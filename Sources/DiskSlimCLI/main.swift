@@ -22,8 +22,14 @@ func option(_ name: String) -> URL? {
 }
 
 let sandboxHome = option("--home")
+let workRoot = option("--work")
+// 只换项目目录、不换主目录时，下载文件夹和清理命令还是真实电脑上的：不允许这样半个沙盒
+if workRoot != nil && sandboxHome == nil {
+    FileHandle.standardError.write(Data("--work 要和 --home 一起用（只给 --work 时，下载文件夹和清理命令仍然作用在真实电脑上）\n".utf8))
+    exit(2)
+}
 let home = sandboxHome ?? FileManager.default.homeDirectoryForCurrentUser
-let scan = Scan(home: home, workRoot: option("--work"))
+let scan = Scan(home: home, workRoot: workRoot)
 // 指定了 --home 就是沙盒自测：不运行清理命令，它们会作用在真实电脑上
 let cleaner = scan.cleaner(sandbox: sandboxHome != nil)
 let riskLabel: [Risk: String] = [.safe: "安全", .confirm: "需确认", .readOnly: "只展示"]

@@ -74,6 +74,15 @@ public func blockedByPrivacy(_ url: URL) -> Bool {
     }
 }
 
+/// 跨进程互斥：在 `<文件>.lock` 上拿排他 flock，把一次「读 → 改 → 写」包起来（应用和命令行可能同时写同一个记录文件）
+public func withFileLock<T>(_ url: URL, _ body: () throws -> T) rethrows -> T {
+    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let fd = open(url.path + ".lock", O_CREAT | O_RDWR, 0o644)
+    if fd >= 0 { flock(fd, LOCK_EX) }
+    defer { if fd >= 0 { flock(fd, LOCK_UN); close(fd) } }
+    return try body()
+}
+
 public func diskStatus(of url: URL) -> DiskStatus? {
     guard let v = try? url.resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityKey]),
           let total = v.volumeTotalCapacity, let available = v.volumeAvailableCapacity else { return nil }

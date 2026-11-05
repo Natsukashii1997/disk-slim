@@ -71,17 +71,19 @@ public struct OperationLog {
 
     /// 读不出来（文件坏了）时，先把坏文件改名留底再当作没有记录，下一次写入就不会把它覆盖掉（L-06）。
     /// 返回值的 `backup` 是留底文件的位置，没坏时为 nil；`unreadable` 表示文件在但读不了（权限、读错误），这时不能写。
-    public func loadChecked() -> (batches: [Batch], backup: URL?, unreadable: Bool) {
+    /// `readOnly` 为 true 时（扫描、查能不能撤销）坏文件不挪，只当没有记录。
+    public func loadChecked(readOnly: Bool = false) -> (batches: [Batch], backup: URL?, unreadable: Bool) {
         guard FileManager.default.fileExists(atPath: url.path) else { return ([], nil, false) }
         guard let data = try? Data(contentsOf: url) else { return ([], nil, true) }
         if let batches = try? decoder.decode([Batch].self, from: data) { return (batches, nil, false) }
+        if readOnly { return ([], nil, false) }
         let stamp = Int(Date().timeIntervalSince1970)
         let backup = url.deletingLastPathComponent().appendingPathComponent("history-damaged-\(stamp).json.bak")
         guard (try? FileManager.default.moveItem(at: url, to: backup)) != nil else { return ([], nil, true) }
         return ([], backup, false)
     }
 
-    public func load() -> [Batch] { loadChecked().batches }
+    public func load(readOnly: Bool = false) -> [Batch] { loadChecked(readOnly: readOnly).batches }
 
     public func save(_ batches: [Batch]) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -129,7 +131,7 @@ public struct Cleaner {
 
     /// 逐项执行并记一次操作记录。不允许的、已经不在的、正在使用的、复核不通过的都跳过，不会中断其他项。
     public func clean(_ findings: [Finding], now: Date = Date()) -> Batch {
-        let (all, backup, unreadable) = log.loadChecked()
+        let (_, backup, unreadable) = log.loadChecked()
         // 操作记录在但读不了：清了也记不下来、会覆盖旧记录、也没法撤销，干脆一项都不清
         if unreadable {
             let items = findings.map { f in
@@ -144,8 +146,13 @@ public struct Cleaner {
         var batch = Batch(id: UUID().uuidString, at: now, items: items, undone: false, restored: [], note: nil)
         var notes: [String] = []
         if let backup { notes.append("原来的操作记录读不出来，已另存为 \(backup.lastPathComponent)") }
+        // 清理可能花了很久，期间别的进程（应用 / 命令行）也许写过记录：加锁后重读再追加，不用开头读到的旧内容
         do {
-            try log.save(all + [batch])
+            try withFileLock(log.url) {
+                let (latest, _, unreadableNow) = log.loadChecked()
+                if unreadableNow { throw CocoaError(.fileReadNoPermission) }
+                try log.save(latest + [batch])
+            }
         } catch {
             notes.append("操作记录没保存成功（\(error.localizedDescription)），这次不能用撤销，移走的文件请到废纸篓里找")
         }
@@ -222,12 +229,14 @@ public struct Cleaner {
     }
 
     /// 还有没有能放回的（应用里常驻「撤销上一次」用）
-    public func canUndo() -> Bool { log.load().contains { !$0.undone && !$0.pending.isEmpty } }
+    public func canUndo() -> Bool { log.load(readOnly: true).contains { !$0.undone && !$0.pending.isEmpty } }
 
     /// 撤销：从最近一次往前，找第一批还没撤销完、而且有文件可放回的，把还在废纸篓里的放回原处（可以一次次往前撤）。
     /// 放不回的（原位置有同名文件）下次还能再试；全部放回后这一批才算撤销完。
     /// 直接删除和清理命令无法撤销，会在结果里说明。
-    public func undoLast() -> [String] {
+    public func undoLast() -> [String] { withFileLock(log.url) { undoLastLocked() } }
+
+    private func undoLastLocked() -> [String] {
         var all = log.load()
         // 跳过没有可放回文件的批次（什么都没清掉、或只有清理命令和直接删除的）
         guard let i = all.lastIndex(where: { !$0.undone && !$0.pending.isEmpty }) else {

@@ -48,6 +48,8 @@ final class Store: ObservableObject {
     @Published var notificationsAllowed: Bool?
     /// 操作记录里还有能放回的：首页常驻「撤销上一次」（不只清完后那 10 秒的提示）
     @Published var canUndo = false
+    /// 已经交给系统、还没回音的提醒：防止回音前又发一次
+    private var pendingAlerts: Set<String> = []
 
     let home: URL
     private let usageLog: UsageLog
@@ -138,7 +140,8 @@ final class Store: ObservableObject {
         if !samples.contains(where: { BeijingTime.dayKey($0.at) == today }) { return true }
         guard let r = report else { return true }
         if now.timeIntervalSince(r.scannedAt) < 3600 { return false }
-        let weeklyPending = alertState.settings.weekly
+        // 通知被拒时周报发不出去，也就一直「没发」：不为它反复扫描
+        let weeklyPending = alertState.settings.weekly && notificationsAllowed != false
             && alertState.sent["weekly"] != BeijingTime.dayKey(Weekly.lastReport(atOrBefore: now))
         return weeklyPending || Alerts.shouldAutoClean(now: now, free: disk?.availableBytes, state: alertState)
     }
@@ -154,9 +157,19 @@ final class Store: ObservableObject {
         let due = Alerts.due(now: now, free: disk?.availableBytes, samples: samples,
                              cards: report == nil ? nil : cards, state: alertState)
         var state = alertState
-        for a in due {
-            Notifier.shared.send(title: a.title, body: a.body)
-            state.sent[a.key] = a.day
+        // 只有系统确实收下了才记「已发」：权限被拒时不记，打开权限后还能补发
+        for a in due where !pendingAlerts.contains(a.key) {
+            pendingAlerts.insert(a.key)
+            Notifier.shared.send(title: a.title, body: a.body) { ok, _ in
+                Task { @MainActor in
+                    self.pendingAlerts.remove(a.key)
+                    self.notificationsAllowed = ok
+                    guard ok else { return }
+                    var s = self.alertState
+                    s.sent[a.key] = a.day
+                    self.saveAlerts(s)
+                }
+            }
         }
         // 周报到点时没有要决定的：记成这周已处理，免得每小时重扫一次去等卡片。
         // 下载文件夹没读到（比如没授权）时不算，授权后本周还能提醒
@@ -280,6 +293,11 @@ final class Store: ObservableObject {
         report = r
         disk = r.disk
         if !readOnly { canUndo = cleaner.canUndo() }
+        // 确认框里还是旧扫描的清单：收起来，按新结果重新确认
+        if confirming != nil {
+            confirming = nil
+            toast = Toast(text: "扫描结果更新了，请重新选择后再确认清理。", canUndo: false)
+        }
         selected = Set(r.findings.filter(\.suggested).map(\.id))
         scanning = false
     }

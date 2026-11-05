@@ -16,16 +16,17 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     /// 第一次会弹系统授权框；用户不允许就什么都不发
-    func send(title: String, body: String, id: String = UUID().uuidString, completion: ((String) -> Void)? = nil) {
-        guard let center else { completion?("不是打包版，跳过通知"); return }
+    /// `completion` 的第一个参数表示是否交给了系统（被拒、出错都是 false），第二个是说明
+    func send(title: String, body: String, id: String = UUID().uuidString, completion: ((Bool, String) -> Void)? = nil) {
+        guard let center else { completion?(false, "不是打包版，跳过通知"); return }
         center.requestAuthorization(options: [.alert, .sound]) { granted, error in
-            guard granted else { completion?("没有通知权限：\(error?.localizedDescription ?? "用户未允许")"); return }
+            guard granted else { completion?(false, "没有通知权限：\(error?.localizedDescription ?? "用户未允许")"); return }
             let content = UNMutableNotificationContent()
             content.title = title
             content.body = body
             content.sound = .default
             center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil)) { error in
-                completion?(error.map { "发送失败：\($0.localizedDescription)" } ?? "已发送：\(title)")
+                completion?(error == nil, error.map { "发送失败：\($0.localizedDescription)" } ?? "已发送：\(title)")
             }
         }
     }
@@ -55,7 +56,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         ]
         let done = DispatchSemaphore(value: 0)
         for (i, e) in examples.enumerated() {
-            send(title: e.0, body: e.1, id: "example-\(i)") { print($0); done.signal() }
+            send(title: e.0, body: e.1, id: "example-\(i)") { print($1); done.signal() }
             done.wait()
         }
         UNUserNotificationCenter.current().getNotificationSettings { s in

@@ -407,7 +407,8 @@ struct ConfirmView: View {
             Text("移到废纸篓的要清空废纸篓后才真正腾出空间。").font(.system(size: 11.5)).foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 Button("取消") { store.confirming = nil }.buttonStyle(QuietButton())
-                Button("确认清理") { store.clean(list) }.buttonStyle(PrimaryButton())
+                Button(store.busy ? "正在扫描…" : "确认清理") { store.clean(list) }
+                    .buttonStyle(PrimaryButton(enabled: !store.busy)).disabled(store.busy)
             }
         }
         .padding(14)

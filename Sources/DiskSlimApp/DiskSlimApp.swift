@@ -21,7 +21,7 @@ struct DiskSlimApp: App {
         MenuBarExtra {
             PanelView()
                 .environmentObject(store)
-                .onAppear { store.page = .home; store.scanIfStale() }
+                .onAppear { store.page = .home; store.confirming = nil; store.scanIfStale() }
         } label: {
             MenuBarLabel(disk: store.disk)
                 .task { await store.dailyLoop() }

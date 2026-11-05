@@ -140,3 +140,48 @@ private func downloadsItem(_ url: URL, category: String = "安装包", suggested
         #expect(FileManager.default.fileExists(atPath: target.path))
     }
 }
+
+/// B8–B12 修复后补的用例
+@Suite struct FullReviewFollowupTests {
+    let t = TempDir()
+    var home: URL { t.url.appendingPathComponent("home") }
+
+    func cleaner() -> Cleaner {
+        Cleaner(safety: SafetyGuard(home: home, workRoot: home.appendingPathComponent("work")), runner: FakeRunner(),
+                trasher: FakeTrasher(dir: t.url.appendingPathComponent("Trash")), log: .standard(home: home))
+    }
+
+    /// B9：扫描是只读的，坏掉的操作记录不该被它挪走（留给清理时挪并提示）
+    @Test func 扫描不挪坏掉的操作记录() throws {
+        let log = OperationLog.standard(home: home)
+        try FileManager.default.createDirectory(at: log.url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("[{ broken".utf8).write(to: log.url)
+        _ = Scan(home: home, workRoot: home.appendingPathComponent("work"), meta: FakeMetadata(), runner: FakeRunner()).run()
+        #expect(FileManager.default.fileExists(atPath: log.url.path))
+        #expect(cleaner().canUndo() == false)
+        #expect(FileManager.default.fileExists(atPath: log.url.path))
+    }
+
+    /// B12：两个进程（这里用两个线程模拟）同时清理，两批都要记下来，谁也不覆盖谁
+    @Test func 同时清理两批都记进操作记录() {
+        let files = (0..<8).map { t.file("home/Downloads/f\($0).dmg") }
+        let ids = Locked<[String]>([])
+        DispatchQueue.concurrentPerform(iterations: files.count) { i in
+            let item = Finding(area: .downloads, category: "安装包", title: files[i].lastPathComponent, detail: "",
+                               paths: [files[i].path], bytes: 1, risk: .safe, suggested: true, cleanup: .trash)
+            let b = cleaner().clean([item])
+            ids.mutate { $0.append(b.id) }
+        }
+        let logged = Set(OperationLog.standard(home: home).load().map(\.id))
+        #expect(logged == Set(ids.value))
+    }
+}
+
+final class Locked<T>: @unchecked Sendable {
+    private var v: T
+    private let lock = NSLock()
+    init(_ v: T) { self.v = v }
+    var value: T { lock.lock(); defer { lock.unlock() }; return v }
+    func mutate(_ f: (inout T) -> Void) { lock.lock(); f(&v); lock.unlock() }
+}
+

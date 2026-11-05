@@ -47,7 +47,9 @@ public struct UsageLog {
     }
 
     @discardableResult
-    public func record(_ s: UsageSample) throws -> [UsageSample] {
+    public func record(_ s: UsageSample) throws -> [UsageSample] { try withFileLock(url) { try recordLocked(s) } }
+
+    private func recordLocked(_ s: UsageSample) throws -> [UsageSample] {
         // 写之前读旧记录：没有文件从头开始；文件在但读不出来就报错不写，免得覆盖掉历史；内容坏了先留底再写
         var all: [UsageSample] = []
         if FileManager.default.fileExists(atPath: url.path) {
