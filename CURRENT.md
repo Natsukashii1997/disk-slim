@@ -1,6 +1,17 @@
 # 当前状态
 
-更新：2026-11-05。第 0–6 批都已完成，全面审查的 B1–B7 已修，应用已装到 `/Applications/DiskSlim.app` 并在运行。分支 main → feat/scan-engine → feat/cleaner → feat/menubar-ui → feat/growth → feat/alerts → feat/launch → feat/review-fixes，都没合并、没推送，GitHub 远端未建。唯一下一步：用户试用一周（第 6 批验收标准「使用一周无误删」），期间按需打开「完全磁盘访问权限」、通知和开机自启；决定是否停掉 Claude 定时任务 `disk-space-guard`；看 `docs/reviews/2026-11-05-全面审查与优化建议.md`，决定 B8–B12 和优化建议做不做。
+更新：2026-11-05。第 0–6 批都已完成，全面审查的 B1–B12 都已修，应用已装到 `/Applications/DiskSlim.app` 并在运行。分支 main → feat/scan-engine → feat/cleaner → feat/menubar-ui → feat/growth → feat/alerts → feat/launch → feat/review-fixes，都没合并、没推送，GitHub 远端未建。唯一下一步：用户试用一周（第 6 批验收标准「使用一周无误删」），期间按需打开「完全磁盘访问权限」、通知和开机自启；决定是否停掉 Claude 定时任务 `disk-space-guard`；看 `docs/reviews/2026-11-05-全面审查与优化建议.md`，决定第二节的优化建议做不做。
+
+## 修复全面审查 B8–B12（2026-11-05，Claude，用户说「继续修 B8–B12」；已提交到 `feat/review-fixes`、已重新安装、未发布）
+
+- 时间：开工 `2026-11-05 14:35`（`date '+%F %H:%M'` 记录）。来由：`docs/reviews/2026-11-05-全面审查与优化建议.md` 第一节 B8–B12。
+- 改了哪些文件：`DiskSlimApp.swift`、`Store.swift`、`Views.swift`（B8：打开面板时收起确认框；新扫描结果到了收起旧确认框并提示重新确认；正在扫描或清理时「确认清理」变灰）；`Cleaner.swift`、`Scan.swift`（B9：`loadChecked(readOnly:)`，扫描和 `canUndo` 只读、不挪坏文件，坏文件留给清理时挪并提示）；`Sources/DiskSlimCLI/main.swift`（B10：只给 `--work` 不给 `--home` 时报错退出，退出码 2）；`Notifier.swift`、`Store.swift`（B11：系统确实收下通知才记「已发」，回音前不重复发；通知被拒时不为周报反复扫描）；`System.swift`、`Cleaner.swift`、`Usage.swift`（B12：`withFileLock` 在 `<文件>.lock` 上 flock，`history.json` 的追加和撤销、`usage.json` 的记录都加锁，清理结束时加锁重读再追加）；`FullReviewTests.swift` 补 2 项。
+- 测试：`scripts/test.sh` 原样结果 `✔ Test run with 216 tests in 31 suites passed`；`node --test tests/*.test.mjs` 原样结果「ℹ fail 0」；`node scripts/check-rules.mjs` 输出「通用规则检查通过」。
+- 验证：`diskslim clean --work /tmp/x` 输出「--work 要和 --home 一起用…」、退出码 2；`scripts/install.sh` 重新安装（`evidence/2026-11-05-install-4.txt`），只有 `/Applications/DiskSlim.app` 一个进程（25650）。B8、B11 是界面和通知行为，没有单元测试，也没在真机上点过；B12 的并发测试没先在修复前跑一遍确认它会失败。
+- 截图：无。
+- 发布与回读：未发布；已重新安装到本机。
+- 与授权不一致之处、遗留问题、范围外发现：① `decisions.json`、`alerts.json` 只有应用会写，没加锁；② 记录文件旁边会多出 `*.lock` 空文件；③ B11 之后通知被拒时，每次检查都会再试一次发通知（不会弹出任何东西），周报不会因此反复扫描；④ 审查员的 worktree 还在。
+- 本轮新坑：无。
 
 ## 修复全面审查 B1–B7（2026-11-05，Claude，用户说「修 B1 到 B7」；已提交到 `feat/review-fixes`、已重新安装、未发布）
 
