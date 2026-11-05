@@ -13,6 +13,11 @@ struct DiskSlimApp: App {
             Snapshot.run(to: URL(fileURLWithPath: CommandLine.arguments[i + 1]))
             exit(0)
         }
+        // 自测用：用示例数据把每种提醒各发一条系统通知，然后退出（要用打包版运行）
+        if CommandLine.arguments.contains("--test-notify") {
+            Notifier.shared.sendExamples()
+            exit(0)
+        }
     }
 
     var body: some Scene {

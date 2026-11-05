@@ -20,10 +20,12 @@ enum Snapshot {
             ("8-涨幅-真实记录", { $0.page = .growth }),
             ("9-首页-示例记录", { $0.samples = example(report) }),
             ("10-涨幅-示例记录", { $0.samples = example(report); $0.page = .growth }),
+            ("11-本周待决定", { $0.page = .week }),
+            ("12-提醒设置", { $0.page = .alerts }),
         ]
         for (name, setup) in shots {
             for scheme in [ColorScheme.light, .dark] {
-                let store = Store(readOnlyUsage: true)
+                let store = Store(readOnly: true)
                 store.apply(report)
                 setup(store)
                 let view = PanelView()

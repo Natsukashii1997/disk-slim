@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 面板里的页面：首页 + 四个下钻页（第 2 版「首页 + 下钻」）。
 enum Page: Hashable {
-    case home, downloads, caches, decide, records, growth
+    case home, downloads, caches, decide, records, growth, week, alerts
 }
 
 extension Finding {
@@ -39,23 +39,38 @@ final class Store: ObservableObject {
     @Published var toast: Toast?
     /// 每日记录（usage.json），首页曲线和涨幅页用
     @Published var samples: [UsageSample] = []
+    /// 卡片上的「保留」「下周再问」（decisions.json）
+    @Published var decisions: Decisions
+    /// 提醒开关和发过的记录（alerts.json）
+    @Published var alertState: AlertState
 
     let home: URL
     private let usageLog: UsageLog
-    /// 离屏截图用：只读记录，文件坏了也不挪，也不写
-    private let readOnlyUsage: Bool
+    private let decisionLog: DecisionLog
+    private let alertStore: AlertStore
+    /// 离屏截图用：只读，不写任何记录，不发通知，不自动清理
+    private let readOnly: Bool
     /// 每次扫描加一；扫描结果回来时代次不对就丢掉（清理后的新扫描要盖过清理前发起的旧扫描）
     private var scanGeneration = 0
 
     /// 正在扫描或清理时，清理和撤销按钮都不能点
     var busy: Bool { scanning || working }
 
-    init(home: URL = FileManager.default.homeDirectoryForCurrentUser, readOnlyUsage: Bool = false) {
+    init(home: URL = FileManager.default.homeDirectoryForCurrentUser, readOnly: Bool = false) {
         self.home = home
-        self.readOnlyUsage = readOnlyUsage
+        self.readOnly = readOnly
         usageLog = UsageLog.standard(home: home)
+        decisionLog = DecisionLog.standard(home: home)
+        alertStore = AlertStore.standard(home: home)
         disk = diskStatus(of: home)
-        samples = usageLog.load(readOnly: readOnlyUsage)
+        samples = usageLog.load(readOnly: readOnly)
+        decisions = decisionLog.load()
+        alertState = alertStore.load()
+        // 第一次运行：从下一个周五开始发周报，不补发装上之前那个周五的
+        if !readOnly, alertState.sent["weekly"] == nil {
+            alertState.sent["weekly"] = BeijingTime.dayKey(Weekly.lastReport(atOrBefore: Date()))
+            try? alertStore.save(alertState)
+        }
     }
 
     private var cleaner: Cleaner { Scan(home: home).cleaner() }
@@ -84,22 +99,110 @@ final class Store: ObservableObject {
                 guard generation == self.scanGeneration else { return }
                 self.apply(r)
                 self.recordUsage(r)
+                self.checkAlerts()
+                self.autoCleanIfDue()
             }
         }
     }
 
     /// 只在真实扫描完成后记（不放进 apply：离屏截图也会调 apply）
     private func recordUsage(_ r: ScanReport) {
-        guard !readOnlyUsage, let s = Usage.sample(from: r), let all = try? usageLog.record(s) else { return }
+        guard !readOnly, let s = Usage.sample(from: r), let all = try? usageLog.record(s) else { return }
         samples = all
     }
 
-    /// 应用开着时每 30 分钟看一次：今天（北京时间）还没有记录就在后台扫描一次，扫描完成会写记录
+    /// 应用开着时每 30 分钟看一次：今天（北京时间）还没有记录、或者周报 / 自动清理到点了而扫描结果超过一小时，
+    /// 就在后台扫描一次（扫描完成会写记录、查提醒、按需自动清理）；否则直接查提醒
     func dailyLoop() async {
         while !Task.isCancelled {
-            let today = BeijingTime.dayKey(Date())
-            if !samples.contains(where: { BeijingTime.dayKey($0.at) == today }) { scan() }
+            refreshDisk()
+            if needsScan(now: Date()) { scan() } else { checkAlerts(); autoCleanIfDue() }
             try? await Task.sleep(nanoseconds: 1_800_000_000_000)
+        }
+    }
+
+    private func needsScan(now: Date) -> Bool {
+        let today = BeijingTime.dayKey(now)
+        if !samples.contains(where: { BeijingTime.dayKey($0.at) == today }) { return true }
+        guard let r = report else { return true }
+        if now.timeIntervalSince(r.scannedAt) < 3600 { return false }
+        let weeklyPending = alertState.settings.weekly
+            && alertState.sent["weekly"] != BeijingTime.dayKey(Weekly.lastReport(atOrBefore: now))
+        return weeklyPending || Alerts.shouldAutoClean(now: now, free: disk?.availableBytes, state: alertState)
+    }
+
+    // MARK: 提醒
+
+    /// 本周还要决定的卡片；没扫描过时为空
+    var cards: [WeeklyCard] { report.map { Weekly.cards($0.findings, decisions: decisions, now: Date()) } ?? [] }
+
+    func checkAlerts() {
+        guard !readOnly else { return }
+        let now = Date()
+        let due = Alerts.due(now: now, free: disk?.availableBytes, samples: samples,
+                             cards: report == nil ? nil : cards, state: alertState)
+        var state = alertState
+        for a in due {
+            Notifier.shared.send(title: a.title, body: a.body)
+            state.sent[a.key] = a.day
+        }
+        // 周报到点时没有要决定的：记成这周已处理，免得每小时重扫一次去等卡片
+        let friday = Weekly.lastReport(atOrBefore: now)
+        if state.settings.weekly, report != nil, cards.isEmpty { state.sent["weekly"] = BeijingTime.dayKey(friday) }
+        if state != alertState { saveAlerts(state) }
+    }
+
+    func setSetting(_ key: WritableKeyPath<AlertSettings, Bool>, _ on: Bool) {
+        var state = alertState
+        state.settings[keyPath: key] = on
+        saveAlerts(state)
+    }
+
+    private func saveAlerts(_ state: AlertState) {
+        alertState = state
+        if !readOnly { try? alertStore.save(state) }
+    }
+
+    /// 自动清理（默认关）：可用低于 60 GB、今天还没跑过时，只清「看不见的」里安全、默认勾选的项；下载文件夹不动
+    func autoCleanIfDue() {
+        guard !readOnly, !busy, let r = report,
+              Alerts.shouldAutoClean(now: Date(), free: disk?.availableBytes, state: alertState) else { return }
+        var state = alertState
+        state.autoCleanDay = BeijingTime.dayKey(Date())
+        saveAlerts(state)
+        let picks = Alerts.autoCleanPicks(r.findings)
+        guard !picks.isEmpty else { return }
+        working = true
+        let cleaner = cleaner
+        Task.detached {
+            let batch = cleaner.clean(picks)
+            await MainActor.run {
+                self.working = false
+                let text = Self.summary(batch)
+                self.toast = Toast(text: "自动清理：" + text, canUndo: batch.trashedBytes > 0 && batch.note == nil)
+                Notifier.shared.send(title: "自动清理腾出了 \(formatBytes(batch.freedBytes + batch.trashedBytes))", body: text)
+                self.report = nil
+                self.scan(force: true)
+            }
+        }
+    }
+
+    // MARK: 每周卡片
+
+    func keep(_ card: WeeklyCard) { decide { $0.keep(card, now: Date()) } }
+    func snooze(_ card: WeeklyCard) { decide { $0.snooze(card, now: Date()) } }
+
+    private func decide(_ change: (inout Decisions) -> Void) {
+        var d = decisions
+        change(&d)
+        decisions = d
+        if !readOnly { try? decisionLog.save(d) }
+        // 选了保留的项马上不再默认勾选
+        if let r = report {
+            let findings = applyDecisions(r.findings, d)
+            report = ScanReport(scannedAt: r.scannedAt, seconds: r.seconds, disk: r.disk, findings: findings,
+                                downloadsBytes: r.downloadsBytes, trashBytes: r.trashBytes)
+            selected.subtract(findings.filter { d.isKept($0) }.map(\.id))
         }
     }
 

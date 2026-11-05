@@ -71,6 +71,8 @@ struct PanelView: View {
                 case .decide: ListPage(page: .decide, title: "要你决定的", action: "处理所选")
                 case .records: ListPage(page: .records, title: "对话记录", action: nil)
                 case .growth: GrowthPage()
+                case .week: WeekPage()
+                case .alerts: AlertsPage()
                 }
             }
             .disabled(store.confirming != nil)
@@ -100,6 +102,10 @@ struct HomeView: View {
                 section("要你决定").padding(.top, 6)
                 row(.decide, color: Palette.projects, title: "备份、虚拟机、在用的构建产物", sub: "默认不勾，逐项看", value: total(store.findings(.decide)))
                 row(.records, color: Palette.system, title: "对话记录", sub: "只展示，不会删", value: total(store.findings(.records)))
+                let cards = store.cards
+                row(.week, color: Palette.warn, title: "本周待决定",
+                    sub: store.report == nil ? "扫描完就有" : cards.isEmpty ? "都处理完了" : "\(cards.count) 件，一件一件点完",
+                    value: cards.reduce(0) { $0 + $1.bytes })
             }
             .padding(.horizontal, -6)
 
@@ -109,6 +115,8 @@ struct HomeView: View {
                 .disabled(picks.isEmpty || store.busy)
 
             HStack {
+                Button("提醒设置") { store.page = .alerts }
+                    .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(Palette.accent)
                 Spacer()
                 Button("退出磁盘瘦身") { NSApp.terminate(nil) }
                     .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(.secondary)
@@ -532,6 +540,119 @@ struct GrowthPage: View {
             }
             .padding(.horizontal, 6).padding(.vertical, 6)
         }
+    }
+}
+
+// MARK: - 本周待决定
+
+/// 一次一件：移到废纸篓（或清理，先经过确认框）/ 保留（以后不再问）/ 下周再问
+struct WeekPage: View {
+    @EnvironmentObject var store: Store
+    private let showFiles = 6
+
+    var body: some View {
+        let cards = store.cards
+        VStack(alignment: .leading, spacing: 0) {
+            PageHeader(title: "本周待决定")
+            if let card = cards.first {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("还有 \(cards.count) 件").font(.system(size: 11.5)).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(card.tag).font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.warn)
+                            .padding(.horizontal, 7).padding(.vertical, 2)
+                            .background(Capsule().fill(Palette.warn.opacity(0.15)))
+                        Text(card.title).font(.system(size: 14, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(formatBytes(card.bytes)).font(.system(size: 26, weight: .semibold)).monospacedDigit()
+                            Text("可腾出").foregroundStyle(.secondary)
+                        }
+                        Text(card.why).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        // 只有一项时标题就是它，不再列一遍
+                        if card.findings.count > 1 { VStack(alignment: .leading, spacing: 3) {
+                            ForEach(card.findings.prefix(showFiles), id: \.id) { f in
+                                HStack {
+                                    Text(f.title).lineLimit(1).truncationMode(.middle)
+                                    Spacer(minLength: 8)
+                                    Text(formatBytes(f.bytes)).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(.secondary)
+                                }
+                                .font(.system(size: 12))
+                            }
+                            if card.findings.count > showFiles {
+                                Text("等 \(card.findings.count) 个").font(.system(size: 11.5)).foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.top, 2) }
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(.quaternary.opacity(0.5)))
+
+                    HStack(spacing: 8) {
+                        Button(card.actionLabel) { store.askToClean(card.findings) }
+                            .buttonStyle(PrimaryButton(enabled: !store.busy)).disabled(store.busy)
+                        Button("保留") { store.keep(card) }.buttonStyle(QuietButton()).disabled(store.busy)
+                        Button("下周再问") { store.snooze(card) }.buttonStyle(QuietButton()).disabled(store.busy)
+                    }
+                    Text("「保留」以后不再问，也不会再被默认勾选；「下周再问」到下周五 18:00 再出现。")
+                        .font(.system(size: 11)).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 16).padding(.bottom, 16)
+            } else {
+                Text(store.scanning || store.report == nil ? "正在扫描…" : "本周都处理完了。下周五 18:00 再来。")
+                    .foregroundStyle(.secondary).padding(16)
+            }
+        }
+    }
+}
+
+// MARK: - 提醒设置
+
+struct AlertsPage: View {
+    @EnvironmentObject var store: Store
+
+    var body: some View {
+        let s = store.alertState.settings
+        let free = store.disk.map { "现在 \(formatBytes($0.availableBytes))" } ?? ""
+        VStack(alignment: .leading, spacing: 0) {
+            PageHeader(title: "提醒设置")
+            VStack(alignment: .leading, spacing: 0) {
+                info("可用低于 60 GB 图标变橙、低于 30 GB 变红", free)
+                toggle(\.lowSpace, s.lowSpace, "可用低于 30 GB 时发通知", "一天最多一次")
+                toggle(\.growth, s.growth, "某个位置一天涨超过 10 GB 时发通知", "比如某个项目一天多开了几个 worktree")
+                toggle(\.weekly, s.weekly, "每周五 18:00 发周报", "有待决定的事才发；那时没开着应用，之后打开会补发")
+                toggle(\.autoClean, s.autoClean, "自动清理缓存和构建产物",
+                       "默认关。打开后只在可用低于 60 GB 时、每天最多一次，只清「缓存与构建产物」里默认勾选的项，下载文件夹不动。运行清理命令和直接删除的不能撤销。")
+            }
+            .padding(.horizontal, 10).padding(.bottom, 12)
+        }
+    }
+
+    private func info(_ title: String, _ sub: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+            if !sub.isEmpty { Text(sub).font(.system(size: 11)).foregroundStyle(.secondary) }
+        }
+        .padding(.horizontal, 6).padding(.vertical, 8)
+    }
+
+    private func toggle(_ key: WritableKeyPath<AlertSettings, Bool>, _ on: Bool, _ title: String, _ sub: String) -> some View {
+        Button { store.setSetting(key, !on) } label: {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                    Text(sub).font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                // 自绘开关：离屏截图画不出系统自带的
+                Capsule().fill(on ? Palette.ok : Color.secondary.opacity(0.3))
+                    .frame(width: 34, height: 20)
+                    .overlay(alignment: on ? .trailing : .leading) { Circle().fill(.white).padding(2).shadow(radius: 0.5) }
+            }
+            .padding(.horizontal, 6).padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(on ? "开" : "关")
     }
 }
 
