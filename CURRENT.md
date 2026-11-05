@@ -1,6 +1,6 @@
 # 当前状态
 
-更新：2026-11-05。第 0–6 批都已完成，全面审查的 B1–B12 都已修，第 7 批（worktree 新规则）已完成，应用已装到 `/Applications/DiskSlim.app` 并在运行。分支 main → feat/scan-engine → feat/cleaner → feat/menubar-ui → feat/growth → feat/alerts → feat/launch → feat/review-fixes → feat/worktree-rules，都没合并、没推送，GitHub 远端未建。唯一下一步：用户试用一周（第 6 批验收标准「使用一周无误删」），期间按需打开「完全磁盘访问权限」、通知和开机自启；决定是否停掉 Claude 定时任务 `disk-space-guard`；看 `docs/reviews/2026-11-05-全面审查与优化建议.md`，打开通知和自动清理后第 7 批才会自己动起来；postpane 的 Cargo 配置和「合并后清 target」的流程改动等用户定。
+更新：2026-11-05。第 0–6 批都已完成，全面审查的 B1–B12 都已修，第 7 批（worktree 新规则）已完成，应用已装到 `/Applications/DiskSlim.app` 并在运行。分支 main → feat/scan-engine → feat/cleaner → feat/menubar-ui → feat/growth → feat/alerts → feat/launch → feat/review-fixes → feat/worktree-rules，都没合并、没推送，GitHub 远端未建。唯一下一步：用户试用一周（第 6 批验收标准「使用一周无误删」），期间按需打开「完全磁盘访问权限」、通知和开机自启；决定是否停掉 Claude 定时任务 `disk-space-guard`；看 `docs/reviews/2026-11-05-全面审查与优化建议.md`，打开通知和自动清理后第 7 批才会自己动起来；postpane 的 Cargo 配置等用户定。
 
 ## 止血 + 第 7 批：worktree 构建产物新规则（2026-11-05，Claude，用户说「删，然后做第 7 批」；已提交到 `feat/worktree-rules`、已重新安装、未发布）
 
@@ -12,7 +12,7 @@
 - 独立审查（L-06）：审核员（计划阶段）+ 审查员（实现后，沙盒里真实 git worktree 和 cargo 1.99 演练）。审查员报 8 条，全部修了：暂存目录是符号链接时清空链接指向的目录（中，已实测，L-10）；跨卷时 `moveItem` 会复制（改用 `rename`）；名字是前缀的 worktree 误判在用；锁原因中文显示成八进制；两个进程同时清理互删暂存；挪动失败时先放了锁；复核每项重跑 lsof；只靠「已在主分支里」认出的会清掉刚切出来的 worktree（改为静置 24 小时）。
 - 截图：无（界面没改）。
 - 发布与回读：未发布；已重新安装到本机。
-- 与授权不一致之处、遗留问题、范围外发现：① 要让第 7 批自己起作用，用户得打开通知和「自动清理」；② 跨卷没实测（本机没有第二个可写卷）；③ 陈旧的 worktree 锁（会话已退出锁还在）会让那个 worktree 永远不被清，只影响效果不影响安全；④ 审核员建议在合并流程（`agent-kit/工程流程.md` 或 postpane 的 AGENTS.md）加「合并后 `cargo clean` 或 `git worktree remove`」从源头根治，要用户批准、不归本项目改；⑤ postpane 的 Cargo 配置（`debug = "line-tables-only"`）先量再改，交给 postpane 会话；⑥ 审查员们的 worktree 还在 `.claude/worktrees/`；⑦ 可用空间 15:32 是 56 GB，postpane 仍在编译新 worktree。
+- 与授权不一致之处、遗留问题、范围外发现：① 要让第 7 批自己起作用，用户得打开通知和「自动清理」；② 跨卷没实测（本机没有第二个可写卷）；③ 陈旧的 worktree 锁（会话已退出锁还在）会让那个 worktree 永远不被清，只影响效果不影响安全；④ 用户选了只加到 postpane：已在 postpane 的 AGENTS.md「规则」加一条「PR 合并后马上 `cargo clean` 或 `git worktree remove`」，提交到 postpane 的 main（`54479ef`），没推送；⑤ postpane 的 Cargo 配置（`debug = "line-tables-only"`）先量再改，交给 postpane 会话；⑥ 审查员们的 worktree 还在 `.claude/worktrees/`；⑦ 可用空间 15:32 是 56 GB，postpane 仍在编译新 worktree。
 - 本轮新坑：L-10。
 
 ## 修复全面审查 B8–B12（2026-11-05，Claude，用户说「继续修 B8–B12」；已提交到 `feat/review-fixes`、已重新安装、未发布）
