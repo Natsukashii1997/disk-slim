@@ -22,6 +22,7 @@ struct DiskSlimApp: App {
                 .onAppear { store.page = .home; store.scanIfStale() }
         } label: {
             MenuBarLabel(disk: store.disk)
+                .task { await store.dailyLoop() }
         }
         .menuBarExtraStyle(.window)
     }

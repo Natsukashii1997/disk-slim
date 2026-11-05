@@ -101,4 +101,17 @@ import Testing
         #expect(s.parts["下载文件夹"] == 3 * gb) // 下载区用整体大小，不按单个文件
         #expect(s.parts["a.dmg"] == nil)
     }
+
+    @Test func 首页一句话_说少了多少和主要是谁() {
+        let a = sample(bj("2026-11-04T10:00:00"), free: 80, ["下载文件夹": 5, "postpane · worktree 构建产物": 10])
+        let b = sample(bj("2026-11-05T10:00:00"), free: 76.5, ["下载文件夹": 5.5, "postpane · worktree 构建产物": 13])
+        #expect(Usage.headline([a, b]) == "比昨天少了 3.5 GB，主要是postpane · worktree 构建产物（+3.0 GB）")
+        // 隔了几天：写日期；可用变多时说减得最多的
+        let c = sample(bj("2026-11-07T10:00:00"), free: 85, ["下载文件夹": 1, "postpane · worktree 构建产物": 10])
+        #expect(Usage.headline([a, c]) == "比 11/4 多了 5.0 GB，主要是下载文件夹（−4.0 GB）")
+        // 变化很小、只有一天
+        #expect(Usage.headline([a, sample(bj("2026-11-05T10:00:00"), free: 80.01, [:])])?.hasPrefix("可用空间和昨天差不多") == true)
+        #expect(Usage.headline([a]) == nil)
+    }
 }
+

@@ -32,11 +32,13 @@ public struct UsageLog {
         UsageLog(url: home.appendingPathComponent("Library/Application Support/disk-slim/usage.json"))
     }
 
-    public func load() -> [UsageSample] {
+    /// `readOnly` 为 true 时（命令行查看）文件坏了也不挪动，只返回空
+    public func load(readOnly: Bool = false) -> [UsageSample] {
         guard let data = try? Data(contentsOf: url) else { return [] }
         let d = JSONDecoder()
         d.dateDecodingStrategy = .iso8601
         guard let samples = try? d.decode([UsageSample].self, from: data) else {
+            if readOnly { return [] }
             // 坏了就留底，免得下一次记录把它覆盖掉
             let stamp = Int(Date().timeIntervalSince1970)
             try? FileManager.default.moveItem(at: url, to: url.deletingLastPathComponent()
@@ -83,7 +85,7 @@ public enum Usage {
     }
 
     /// 同类的合成一个位置：同一项目的 worktree 构建产物合起来，多份 Codex 备份合起来
-    static func partName(_ f: Finding) -> String {
+    public static func partName(_ f: Finding) -> String {
         if f.category.contains("构建产物") {
             let project = f.title.components(separatedBy: " · ").first ?? f.title
             return "\(project) · worktree 构建产物"
@@ -119,5 +121,20 @@ public enum Usage {
         let tracked = list.reduce(Int64(0)) { $0 + $1.delta }
         list.append(UsageChange(name: untracked, delta: (new.usedBytes - old.usedBytes) - tracked))
         return list.filter { abs($0.delta) >= minBytes }.sorted { $0.delta > $1.delta }
+    }
+
+    /// 首页那一句，如「比昨天少了 3.2 GB，主要是 postpane · worktree 构建产物（+2.8 GB）」。不够两天返回 nil。
+    public static func headline(_ samples: [UsageSample]) -> String? {
+        guard let (new, old) = latestAndPrevious(samples) else { return nil }
+        let isYesterday = BeijingTime.dayKey(new.at.addingTimeInterval(-86_400)) == BeijingTime.dayKey(old.at)
+        let when = isYesterday ? "昨天" : " \(BeijingTime.shortDay(old.at)) "
+        let d = new.freeBytes - old.freeBytes
+        if abs(d) < 50 * 1_048_576 { return "可用空间和\(when)差不多" }
+        let list = changes(from: old, to: new)
+        var text = "比\(when)\(d < 0 ? "少了" : "多了") \(formatBytes(abs(d)))"
+        // 可用变少时找涨得最多的，变多时找减得最多的
+        let main = d < 0 ? list.first(where: { $0.delta > 0 }) : list.last(where: { $0.delta < 0 })
+        if let m = main { text += "，主要是\(m.name)（\(formatDelta(m.delta))）" }
+        return text
     }
 }

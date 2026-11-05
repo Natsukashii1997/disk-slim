@@ -166,3 +166,8 @@ public func formatBytes(_ bytes: Int64) -> String {
     if mb < 1024 { return "\(Int(mb.rounded())) MB" }
     return String(format: "%.1f GB", mb / 1024)
 }
+
+/// 带正负号的变化量：「+2.8 GB」「−340 MB」
+public func formatDelta(_ bytes: Int64) -> String {
+    (bytes < 0 ? "−" : "+") + formatBytes(abs(bytes))
+}

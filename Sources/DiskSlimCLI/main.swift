@@ -7,6 +7,7 @@ let usage = """
   diskslim clean                预览：默认勾选的项会怎么处理（不执行）
   diskslim clean --yes          执行：移到废纸篓 / 删除可再生目录 / 运行清理命令，并记操作记录
   diskslim undo                 撤销最近一次：把移到废纸篓的东西放回原处
+  diskslim growth               最近 7 天可用空间和谁涨了多少（只读每日记录，不扫描）
 通用选项：
   --home <目录>  --work <目录>   换一个主目录 / 项目目录（自测用的沙盒）
 """
@@ -93,6 +94,34 @@ case "clean":
 
 case "undo":
     for line in cleaner.undoLast() { print(line) }
+
+case "growth":
+    let log = UsageLog.standard(home: home)
+    let days = Usage.daily(log.load(readOnly: true), now: Date())
+    if days.isEmpty {
+        let exists = FileManager.default.fileExists(atPath: log.url.path)
+        print(exists ? "记录文件读不出来或最近 7 天没有记录：\(log.url.path)" : "还没有记录。菜单栏应用每次扫描完会记一次，每天至少一次。")
+        break
+    }
+    print("最近 7 天可用空间（每天最后一份记录，北京时间）：")
+    for s in days { print("  \(BeijingTime.shortDay(s.at).padding(toLength: 6, withPad: " ", startingAt: 0)) \(formatBytes(s.freeBytes).padding(toLength: 9, withPad: " ", startingAt: 0)) \(BeijingTime.hourMinute(s.at)) 记录") }
+    func ranking(_ list: [UsageChange]) {
+        if list.isEmpty { print("  没有超过 50 MB 的变化") }
+        for c in list { print("  \(formatDelta(c.delta).padding(toLength: 10, withPad: " ", startingAt: 0)) \(c.name)") }
+    }
+    if let (new, old) = Usage.latestAndPrevious(days) {
+        print("\n\(Usage.headline(days) ?? "")")
+        print("谁涨了多少（\(BeijingTime.shortDay(old.at)) → \(BeijingTime.shortDay(new.at))）：")
+        ranking(Usage.changes(from: old, to: new))
+    } else {
+        print("\n只有 1 天的记录，攒够两天才能比。")
+    }
+    if days.count > 2, let first = days.first, let last = days.last {
+        let d = last.freeBytes - first.freeBytes
+        print("\n近 7 天合计（\(BeijingTime.shortDay(first.at)) → \(BeijingTime.shortDay(last.at))）：可用空间\(d < 0 ? "少了" : "多了") \(formatBytes(abs(d)))")
+        ranking(Usage.changes(from: first, to: last))
+    }
+    print("\n本命令只读记录，不扫描、不删除。")
 
 default:
     print(usage)

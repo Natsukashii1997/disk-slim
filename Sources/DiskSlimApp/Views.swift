@@ -1,3 +1,5 @@
+import AppKit
+import Charts
 import DiskSlimCore
 import SwiftUI
 
@@ -68,6 +70,7 @@ struct PanelView: View {
                 case .caches: ListPage(page: .caches, title: "缓存与构建产物", action: "清理")
                 case .decide: ListPage(page: .decide, title: "要你决定的", action: "处理所选")
                 case .records: ListPage(page: .records, title: "对话记录", action: nil)
+                case .growth: GrowthPage()
                 }
             }
             .disabled(store.confirming != nil)
@@ -104,6 +107,12 @@ struct HomeView: View {
             Button(store.working ? "正在清理…" : picks.isEmpty ? "暂时没有建议清理的" : "清理建议项 · \(formatBytes(total(picks)))") { store.askToClean(picks) }
                 .buttonStyle(PrimaryButton(enabled: !picks.isEmpty && !store.busy))
                 .disabled(picks.isEmpty || store.busy)
+
+            HStack {
+                Spacer()
+                Button("退出磁盘瘦身") { NSApp.terminate(nil) }
+                    .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(.secondary)
+            }
         }
         .padding(16)
     }
@@ -146,17 +155,31 @@ struct HomeView: View {
         return "\(total) · \(BeijingTime.hourMinute(r.scannedAt)) 扫描"
     }
 
-    /// 涨幅曲线要有每日记录（第 4 批），先说明从今天开始记
+    /// 最近 7 天可用空间曲线和「比昨天少了 X，主要是 Y」，点进涨幅页；不够两天先说明
     private var growth: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "chart.line.uptrend.xyaxis").foregroundStyle(.secondary)
-            Text("从今天开始每天记一次各目录大小，攒够两天就能看到谁在涨。")
-                .font(.system(size: 11.5)).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+        let days = store.dailySamples
+        return Button { store.page = .growth } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                if days.count >= 2 {
+                    FreeChart(days: days, height: 64, showDates: false)
+                    if let line = Usage.headline(days) {
+                        Text(line).font(.system(size: 11.5)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chart.line.uptrend.xyaxis").foregroundStyle(.secondary)
+                        Text(GrowthPage.notEnough).font(.system(size: 11.5)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary.opacity(0.5)))
+            .contentShape(Rectangle())
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary.opacity(0.5)))
+        .buttonStyle(.plain)
     }
 
     private func section(_ text: String) -> some View {
@@ -184,6 +207,23 @@ struct HomeView: View {
 
 // MARK: - 下钻页
 
+struct PageHeader: View {
+    @EnvironmentObject var store: Store
+    let title: String
+
+    var body: some View {
+        HStack {
+            Button { store.page = .home } label: { Label("返回", systemImage: "chevron.left") }
+                .buttonStyle(.plain).foregroundStyle(Palette.accent)
+            Spacer()
+            Text(title).font(.system(size: 13, weight: .semibold))
+            Spacer()
+            Color.clear.frame(width: 44, height: 1)
+        }
+        .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 6)
+    }
+}
+
 struct ListPage: View {
     @EnvironmentObject var store: Store
     let page: Page
@@ -197,15 +237,7 @@ struct ListPage: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Button { store.page = .home } label: { Label("返回", systemImage: "chevron.left") }
-                    .buttonStyle(.plain).foregroundStyle(Palette.accent)
-                Spacer()
-                Text(title).font(.system(size: 13, weight: .semibold))
-                Spacer()
-                Color.clear.frame(width: 44, height: 1)
-            }
-            .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 6)
+            PageHeader(title: title)
 
             let items = store.findings(page)
             Scroller {
@@ -388,3 +420,104 @@ struct ToastView: View {
         }
     }
 }
+
+// MARK: - 涨幅
+
+/// 每天一个点的可用空间折线（GB）
+struct FreeChart: View {
+    let days: [UsageSample]
+    let height: CGFloat
+    let showDates: Bool
+
+    var body: some View {
+        Chart(days, id: \.at) { s in
+            let gb = Double(s.freeBytes) / 1_073_741_824
+            LineMark(x: .value("日期", BeijingTime.shortDay(s.at)), y: .value("可用 GB", gb))
+                .foregroundStyle(Palette.accent)
+            PointMark(x: .value("日期", BeijingTime.shortDay(s.at)), y: .value("可用 GB", gb))
+                .foregroundStyle(gb < 30 ? Palette.bad : gb < 60 ? Palette.warn : Palette.accent)
+                .symbolSize(showDates ? 28 : 16)
+        }
+        .chartXAxis(showDates ? .automatic : .hidden)
+        .chartYAxis {
+            // 首页是小图，只留网格线；涨幅页的大图带刻度
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { v in
+                AxisGridLine()
+                if showDates { AxisValueLabel { if let g = v.as(Double.self) { Text("\(Int(g))G") } } }
+            }
+        }
+        .chartYScale(domain: .automatic(includesZero: false))
+        .frame(height: height)
+    }
+}
+
+struct GrowthPage: View {
+    @EnvironmentObject var store: Store
+    static let notEnough = "从今天开始每天记一次可用空间和各目录大小，攒够两天就能看到谁在涨。"
+
+    var body: some View {
+        let days = store.dailySamples
+        VStack(spacing: 0) {
+            PageHeader(title: "涨幅")
+            Scroller {
+                if days.count < 2 {
+                    Text(Self.notEnough + "（已有 \(days.count) 天）")
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true).padding(8)
+                } else {
+                    Text("最近 7 天可用空间").font(.system(size: 11.5)).foregroundStyle(.secondary).padding(.horizontal, 6)
+                    FreeChart(days: days, height: 120, showDates: true).padding(6)
+                    if let (new, old) = Usage.latestAndPrevious(days) {
+                        section("谁涨了多少（\(BeijingTime.shortDay(old.at)) → \(BeijingTime.shortDay(new.at))）", Usage.headline(days))
+                        changes(Usage.changes(from: old, to: new))
+                    }
+                    if let first = days.first, let last = days.last, days.count > 2 {
+                        section("近 7 天合计（\(BeijingTime.shortDay(first.at)) → \(BeijingTime.shortDay(last.at))）",
+                                "可用空间\(last.freeBytes < first.freeBytes ? "少了" : "多了") \(formatBytes(abs(last.freeBytes - first.freeBytes)))")
+                        changes(Usage.changes(from: first, to: last))
+                    }
+                    Text("扫描完成就记一次，同一天只留最后一份；变化不到 50 MB 的不列。")
+                        .font(.system(size: 11)).foregroundStyle(.tertiary).padding(8)
+                }
+            }
+        }
+    }
+
+    private func section(_ title: String, _ sub: String?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+            if let sub { Text(sub).font(.system(size: 11.5)).fixedSize(horizontal: false, vertical: true) }
+        }
+        .padding(.horizontal, 6).padding(.top, 12).padding(.bottom, 4)
+    }
+
+    @ViewBuilder private func changes(_ list: [UsageChange]) -> some View {
+        if list.isEmpty {
+            Text("没有超过 50 MB 的变化").font(.system(size: 11.5)).foregroundStyle(.secondary).padding(6)
+        }
+        let biggest = list.map { abs($0.delta) }.max() ?? 1
+        ForEach(list, id: \.name) { c in
+            let target = store.pageFor(part: c.name)
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(c.name).lineLimit(1).truncationMode(.middle)
+                    GeometryReader { g in
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(c.delta > 0 ? Palette.bad.opacity(0.7) : Palette.ok.opacity(0.7))
+                            .frame(width: max(3, g.size.width * CGFloat(abs(c.delta)) / CGFloat(biggest)))
+                    }
+                    .frame(height: 4)
+                }
+                Spacer(minLength: 6)
+                Text(formatDelta(c.delta)).font(.system(size: 12.5, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(c.delta > 0 ? Palette.bad : Palette.ok)
+                if let target {
+                    Button("去处理") { store.page = target }
+                        .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(Palette.accent)
+                }
+            }
+            .padding(.horizontal, 6).padding(.vertical, 6)
+        }
+    }
+}
+

@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 面板里的页面：首页 + 四个下钻页（第 2 版「首页 + 下钻」）。
 enum Page: Hashable {
-    case home, downloads, caches, decide, records
+    case home, downloads, caches, decide, records, growth
 }
 
 extension Finding {
@@ -37,8 +37,11 @@ final class Store: ObservableObject {
     @Published var page: Page = .home
     @Published var confirming: [Finding]?
     @Published var toast: Toast?
+    /// 每日记录（usage.json），首页曲线和涨幅页用
+    @Published var samples: [UsageSample] = []
 
     let home: URL
+    private let usageLog: UsageLog
     /// 每次扫描加一；扫描结果回来时代次不对就丢掉（清理后的新扫描要盖过清理前发起的旧扫描）
     private var scanGeneration = 0
 
@@ -47,7 +50,9 @@ final class Store: ObservableObject {
 
     init(home: URL = FileManager.default.homeDirectoryForCurrentUser) {
         self.home = home
+        usageLog = UsageLog.standard(home: home)
         disk = diskStatus(of: home)
+        samples = usageLog.load()
     }
 
     private var cleaner: Cleaner { Scan(home: home).cleaner() }
@@ -75,7 +80,23 @@ final class Store: ObservableObject {
             await MainActor.run {
                 guard generation == self.scanGeneration else { return }
                 self.apply(r)
+                self.recordUsage(r)
             }
+        }
+    }
+
+    /// 只在真实扫描完成后记（不放进 apply：离屏截图也会调 apply）
+    private func recordUsage(_ r: ScanReport) {
+        guard let s = Usage.sample(from: r), let all = try? usageLog.record(s) else { return }
+        samples = all
+    }
+
+    /// 应用开着时每 30 分钟看一次：今天（北京时间）还没有记录就在后台扫描一次，扫描完成会写记录
+    func dailyLoop() async {
+        while !Task.isCancelled {
+            let today = BeijingTime.dayKey(Date())
+            if !samples.contains(where: { BeijingTime.dayKey($0.at) == today }) { scan() }
+            try? await Task.sleep(nanoseconds: 1_800_000_000_000)
         }
     }
 
@@ -87,6 +108,15 @@ final class Store: ObservableObject {
     }
 
     // MARK: 查询
+
+    /// 最近 7 天每天最后一份记录
+    var dailySamples: [UsageSample] { Usage.daily(samples, now: Date()) }
+
+    /// 涨幅排行里某个位置对应哪个下钻页（「其他」和已经扫不到的位置没有）
+    func pageFor(part name: String) -> Page? {
+        if name == "下载文件夹" { return .downloads }
+        return report?.findings.first { $0.area == .hidden && Usage.partName($0) == name }?.page
+    }
 
     func findings(_ page: Page) -> [Finding] { report?.findings.filter { $0.page == page } ?? [] }
     func picked(_ page: Page) -> [Finding] { findings(page).filter { $0.selectable && selected.contains($0.id) } }
