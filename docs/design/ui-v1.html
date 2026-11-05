@@ -1,0 +1,393 @@
+<title>磁盘瘦身 界面三版</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* 布局：顶部切换条 → 左侧「桌面舞台」（菜单栏 + 弹出面板 + 通知）/ 右侧方案说明；窄屏上下堆叠 */
+:root{
+  --bg:#eef0f3; --fg:#1b1f27; --muted:#5d6573; --line:#d5d9e0; --card:#ffffff; --accent:#2f5bd3;
+  --sans:"IBM Plex Sans",-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  /* 方案 A：原生面板，跟随系统明暗 */
+  --a-panel:rgba(246,247,249,.94); --a-fg:#1c1f24; --a-muted:#6b7280; --a-line:rgba(0,0,0,.09); --a-hover:rgba(0,0,0,.045);
+  --a-accent:#0a64d8; --a-sys:#9aa3b2; --a-proj:#e0773a; --a-cache:#8a63d2; --a-dl:#2aa198; --a-free:rgba(0,0,0,.08);
+  /* 方案 B：深色监视器，固定单一主题 */
+  --b-panel:#121a24; --b-fg:#e7edf5; --b-muted:#8796aa; --b-line:#243243; --b-amber:#f2b33d; --b-red:#ef6b5b; --b-teal:#4fc1b0;
+  /* 方案 C：浅色清单卡片，固定单一主题 */
+  --c-panel:#fbfbfd; --c-fg:#191c22; --c-muted:#646b78; --c-line:#e3e6ec; --c-cobalt:#2449c4; --c-soft:#eef2fc; --c-warn:#b5651d; --c-warnsoft:#fbf1e6;
+  --ok:#1f9d55; --warn:#c77c12; --bad:#d64545;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#14171c; --fg:#e6e9ee; --muted:#98a1ae; --line:#2b313a; --card:#1c2027; --accent:#7d9bff;
+  --a-panel:rgba(40,42,48,.94); --a-fg:#eceef2; --a-muted:#9aa2ae; --a-line:rgba(255,255,255,.09); --a-hover:rgba(255,255,255,.06);
+  --a-accent:#3b8cff; --a-free:rgba(255,255,255,.1);
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#14171c; --fg:#e6e9ee; --muted:#98a1ae; --line:#2b313a; --card:#1c2027; --accent:#7d9bff;
+  --a-panel:rgba(40,42,48,.94); --a-fg:#eceef2; --a-muted:#9aa2ae; --a-line:rgba(255,255,255,.09); --a-hover:rgba(255,255,255,.06);
+  --a-accent:#3b8cff; --a-free:rgba(255,255,255,.1);
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:22px}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px}
+header.top h1{margin:0;font-size:26px;font-weight:700;letter-spacing:-.01em;text-wrap:balance}
+header.top p{margin:4px 0 0;color:var(--muted);max-width:60ch}
+.seg{display:flex;gap:4px;padding:4px;border:1px solid var(--line);border-radius:10px;background:var(--card);flex-wrap:wrap}
+.seg button{font:inherit;border:0;background:transparent;color:var(--muted);padding:7px 14px;border-radius:7px;cursor:pointer;display:flex;gap:8px;align-items:baseline}
+.seg button b{font-family:var(--mono);font-weight:600;font-size:12px}
+.seg button[aria-selected="true"]{background:var(--fg);color:var(--bg)}
+.seg button:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.view{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:22px;align-items:start}
+@media (max-width:900px){.view{grid-template-columns:minmax(0,1fr)}}
+.note{display:grid;gap:14px;align-content:start}
+.note h2{margin:0;font-size:20px;letter-spacing:-.01em}
+.note .lede{margin:0;color:var(--fg)}
+.note dl{margin:0;display:grid;gap:10px}
+.note dt{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.note dd{margin:2px 0 0}
+.note .fine{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+
+/* 桌面舞台 */
+.stage{position:relative;border-radius:14px;overflow:hidden;min-height:640px;border:1px solid var(--line)}
+.menubar{height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:13px;backdrop-filter:blur(20px)}
+.menubar .l,.menubar .r{display:flex;gap:16px;align-items:center;white-space:nowrap;overflow:hidden}
+.menubar .l b{font-weight:600}
+.mbitem{display:flex;align-items:center;gap:5px;padding:1px 7px;border-radius:5px;font-family:var(--mono);font-size:12px;font-weight:600}
+.pop{position:absolute;top:36px;right:clamp(8px,8%,96px);width:min(388px,calc(100% - 16px));border-radius:14px;overflow:hidden}
+.toast{position:absolute;bottom:16px;left:16px;width:min(330px,calc(100% - 32px));border-radius:14px;padding:11px 13px;display:grid;grid-template-columns:34px 1fr;gap:10px;font-size:12.5px;line-height:1.4}
+.toast .ic{width:34px;height:34px;border-radius:8px;display:grid;place-items:center}
+.toast b{display:block;font-size:13px}
+.toast small{opacity:.7}
+@media (max-width:560px){.stage{min-height:0;padding-bottom:16px}.pop{position:relative;top:auto;right:auto;margin:10px auto 0;width:calc(100% - 16px)}.toast{position:relative;left:auto;bottom:auto;margin:12px auto 0;width:calc(100% - 16px)}.menubar .l span:nth-child(n+3){display:none}}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ===== 方案 A：容量仪表（原生） ===== */
+#va .stage{background:radial-gradient(120% 90% at 20% 0%,#9fb6d8 0%,#6d86ad 45%,#3f5478 100%)}
+#va .menubar{background:rgba(255,255,255,.55);color:#111}
+#va .mbitem{background:rgba(0,0,0,.12)}
+.pa{background:var(--a-panel);color:var(--a-fg);backdrop-filter:blur(30px);box-shadow:0 18px 50px rgba(0,0,0,.35),0 0 0 .5px rgba(0,0,0,.25)}
+.pa .hd{padding:14px 16px 10px;display:grid;gap:8px}
+.pa .row1{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.pa .row1 .big{font-size:22px;font-weight:600}
+.pa .row1 .big small{font-size:12px;color:var(--a-muted);font-weight:400}
+.pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.pa .pill{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.capbar{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:1.5px}
+.capbar i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--a-muted)}
+.legend span{display:flex;align-items:center;gap:5px}
+.legend span::before{content:"";width:7px;height:7px;border-radius:2px;background:var(--c)}
+.tabs{display:flex;gap:2px;margin:0 12px;padding:2px;border-radius:8px;background:var(--a-hover)}
+.tabs button{flex:1;font:inherit;font-size:12px;border:0;background:transparent;color:var(--a-fg);padding:5px 4px;border-radius:6px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--a-panel);box-shadow:0 1px 2px rgba(0,0,0,.18);font-weight:600}
+.pa .list{padding:8px 8px 0;max-height:330px;overflow:auto}
+.grp{padding:8px 8px 4px;font-size:11px;color:var(--a-muted);display:flex;justify-content:space-between;gap:8px}
+.grp b{color:var(--a-fg);font-weight:600}
+.it{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 8px;border-radius:7px;font-size:12.5px}
+.it:hover{background:var(--a-hover)}
+.it input{margin:0;accent-color:var(--a-accent)}
+.it .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.it .nm small{display:block;color:var(--a-muted);font-size:11px}
+.it .sz{font-family:var(--mono);font-size:11.5px;color:var(--a-muted)}
+.chip{font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600;margin-left:6px;vertical-align:1px}
+.chip.safe{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.chip.ask{background:color-mix(in srgb,var(--warn) 17%,transparent);color:var(--warn)}
+.chip.ro{background:var(--a-hover);color:var(--a-muted)}
+.pa .ft{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px 12px;border-top:1px solid var(--a-line);margin-top:6px}
+.pa .ft small{color:var(--a-muted);font-size:11.5px}
+.btn-a{font:inherit;font-size:12.5px;font-weight:600;border:0;border-radius:7px;padding:6px 12px;background:var(--a-accent);color:#fff;cursor:pointer;white-space:nowrap}
+.rule{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px;border-radius:7px;font-size:12.5px}
+.rule small{display:block;color:var(--a-muted);font-size:11px}
+.sw{width:30px;height:18px;border-radius:9px;background:var(--a-accent);position:relative;flex:none}
+.sw::after{content:"";position:absolute;top:2px;right:2px;width:14px;height:14px;border-radius:50%;background:#fff}
+.sw.off{background:var(--a-free)}.sw.off::after{right:auto;left:2px}
+#va .toast{background:var(--a-panel);color:var(--a-fg);backdrop-filter:blur(30px);box-shadow:0 10px 30px rgba(0,0,0,.3)}
+#va .toast .ic{background:var(--a-accent);color:#fff}
+
+/* ===== 方案 B：涨幅雷达（深色） ===== */
+#vb .stage{background:linear-gradient(160deg,#2c3a4d 0%,#1a2330 60%,#121821 100%)}
+#vb .menubar{background:rgba(10,14,20,.6);color:#d9e1ec}
+#vb .mbitem{background:var(--b-amber);color:#1a1405}
+.pb{background:var(--b-panel);color:var(--b-fg);box-shadow:0 20px 60px rgba(0,0,0,.55),0 0 0 1px var(--b-line)}
+.pb .hd{padding:16px 16px 6px}
+.pb .eyebrow{font-size:11px;letter-spacing:.08em;color:var(--b-muted);text-transform:uppercase;font-weight:600}
+.pb .headline{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-top:2px}
+.pb .headline .big{font-family:var(--mono);font-size:30px;font-weight:600;color:var(--b-amber);letter-spacing:-.02em}
+.pb .headline span{color:var(--b-muted);font-size:12.5px}
+.pb svg{display:block;width:100%;height:auto}
+.pb .sec{padding:4px 16px 0;font-size:11px;letter-spacing:.08em;color:var(--b-muted);text-transform:uppercase;font-weight:600;display:flex;justify-content:space-between}
+.cul{display:grid;gap:2px;padding:6px 8px 4px}
+.cu{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:8px;border-radius:8px}
+.cu:hover{background:rgba(255,255,255,.04)}
+.cu .t{font-size:12.5px;min-width:0}
+.cu .t small{display:block;color:var(--b-muted);font-size:11px}
+.cu .d{font-family:var(--mono);font-size:12.5px;font-weight:600;text-align:right}
+.cu .bar{grid-column:1/-1;height:4px;border-radius:2px;background:var(--b-line);overflow:hidden}
+.cu .bar i{display:block;height:100%;background:var(--b-amber)}
+.cu .act{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
+.btn-b{font:inherit;font-size:11.5px;font-weight:600;border:1px solid var(--b-line);background:transparent;color:var(--b-fg);border-radius:6px;padding:4px 9px;cursor:pointer}
+.btn-b.pri{background:var(--b-amber);color:#1a1405;border-color:var(--b-amber)}
+.pb .ft{display:flex;justify-content:space-between;gap:8px;padding:10px 16px 12px;border-top:1px solid var(--b-line);font-size:11.5px;color:var(--b-muted);flex-wrap:wrap}
+#vb .toast{background:#1d2632;color:var(--b-fg);box-shadow:0 10px 30px rgba(0,0,0,.45),0 0 0 1px var(--b-line)}
+#vb .toast .ic{background:var(--b-amber);color:#1a1405;font-family:var(--mono);font-weight:700;font-size:12px}
+
+/* ===== 方案 C：待清理收件箱（卡片逐个决定） ===== */
+#vc .stage{background:linear-gradient(135deg,#d9dfe9 0%,#c4cddc 50%,#aab6c9 100%)}
+#vc .menubar{background:rgba(255,255,255,.6);color:#111}
+#vc .mbitem{background:var(--c-cobalt);color:#fff}
+.pc{background:var(--c-panel);color:var(--c-fg);box-shadow:0 18px 50px rgba(30,40,70,.28),0 0 0 .5px rgba(0,0,0,.18)}
+.pc .hd{padding:14px 16px 10px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.pc .hd b{font-size:15px}
+.pc .hd small{display:block;color:var(--c-muted);font-size:12px}
+.dots{display:flex;gap:4px}
+.dots i{width:7px;height:7px;border-radius:50%;background:var(--c-line)}
+.dots i.done{background:var(--c-cobalt)}
+.dots i.cur{background:var(--c-cobalt);box-shadow:0 0 0 3px var(--c-soft)}
+.card{margin:0 12px;border:1px solid var(--c-line);border-radius:12px;padding:14px;display:grid;gap:10px;background:#fff}
+.card .tag{justify-self:start;font-size:11px;font-weight:600;padding:2px 8px;border-radius:5px;background:var(--c-soft);color:var(--c-cobalt)}
+.card .tag.ask{background:var(--c-warnsoft);color:var(--c-warn)}
+.card h3{margin:0;font-size:16px;line-height:1.35;text-wrap:balance}
+.card .why{margin:0;font-size:12.5px;color:var(--c-muted)}
+.card .size{font-family:var(--mono);font-size:26px;font-weight:600;letter-spacing:-.02em}
+.card .size small{font-size:12px;color:var(--c-muted);font-weight:400;margin-left:6px;font-family:var(--sans)}
+.card ul{margin:0;padding:0;list-style:none;display:grid;gap:3px;font-size:12px;max-height:118px;overflow:auto}
+.card li{display:flex;justify-content:space-between;gap:10px;color:var(--c-fg)}
+.card li span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card li span:last-child{font-family:var(--mono);color:var(--c-muted);flex:none}
+.acts{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:6px;padding:12px}
+.btn-c{font:inherit;font-size:12.5px;font-weight:600;border:1px solid var(--c-line);background:#fff;color:var(--c-fg);border-radius:8px;padding:8px 6px;cursor:pointer}
+.btn-c.pri{background:var(--c-cobalt);border-color:var(--c-cobalt);color:#fff}
+.queue{padding:0 12px 12px;display:grid;gap:4px}
+.queue .q{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--c-muted);padding:6px 8px;border-radius:7px;background:#f3f4f7}
+.queue .q span:last-child{font-family:var(--mono)}
+.donebox{margin:0 12px 12px;padding:26px 16px;text-align:center;border:1px dashed var(--c-line);border-radius:12px;display:grid;gap:6px}
+.donebox b{font-size:16px}
+.donebox .num{font-size:28px;color:var(--c-cobalt);font-weight:600}
+#vc .toast{background:#fff;color:var(--c-fg);box-shadow:0 10px 30px rgba(30,40,70,.25)}
+#vc .toast .ic{background:var(--c-cobalt);color:#fff;font-weight:700}
+@media (prefers-reduced-motion:no-preference){.card{animation:in .22s ease-out}@keyframes in{from{transform:translateY(6px);opacity:.4}to{transform:none;opacity:1}}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>磁盘瘦身 · 菜单栏界面三版</h1>
+      <p>同一份数据（取自 11 月 5 日的真实扫描，属于示例）做成三种截然不同的面板。点上方切换；面板里的勾选框、标签页、按钮都能点。</p>
+    </div>
+    <div class="seg" role="tablist" aria-label="切换方案">
+      <button role="tab" id="t-a" aria-selected="true" data-v="a"><b>A</b>容量仪表</button>
+      <button role="tab" id="t-b" aria-selected="false" data-v="b"><b>B</b>涨幅雷达</button>
+      <button role="tab" id="t-c" aria-selected="false" data-v="c"><b>C</b>待清理收件箱</button>
+    </div>
+  </header>
+
+  <!-- ========== A ========== -->
+  <section class="view" id="va">
+    <div class="stage">
+      <div class="menubar"><div class="l"><b>访达</b><span>文件</span><span>编辑</span><span>显示</span></div><div class="r"><span class="mbitem">◔ 91G</span><span>周四 10:05</span></div></div>
+      <div class="pop pa">
+        <div class="hd">
+          <div class="row1"><div class="big num">91 GB <small>可用 / 460 GB</small></div><span class="pill">健康</span></div>
+          <div class="capbar" aria-label="磁盘构成">
+            <i style="width:21%;background:var(--a-sys)"></i><i style="width:33%;background:var(--a-proj)"></i><i style="width:17%;background:var(--a-cache)"></i><i style="width:9%;background:var(--a-dl)"></i><i style="width:20%;background:var(--a-free)"></i>
+          </div>
+          <div class="legend">
+            <span style="--c:var(--a-sys)">系统与应用</span><span style="--c:var(--a-proj)">项目 152G</span><span style="--c:var(--a-cache)">缓存与对话 78G</span><span style="--c:var(--a-dl)">文稿与下载</span>
+          </div>
+        </div>
+        <div class="tabs" role="tablist">
+          <button role="tab" id="a-t1" aria-selected="true" data-p="a1">下载 · 7</button>
+          <button role="tab" id="a-t2" aria-selected="false" data-p="a2">看不见的 · 6</button>
+          <button role="tab" id="a-t3" aria-selected="false" data-p="a3">提醒</button>
+        </div>
+        <div class="list" id="a1">
+          <div class="grp"><b>安装包 · 装完就用不上</b><span>超过 7 天</span></div>
+          <label class="it"><input type="checkbox" id="a-c1" checked data-mb="43"><span class="nm">KanKan-Shoucang_0.2.5_arm64.dmg<small>10 月 18 日下载</small></span><span class="sz">43 MB</span></label>
+          <label class="it"><input type="checkbox" id="a-c2" checked data-mb="42"><span class="nm">Luzi_0.1.10_aarch64.dmg<small>9 月 14 日下载</small></span><span class="sz">42 MB</span></label>
+          <div class="grp"><b>压缩包 · 旁边已有解压好的文件夹</b><span></span></div>
+          <label class="it"><input type="checkbox" id="a-c3" checked data-mb="61"><span class="nm">mono-color-skill-main.zip<small>10 月 6 日 · 已解压</small></span><span class="sz">61 MB</span></label>
+          <label class="it"><input type="checkbox" id="a-c4" checked data-mb="31"><span class="nm">婴儿工作台_23张原始图片.zip<small>10 月 23 日 · 已解压</small></span><span class="sz">31 MB</span></label>
+          <div class="grp"><b>30 天没打开过</b><span>默认不勾</span></div>
+          <label class="it"><input type="checkbox" id="a-c5" data-mb="49"><span class="nm">社群营销与运营.pdf<small>9 月 28 日 · 从没打开</small></span><span class="sz">49 MB</span></label>
+          <label class="it"><input type="checkbox" id="a-c6" data-mb="38"><span class="nm">管培生阶段反馈-工作流和九月任务.m4a<small>9 月 10 日 · 上次打开 9 月 11 日</small></span><span class="sz">38 MB</span></label>
+          <div class="grp"><b>最近下载的大文件</b><span>只提示</span></div>
+          <label class="it"><input type="checkbox" id="a-c7" data-mb="764"><span class="nm">双11大学辅导物料.zip<small>11 月 2 日 · 还没解压</small></span><span class="sz">764 MB</span></label>
+        </div>
+        <div class="list" id="a2" hidden>
+          <div class="grp"><b>可再生 · 删了会自动重新生成</b><span></span></div>
+          <label class="it"><input type="checkbox" id="a-d1" checked data-mb="1024"><span class="nm">npm 缓存<span class="chip safe">安全</span><small>~/.npm</small></span><span class="sz">1.0 GB</span></label>
+          <label class="it"><input type="checkbox" id="a-d2" checked data-mb="283"><span class="nm">Homebrew 旧版本<span class="chip safe">安全</span><small>brew cleanup</small></span><span class="sz">283 MB</span></label>
+          <div class="grp"><b>需要你确认</b><span></span></div>
+          <label class="it"><input type="checkbox" id="a-d3" data-mb="11264"><span class="nm">Codex 备份快照 ×4<span class="chip ask">需确认</span><small>8–9 月 session-guard</small></span><span class="sz">11 GB</span></label>
+          <label class="it"><input type="checkbox" id="a-d4" data-mb="4505"><span class="nm">Colima 虚拟机 multica<span class="chip ask">需确认</span><small>10 月 19 日后没开过</small></span><span class="sz">4.4 GB</span></label>
+          <div class="grp"><b>只展示 · 工具不会删</b><span></span></div>
+          <div class="it"><span></span><span class="nm">Codex 对话记录<span class="chip ro">只展示</span><small>8 月单月 21 GB</small></span><span class="sz">31 GB</span></div>
+          <div class="it"><span></span><span class="nm">Claude 对话记录<span class="chip ro">只展示</span></span><span class="sz">4.4 GB</span></div>
+        </div>
+        <div class="list" id="a3" hidden>
+          <div class="rule"><span>可用低于 60 GB 时图标变橙<small>现在 91 GB</small></span><span class="sw"></span></div>
+          <div class="rule"><span>可用低于 30 GB 时弹通知</span><span class="sw"></span></div>
+          <div class="rule"><span>某个目录一天涨超过 10 GB<small>上周 postpane 触发过 4 次</small></span><span class="sw"></span></div>
+          <div class="rule"><span>每周五 18:00 发瘦身周报</span><span class="sw"></span></div>
+          <div class="rule"><span>自动清理「安全」项<small>只在低于 60 GB 时</small></span><span class="sw off"></span></div>
+        </div>
+        <div class="ft"><small id="a-sum">已选 4 项 · 177 MB</small><button class="btn-a" id="a-go">移到废纸篓</button></div>
+      </div>
+      <div class="toast"><div class="ic">◔</div><div><b>下载文件夹有 7 个文件可以清理</b>其中 4 个是装完的安装包和解压过的压缩包，约 177 MB。<br><small>磁盘瘦身 · 现在</small></div></div>
+    </div>
+    <aside class="note">
+      <h2>A · 容量仪表</h2>
+      <p class="lede">像系统自带的面板：先看磁盘还剩多少、被什么占着，再按三个标签分开处理。</p>
+      <dl>
+        <div><dt>点开第一眼</dt><dd>剩余空间、健康状态、一条构成色条。</dd></div>
+        <div><dt>怎么清</dt><dd>按类别分组的勾选清单，默认只勾「安全」项，一键移到废纸篓。</dd></div>
+        <div><dt>适合</dt><dd>想一次看全、习惯自己勾选的时候。</dd></div>
+        <div><dt>代价</dt><dd>信息最全也最密；不太能回答「这几天是谁涨的」。</dd></div>
+      </dl>
+      <p class="fine">跟随系统浅色 / 深色。菜单栏图标直接显示剩余 GB。</p>
+    </aside>
+  </section>
+
+  <!-- ========== B ========== -->
+  <section class="view" id="vb" hidden>
+    <div class="stage">
+      <div class="menubar"><div class="l"><b>访达</b><span>文件</span><span>编辑</span><span>显示</span></div><div class="r"><span class="mbitem">▲ 6.7G</span><span>周二 21:40</span></div></div>
+      <div class="pop pb">
+        <div class="hd">
+          <div class="eyebrow">最近 7 天 · 可用空间</div>
+          <div class="headline"><span class="big">−57 GB</span><span>从 64 GB 掉到 6.7 GB</span></div>
+        </div>
+        <svg viewBox="0 0 360 120" role="img" aria-label="最近 7 天可用空间从 64 GB 降到 6.7 GB">
+          <g stroke="var(--b-line)" stroke-width="1">
+            <line x1="34" y1="16" x2="350" y2="16"/><line x1="34" y1="52" x2="350" y2="52"/><line x1="34" y1="88" x2="350" y2="88"/>
+          </g>
+          <line x1="34" y1="34" x2="350" y2="34" stroke="var(--b-teal)" stroke-dasharray="3 3" stroke-width="1"/>
+          <text x="348" y="30" text-anchor="end" font-size="9" fill="var(--b-teal)" font-family="IBM Plex Mono, monospace">60G 提醒线</text>
+          <g font-size="9" fill="var(--b-muted)" font-family="IBM Plex Mono, monospace" text-anchor="end">
+            <text x="28" y="19">80</text><text x="28" y="55">40</text><text x="28" y="91">0</text>
+          </g>
+          <!-- 0GB→y88, 80GB→y16 : y = 88 - v*0.9 -->
+          <path d="M40 30.4 L91 41.2 L142 52 L193 62.8 L244 72.7 L295 82 L295 88 L40 88 Z" fill="var(--b-amber)" opacity=".14"/>
+          <polyline points="40,30.4 91,41.2 142,52 193,62.8 244,72.7 295,82" fill="none" stroke="var(--b-amber)" stroke-width="2"/>
+          <circle cx="295" cy="82" r="4" fill="var(--b-red)"/>
+          <g font-size="9" fill="var(--b-muted)" font-family="IBM Plex Mono, monospace" text-anchor="middle">
+            <text x="40" y="108">10/29</text><text x="91" y="108">10/30</text><text x="142" y="108">10/31</text><text x="193" y="108">11/1</text><text x="244" y="108">11/2</text><text x="295" y="108">11/3</text>
+          </g>
+          <text x="295" y="73" text-anchor="middle" font-size="10" font-weight="600" fill="var(--b-red)" font-family="IBM Plex Mono, monospace">6.7</text>
+        </svg>
+        <div class="sec"><span>谁涨的</span><span>7 天增量</span></div>
+        <div class="cul">
+          <div class="cu"><div class="t">postpane · 14 个已合并 worktree 的构建产物<small>每开一个 worktree 全量编译一次，约 6 GB</small></div><div class="d" style="color:var(--b-amber)">+78.1G</div><div class="bar"><i style="width:100%"></i></div><div class="act"><button class="btn-b pri" id="b-1">清掉 78 GB</button><button class="btn-b" id="b-1b">看明细</button></div></div>
+          <div class="cu"><div class="t">Codex 对话记录<small>只展示，不会清</small></div><div class="d">+1.2G</div><div class="bar"><i style="width:2%"></i></div></div>
+          <div class="cu"><div class="t">下载文件夹<small>双11大学辅导物料.zip 等 3 个</small></div><div class="d">+0.9G</div><div class="bar"><i style="width:1.5%"></i></div><div class="act"><button class="btn-b" id="b-3">去下载区处理</button></div></div>
+          <div class="cu"><div class="t">npm 缓存<small>可再生</small></div><div class="d">+0.6G</div><div class="bar"><i style="width:1%"></i></div><div class="act"><button class="btn-b" id="b-4">清掉</button></div></div>
+        </div>
+        <div class="ft"><span>下次巡检 明天 10:05</span><span>提醒线 60G · 告警线 30G</span></div>
+      </div>
+      <div class="toast"><div class="ic">+12G</div><div><b>postpane 今天涨了 12 GB</b>又多了 2 个 worktree 的构建产物，可用空间剩 6.7 GB。<br><small>磁盘瘦身 · 21:40</small></div></div>
+    </div>
+    <aside class="note">
+      <h2>B · 涨幅雷达</h2>
+      <p class="lede">不先问「现在有多满」，先问「这几天是谁吃掉的」。对准你说的「看不见的地方」。</p>
+      <dl>
+        <div><dt>点开第一眼</dt><dd>7 天可用空间曲线和一个大数字：掉了多少。</dd></div>
+        <div><dt>怎么清</dt><dd>按增量排「肇事者」，每一行直接给处理按钮，下载区只是其中一行。</dd></div>
+        <div><dt>适合</dt><dd>空间突然没了、想不起来干了什么的时候。今天 postpane 那 78 GB 就是这种。</dd></div>
+        <div><dt>代价</dt><dd>需要每天记一次快照，装好第一周没有曲线；下载区的批量勾选要再点进去一层。</dd></div>
+      </dl>
+      <p class="fine">固定深色。菜单栏图标在快满时显示红色箭头和剩余量。示意的是 11 月 3 日清理前的状态。</p>
+    </aside>
+  </section>
+
+  <!-- ========== C ========== -->
+  <section class="view" id="vc" hidden>
+    <div class="stage">
+      <div class="menubar"><div class="l"><b>访达</b><span>文件</span><span>编辑</span><span>显示</span></div><div class="r"><span class="mbitem" id="c-mb">5</span><span>周五 18:00</span></div></div>
+      <div class="pop pc">
+        <div class="hd"><div><b>本周瘦身</b><small id="c-sub">5 件事等你决定 · 最多腾出 16.8 GB</small></div><div class="dots" id="c-dots"></div></div>
+        <div id="c-body"></div>
+        <div class="acts" id="c-acts"><button class="btn-c pri" id="c-yes">移到废纸篓</button><button class="btn-c" id="c-keep">保留</button><button class="btn-c" id="c-later">下周再问</button></div>
+        <div class="queue" id="c-queue"></div>
+      </div>
+      <div class="toast"><div class="ic">5</div><div><b>本周瘦身：5 件事，约 16.8 GB</b>花一分钟逐个决定，每件都能撤销。<br><small>磁盘瘦身 · 周五 18:00</small></div></div>
+    </div>
+    <aside class="note">
+      <h2>C · 待清理收件箱</h2>
+      <p class="lede">不给你一张大清单，而是一次只问一件事，像处理收件箱。专治「不会清、不敢清」。</p>
+      <dl>
+        <div><dt>点开第一眼</dt><dd>一张卡：这是什么、为什么建议清、能腾出多少。</dd></div>
+        <div><dt>怎么清</dt><dd>三个按钮：移到废纸篓 / 保留（以后不再问）/ 下周再问。点完自动下一张。</dd></div>
+        <div><dt>适合</dt><dd>每周五收到通知，一分钟处理完；判断全由工具先做好。</dd></div>
+        <div><dt>代价</dt><dd>看不到全貌；要一次清一大批时比 A 慢。</dd></div>
+      </dl>
+      <p class="fine">固定浅色。菜单栏图标显示待决定的数量，像未读角标。</p>
+    </aside>
+  </section>
+</div>
+
+<script>
+(function(){
+  // 方案切换
+  var tabs=document.querySelectorAll('.seg button');
+  function show(v){
+    tabs.forEach(function(b){b.setAttribute('aria-selected',String(b.dataset.v===v))});
+    ['a','b','c'].forEach(function(k){document.getElementById('v'+k).hidden=(k!==v)});
+  }
+  tabs.forEach(function(b){b.addEventListener('click',function(){show(b.dataset.v);try{history.replaceState(null,'','#'+b.dataset.v)}catch(e){}})});
+  var h=(location.hash||'').slice(1); if(['a','b','c'].indexOf(h)>-1) show(h);
+  window.addEventListener('hashchange',function(){var x=location.hash.slice(1);if(['a','b','c'].indexOf(x)>-1)show(x)});
+
+  // A：标签页 + 勾选合计
+  var at=document.querySelectorAll('#va .tabs button');
+  at.forEach(function(b){b.addEventListener('click',function(){
+    at.forEach(function(x){x.setAttribute('aria-selected',String(x===b));document.getElementById(x.dataset.p).hidden=(x!==b)});
+    sum();
+  })});
+  function fmt(mb){return mb>=1024?(mb/1024).toFixed(1)+' GB':mb+' MB'}
+  function sum(){
+    var pane=[].slice.call(document.querySelectorAll('#va .list')).filter(function(p){return !p.hidden})[0];
+    var cs=pane.querySelectorAll('input:checked'),t=0;cs.forEach(function(c){t+=+c.dataset.mb});
+    document.getElementById('a-sum').textContent=pane.id==='a3'?'规则改动立即生效':('已选 '+cs.length+' 项 · '+fmt(t));
+    document.getElementById('a-go').hidden=pane.id==='a3';
+  }
+  document.querySelectorAll('#va input[type=checkbox]').forEach(function(c){c.addEventListener('change',sum)});
+  document.getElementById('a-go').addEventListener('click',function(){
+    var s=document.getElementById('a-sum');s.textContent='已移到废纸篓 · 可在废纸篓里放回原处';
+  });
+
+  // B：按钮反馈
+  [['b-1','已清掉 78.1 GB · 可用 85 GB'],['b-4','已清掉 0.6 GB']].forEach(function(p){
+    var b=document.getElementById(p[0]);b.addEventListener('click',function(){b.textContent=p[1];b.disabled=true});
+  });
+
+  // C：卡片逐个决定
+  var cards=[
+    {tag:'安装包',h:'2 个安装包，下载超过 7 天了',why:'装好之后安装包就没用了。要重装可以再去官网下载。',mb:85,files:[['KanKan-Shoucang_0.2.5_arm64.dmg','43 MB'],['Luzi_0.1.10_aarch64.dmg','42 MB']]},
+    {tag:'压缩包',h:'2 个压缩包，旁边已经有解压好的文件夹',why:'内容和文件夹里一样，留着只是多占一份。',mb:92,files:[['mono-color-skill-main.zip','61 MB'],['婴儿工作台_23张原始图片.zip','31 MB']]},
+    {tag:'构建产物',h:'npm 和 Homebrew 的缓存',why:'下次安装时会自动重新下载，只是第一次会慢一点。',mb:1307,files:[['~/.npm','1.0 GB'],['Homebrew 旧版本','283 MB']]},
+    {tag:'需确认',ask:true,h:'Colima 虚拟机 multica，10 月 19 日之后没开过',why:'删除后里面的容器和镜像都没了。还要用就点「保留」。',mb:4505,files:[['~/.colima/_lima','4.4 GB']]},
+    {tag:'需确认',ask:true,h:'4 份 Codex 备份快照（8–9 月）',why:'是你自己做的 session-guard 备份。Codex 现在用着正常的话，可以只留最新一份。',mb:11264,files:[['session-guard-20260916','4.2 GB'],['session-guard-20260907','2.8 GB'],['session-guard-20260901','2.2 GB'],['session-guard-20260827','1.6 GB']]}
+  ];
+  var i=0,freed=0,body=document.getElementById('c-body');
+  function fmtC(mb){return mb>=1024?(mb/1024).toFixed(1)+' GB':mb+' MB'}
+  function render(){
+    var dots=document.getElementById('c-dots');dots.innerHTML='';
+    cards.forEach(function(_,k){var d=document.createElement('i');if(k<i)d.className='done';if(k===i)d.className='cur';dots.appendChild(d)});
+    var left=cards.length-i,rest=cards.slice(i).reduce(function(a,c){return a+c.mb},0);
+    document.getElementById('c-mb').textContent=left>0?String(left):'✓';
+    document.getElementById('c-sub').textContent=left>0?(left+' 件事等你决定 · 最多腾出 '+fmtC(rest)):'本周都处理完了';
+    var q=document.getElementById('c-queue');q.innerHTML='';
+    if(i>=cards.length){
+      body.innerHTML='<div class="donebox"><b>都处理完了</b><span class="num">'+fmtC(freed)+'</span><span style="color:var(--c-muted);font-size:12px">已移到废纸篓，可以放回原处。下周五再见。</span></div>';
+      document.getElementById('c-acts').hidden=true;return;
+    }
+    var c=cards[i];
+    body.innerHTML='<div class="card"><span class="tag'+(c.ask?' ask':'')+'">'+c.tag+'</span><h3>'+c.h+'</h3><div class="size">'+fmtC(c.mb)+'<small>可腾出</small></div><p class="why">'+c.why+'</p><ul>'+c.files.map(function(f){return '<li><span>'+f[0]+'</span><span>'+f[1]+'</span></li>'}).join('')+'</ul></div>';
+    cards.slice(i+1,i+4).forEach(function(n){var d=document.createElement('div');d.className='q';d.innerHTML='<span>'+n.h+'</span><span>'+fmtC(n.mb)+'</span>';q.appendChild(d)});
+  }
+  document.getElementById('c-yes').addEventListener('click',function(){freed+=cards[i].mb;i++;render()});
+  document.getElementById('c-keep').addEventListener('click',function(){i++;render()});
+  document.getElementById('c-later').addEventListener('click',function(){i++;render()});
+  render();
+})();
+</script>
