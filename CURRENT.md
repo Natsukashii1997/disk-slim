@@ -1,6 +1,17 @@
 # 当前状态
 
-更新：2026-11-05。第 3 批「菜单栏界面」完成（按用户选定的第 2 版「首页 + 下钻」），在分支 `feat/menubar-ui`，已打包 `dist/DiskSlim.app` 但未启动。唯一下一步：用户自己打开应用试用并反馈；之后做第 4 批「涨幅追踪」。
+更新：2026-11-05。第 3 批完成并修了用户试用发现的「清理命令高估」，在分支 `feat/menubar-ui`，新版应用已重新打包并在运行。唯一下一步：等用户反馈试用感受；之后做第 4 批「涨幅追踪」。
+
+## 修复：清理命令的可清空间被高估（2026-11-05，Claude，用户同意「修一下」；已提交到 `feat/menubar-ui`、未发布）
+
+- 时间：开工 `2026-11-05 11:55`（`date '+%F %H:%M'` 记录）。来由：用户 11:54 在应用里真实清理了 15 项（`history.json`）：12 个文件进废纸篓 139 MB，三条命令只释放 144 MB，pnpm、Homebrew 释放 0，首页却写可清 1.0 GB。
+- 改了哪些文件：新建 `Sources/DiskSlimCore/History.swift`（`applyHistory`：30 天内同一命令上次实际释放不到 10 MB 就不默认勾选并写明结果）；`Scan.swift` 接上操作记录；新建 `tests/DiskSlimCoreTests/HistoryTests.swift`（4 项）；改 `AGENTS.md` 结构说明、`docs/LESSONS.md`（L-05）。
+- 测试：`swift test` 原样结果 `✔ Test run with 27 tests in 7 suites passed`（一次通过，没遇到 L-04）；`node --test tests/*.test.mjs` 原样结果「ℹ pass 4」「ℹ fail 0」。
+- 验证：真实磁盘 `diskslim scan`：pnpm 469 MB、Homebrew 283 MB 都显示「11 月 5 日清理过，只释放了 0 KB，剩下的都还在用」，不再勾选；默认勾选 0 项（输出存 `evidence/2026-11-05-scan-after-fix.txt`）。`scripts/bundle.sh` 重新打包，停掉旧进程后重新打开，新进程 59185 在运行；新版面板没有在屏幕上看过。
+- 截图：无。
+- 发布与回读：未发布。
+- 与授权不一致之处、遗留问题、范围外发现：① 用户那次清理的 12 个文件还在废纸篓里，未清空，可以撤销；② 首页底部按钮在没有勾选项时显示「清理建议项 · 0 KB」并变灰，文案可以再改成「暂时没有建议清理的」，未改，等用户反馈；③ 用户的试用感受还没说。
+- 本轮新坑：L-05。
 
 ## 第 3 批：菜单栏应用（首页 + 下钻）（2026-11-05，Claude，用户选定第 2 版；已提交到 `feat/menubar-ui`、未发布、未安装）
 

@@ -49,6 +49,14 @@
 - 证据：第 2 批交接「测试」一行；第 3 批连跑记录（本会话）。
 - 升级：同类第 2 次，已写进 AGENTS.md「运行」。
 
+## L-05 清理命令腾出的空间远小于目录大小，首页「可清」被高估（2026-11-05）
+
+- 现象：用户在应用里点「清理建议项」，首页写可清 1.0 GB，实际只释放 144 MB（全是 npm）；`pnpm store prune` 释放 0（469 MB 全有项目在用），`brew cleanup -s` 释放 0（283 MB 是 Homebrew 自己要留的）。下次打开这两项还会默认勾选，每次都白点。
+- 根因：清理命令类的项用「目录大小」当「可清大小」，但命令只删其中一部分，事先算不出。
+- 正确做法：用操作记录校正：最近 30 天同一条命令上次实际释放不到 10 MB，就不再默认勾选，说明里写上次的结果（`Sources/DiskSlimCore/History.swift`，测试 `HistoryTests`）。
+- 证据：`~/Library/Application Support/disk-slim/history.json` 11:54 那一批；修复后扫描 `evidence/2026-11-05-scan-after-fix.txt`。
+- 升级：未升级。
+
 ---
 
 格式：
