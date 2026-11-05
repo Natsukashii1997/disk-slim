@@ -1,6 +1,19 @@
 # 当前状态
 
-更新：2026-11-05。第 0–6 批都已完成，全面审查的 B1–B12 都已修，应用已装到 `/Applications/DiskSlim.app` 并在运行。分支 main → feat/scan-engine → feat/cleaner → feat/menubar-ui → feat/growth → feat/alerts → feat/launch → feat/review-fixes，都没合并、没推送，GitHub 远端未建。唯一下一步：用户试用一周（第 6 批验收标准「使用一周无误删」），期间按需打开「完全磁盘访问权限」、通知和开机自启；决定是否停掉 Claude 定时任务 `disk-space-guard`；看 `docs/reviews/2026-11-05-全面审查与优化建议.md`，决定第二节的优化建议做不做。
+更新：2026-11-05。第 0–6 批都已完成，全面审查的 B1–B12 都已修，第 7 批（worktree 新规则）已完成，应用已装到 `/Applications/DiskSlim.app` 并在运行。分支 main → feat/scan-engine → feat/cleaner → feat/menubar-ui → feat/growth → feat/alerts → feat/launch → feat/review-fixes → feat/worktree-rules，都没合并、没推送，GitHub 远端未建。唯一下一步：用户试用一周（第 6 批验收标准「使用一周无误删」），期间按需打开「完全磁盘访问权限」、通知和开机自启；决定是否停掉 Claude 定时任务 `disk-space-guard`；看 `docs/reviews/2026-11-05-全面审查与优化建议.md`，打开通知和自动清理后第 7 批才会自己动起来；postpane 的 Cargo 配置和「合并后清 target」的流程改动等用户定。
+
+## 止血 + 第 7 批：worktree 构建产物新规则（2026-11-05，Claude，用户说「删，然后做第 7 批」；已提交到 `feat/worktree-rules`、已重新安装、未发布）
+
+- 时间：开工 `2026-11-05 15:06`（`date '+%F %H:%M'` 记录）。来由：用户让独立 agent 审核下一步计划，审核员部分同意，给出改过的第 7 批范围（已落地 + 静置 2 小时 + 三道「没在用」，砍掉项目预算和掉速通知），并建议先止血。
+- 止血：用户同意后，先只读核对 postpane 的 48、50、52、54、56 五个已合并 worktree（不是链接、target 被忽略、没改动、没被锁、没进程、cargo 锁没占），再在各自目录里跑 `cargo clean`，共删 35.8 GiB，可用从 32 GB 回到 62 GB（`evidence/2026-11-05-stopgap-cargo-clean.txt`；第一次用了本机没有的 `timeout` 命令，什么都没做，已如实记在同一文件）。
+- 改了哪些文件：`WorktreeScanner.swift`（已落地 = PR 已合并且停在合并提交，或当前提交已在 origin/HEAD|main|master 里；只靠后者认出的要静置 24 小时；三道「没在用」：`git worktree list --porcelain` 有 locked（原因做 git 引号解码）、`target/*/.cargo*lock` 和 `target/*/*/.cargo*lock` 非阻塞 flock 拿不到、`lsof -n -d cwd,txt -Fn` 有进程路径在里面；静置 2 小时；没落地但闲置 ≥ 3 天归「闲置的 worktree 构建产物」risk=confirm、不默认勾选；git 一律 `--no-optional-locks`；ps 匹配要求路径后紧跟「/」或空白或行尾）；`Scan.swift`（执行前复核三道判断，lsof 一分钟内复用）；`Cleaner.swift`（删除时持 cargo 锁、`rename(2)` 挪进 `deleting/<uuid>` 再删，跨卷或暂存目录不可用时持锁原地删；暂存目录和上一层用 `lstat` 确认不是链接；补删只删 UUID 名字且放了一小时以上的）；`Alerts.swift`（自动清理改为两次至少隔 2 小时 `autoCleanAt`；`shouldRescanForDrop`）；`Store.swift`（`dailyLoop` 每 5 分钟读可用空间，比上次扫描掉 ≥ 8 GB 且离上次扫描 ≥ 30 分钟就扫描）；测试：新规则 11 项、掉速 1 项，并入审查员 `Batch7ReviewTests.swift` 3 项，旧测试按新路径参数位置和新提示改；`docs/PRD.md`（4.2 表、4.3）；`docs/LESSONS.md`（L-10）。
+- 测试：`scripts/test.sh` 原样结果 `✔ Test run with 229 tests in 32 suites passed`；`node --test tests/*.test.mjs` 原样结果「ℹ fail 0」；`node scripts/check-rules.mjs` 输出「通用规则检查通过」。
+- 验证：真实磁盘只读扫描（`evidence/2026-11-05-scan-batch7.json`，用时 16.5 秒）：59（squash 合并后的分离 HEAD）认成已落地、只差静置；正在编译的 66 三道判断都认出；cloud-sessions 被锁不碰；没有误勾。`scripts/install.sh` 重新安装，只有 `/Applications/DiskSlim.app` 一个进程（4664）。真机上没有执行过第 7 批的自动清理（通知被拒、自动清理默认关）。
+- 独立审查（L-06）：审核员（计划阶段）+ 审查员（实现后，沙盒里真实 git worktree 和 cargo 1.99 演练）。审查员报 8 条，全部修了：暂存目录是符号链接时清空链接指向的目录（中，已实测，L-10）；跨卷时 `moveItem` 会复制（改用 `rename`）；名字是前缀的 worktree 误判在用；锁原因中文显示成八进制；两个进程同时清理互删暂存；挪动失败时先放了锁；复核每项重跑 lsof；只靠「已在主分支里」认出的会清掉刚切出来的 worktree（改为静置 24 小时）。
+- 截图：无（界面没改）。
+- 发布与回读：未发布；已重新安装到本机。
+- 与授权不一致之处、遗留问题、范围外发现：① 要让第 7 批自己起作用，用户得打开通知和「自动清理」；② 跨卷没实测（本机没有第二个可写卷）；③ 陈旧的 worktree 锁（会话已退出锁还在）会让那个 worktree 永远不被清，只影响效果不影响安全；④ 审核员建议在合并流程（`agent-kit/工程流程.md` 或 postpane 的 AGENTS.md）加「合并后 `cargo clean` 或 `git worktree remove`」从源头根治，要用户批准、不归本项目改；⑤ postpane 的 Cargo 配置（`debug = "line-tables-only"`）先量再改，交给 postpane 会话；⑥ 审查员们的 worktree 还在 `.claude/worktrees/`；⑦ 可用空间 15:32 是 56 GB，postpane 仍在编译新 worktree。
+- 本轮新坑：L-10。
 
 ## 修复全面审查 B8–B12（2026-11-05，Claude，用户说「继续修 B8–B12」；已提交到 `feat/review-fixes`、已重新安装、未发布）
 
