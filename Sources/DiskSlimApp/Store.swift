@@ -61,6 +61,9 @@ final class Store: ObservableObject {
     /// 正在扫描或清理时，清理和撤销按钮都不能点
     var busy: Bool { scanning || working }
 
+    /// 应用里那一个（退出时要问它是不是正在清理）
+    static weak var main: Store?
+
     init(home: URL = FileManager.default.homeDirectoryForCurrentUser, readOnly: Bool = false) {
         self.home = home
         self.readOnly = readOnly
@@ -71,6 +74,7 @@ final class Store: ObservableObject {
         samples = usageLog.load(readOnly: readOnly)
         decisions = decisionLog.load(readOnly: readOnly)
         alertState = alertStore.load(readOnly: readOnly)
+        if !readOnly { Store.main = self }
         // 第一次运行：从下一个周五开始发周报，不补发装上之前那个周五的
         if !readOnly, Notifier.shared.available, alertState.sent["weekly"] == nil {
             alertState.sent["weekly"] = BeijingTime.dayKey(Weekly.lastReport(atOrBefore: Date()))
@@ -162,7 +166,10 @@ final class Store: ObservableObject {
     // MARK: 开机自启
 
     /// 只在装进「应用程序」后才能开：从 dist/ 注册的话，搬走或重新打包就失效了
-    var installedInApplications: Bool { Bundle.main.bundlePath.hasPrefix("/Applications/") }
+    var installedInApplications: Bool {
+        Bundle.main.bundlePath.hasPrefix("/Applications/") && Bundle.main.bundleURL.pathExtension == "app"
+            && Bundle.main.bundleIdentifier == "local.nat.disk-slim"
+    }
     @Published var loginItemOn = SMAppService.mainApp.status == .enabled
     @Published var loginItemError: String?
 
@@ -174,21 +181,21 @@ final class Store: ObservableObject {
         } catch {
             loginItemError = "没设置成功：\(error.localizedDescription)"
         }
+        refreshLoginItem()
+        if on && SMAppService.mainApp.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
+    }
+
+    /// 用户可能在系统设置里改过：打开提醒设置页时重读
+    func refreshLoginItem() {
         let status = SMAppService.mainApp.status
         loginItemOn = status == .enabled
-        if on && status == .requiresApproval { loginItemError = "要在「系统设置 › 通用 › 登录项」里允许磁盘瘦身" }
+        if status == .requiresApproval { loginItemError = "要在「系统设置 › 通用 › 登录项」里允许磁盘瘦身" }
     }
 
     // MARK: 授权
 
     /// 读不全的位置（多半是没给「完全磁盘访问权限」）：首页提示去授权
-    var unreadable: [String] {
-        guard let r = report else { return [] }
-        var list: [String] = []
-        if r.downloadsBytes == nil { list.append("下载文件夹") }
-        if r.trashBytes == nil { list.append("废纸篓") }
-        return list
-    }
+    var unreadable: [String] { report?.needsAccess ?? [] }
 
     func openFullDiskAccessSettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") { NSWorkspace.shared.open(url) }
@@ -255,7 +262,7 @@ final class Store: ObservableObject {
         if let r = report {
             let findings = applyDecisions(r.findings, d)
             report = ScanReport(scannedAt: r.scannedAt, seconds: r.seconds, disk: r.disk, findings: findings,
-                                downloadsBytes: r.downloadsBytes, trashBytes: r.trashBytes)
+                                downloadsBytes: r.downloadsBytes, trashBytes: r.trashBytes, needsAccess: r.needsAccess)
             selected.subtract(findings.filter { d.isKept($0) }.map(\.id))
         }
     }
@@ -263,7 +270,7 @@ final class Store: ObservableObject {
     func apply(_ r: ScanReport) {
         // 扫描时从磁盘读决定；万一上次保存失败，这里再用内存里的套一次，选过保留的不会又被勾上
         let r = ScanReport(scannedAt: r.scannedAt, seconds: r.seconds, disk: r.disk, findings: applyDecisions(r.findings, decisions),
-                           downloadsBytes: r.downloadsBytes, trashBytes: r.trashBytes)
+                           downloadsBytes: r.downloadsBytes, trashBytes: r.trashBytes, needsAccess: r.needsAccess)
         report = r
         disk = r.disk
         selected = Set(r.findings.filter(\.suggested).map(\.id))

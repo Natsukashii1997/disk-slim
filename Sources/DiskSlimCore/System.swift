@@ -63,6 +63,17 @@ public func allocatedSizeIfReadable(_ url: URL) -> Int64? {
     return failed ? nil : size
 }
 
+/// 目录在、但被系统隐私保护拦住（EPERM，要「完全磁盘访问权限」）。不存在、普通的权限位读不了（EACCES）都不算
+public func blockedByPrivacy(_ url: URL) -> Bool {
+    do {
+        _ = try FileManager.default.contentsOfDirectory(atPath: url.path)
+        return false
+    } catch let e as NSError {
+        let posix = (e.userInfo[NSUnderlyingErrorKey] as? NSError) ?? e
+        return posix.domain == NSPOSIXErrorDomain && posix.code == Int(EPERM)
+    }
+}
+
 public func diskStatus(of url: URL) -> DiskStatus? {
     guard let v = try? url.resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityKey]),
           let total = v.volumeTotalCapacity, let available = v.volumeAvailableCapacity else { return nil }

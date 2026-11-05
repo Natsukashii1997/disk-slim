@@ -31,7 +31,24 @@ struct DiskSlimApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var termSource: DispatchSourceSignal?
+
+    /// 正在清理时不退出：操作记录要等整批做完才写，半途退出会丢掉撤销记录
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if MainActor.assumeIsolated({ Store.main?.working == true }) {
+            MainActor.assumeIsolated { Store.main?.toast = Toast(text: "正在清理，清完再退出。", canUndo: false) }
+            return .terminateCancel
+        }
+        return .terminateNow
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 安装脚本用 SIGTERM 请它退出：走正常退出流程（正在清理时会拒绝），不被直接杀掉
+        signal(SIGTERM, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        source.setEventHandler { NSApp.terminate(nil) }
+        source.resume()
+        termSource = source
         // 不在程序坞显示（打包后 Info.plist 的 LSUIElement 也会保证这一点）
         NSApp.setActivationPolicy(.accessory)
         // 自测用：用示例数据把每种提醒各发一条系统通知，然后退出（要用打包版运行）。

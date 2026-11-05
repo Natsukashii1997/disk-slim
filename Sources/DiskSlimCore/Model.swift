@@ -72,14 +72,18 @@ public struct ScanReport: Codable {
     public var downloadsBytes: Int64?
     /// 废纸篓占用（涨幅追踪用：移到废纸篓的东西清空前还占空间）；读不了时为 nil
     public var trashBytes: Int64?
+    /// 因为隐私权限读不了、要「完全磁盘访问权限」的位置（目录不存在、或只是里面个别子项读不了都不算）
+    public var needsAccess: [String]?
 
-    public init(scannedAt: Date, seconds: Double, disk: DiskStatus?, findings: [Finding], downloadsBytes: Int64? = nil, trashBytes: Int64? = nil) {
+    public init(scannedAt: Date, seconds: Double, disk: DiskStatus?, findings: [Finding], downloadsBytes: Int64? = nil, trashBytes: Int64? = nil,
+                needsAccess: [String]? = nil) {
         self.scannedAt = scannedAt
         self.seconds = seconds
         self.disk = disk
         self.findings = findings
         self.downloadsBytes = downloadsBytes
         self.trashBytes = trashBytes
+        self.needsAccess = needsAccess
     }
 
     public var suggestedBytes: Int64 {

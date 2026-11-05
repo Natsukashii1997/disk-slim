@@ -169,7 +169,7 @@ struct HomeView: View {
         Button { store.openFullDiskAccessSettings() } label: {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "lock.shield").foregroundStyle(Palette.warn)
-                Text("\(store.unreadable.joined(separator: "、"))读不了，它们的变化会算进「其他」。点这里打开「完全磁盘访问权限」，把磁盘瘦身加进去。")
+                Text("\(store.unreadable.joined(separator: "、"))读不了，它们的变化会算进「其他」。点这里打开「完全磁盘访问权限」，把磁盘瘦身加进去；列表里已经有的话，先用「−」删掉再加（每次更新后都要）。")
                     .font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             .padding(10)
@@ -650,7 +650,7 @@ struct AlertsPage: View {
             }
             .padding(.horizontal, 10).padding(.bottom, 12)
         }
-        .onAppear { store.refreshNotificationPermission() }
+        .onAppear { store.refreshNotificationPermission(); store.refreshLoginItem() }
     }
 
     private func info(_ title: String, _ sub: String) -> some View {

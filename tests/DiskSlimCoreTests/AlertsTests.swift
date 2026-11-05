@@ -177,5 +177,17 @@ import Testing
         ]
         #expect(Alerts.due(now: bj("2026-11-05T12:00:00"), free: 50 * gb, samples: samples, cards: nil, state: AlertState()).isEmpty)
     }
+
+    @Test func 只有隐私保护拦住才提示授权_不存在和普通权限位都不算() throws {
+        let t = TempDir()
+        #expect(!blockedByPrivacy(t.url.appendingPathComponent("没有这个目录")))
+        let locked = t.dir("locked")
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: locked.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path) }
+        #expect(!blockedByPrivacy(locked)) // EACCES，给完全磁盘访问也没用
+        #expect(!blockedByPrivacy(t.url))
+        // 沙盒里没有 Downloads 和 .Trash：扫描结果不该要求授权
+        #expect(Scan(home: t.url, workRoot: t.url).run().needsAccess == [])
+    }
 }
 

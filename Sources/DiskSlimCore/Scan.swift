@@ -28,7 +28,9 @@ public struct Scan {
         return ScanReport(scannedAt: now, seconds: Date().timeIntervalSince(start),
                           disk: diskStatus(of: home), findings: findings,
                           downloadsBytes: FileManager.default.fileExists(atPath: downloads.path) ? allocatedSizeIfReadable(downloads) : nil,
-                          trashBytes: allocatedSizeIfReadable(home.appendingPathComponent(".Trash")))
+                          trashBytes: allocatedSizeIfReadable(home.appendingPathComponent(".Trash")),
+                          needsAccess: [("下载文件夹", downloads), ("废纸篓", home.appendingPathComponent(".Trash"))]
+                            .filter { blockedByPrivacy($0.1) }.map(\.0))
     }
 
     /// 执行前复核会随时间变化的规则：扫描后又标了「保留」的下载项、扫描后又编译过的构建产物。
