@@ -46,6 +46,8 @@ final class Store: ObservableObject {
     @Published var alertState: AlertState
     /// 系统通知权限：false 时提醒设置页提示去系统设置打开
     @Published var notificationsAllowed: Bool?
+    /// 操作记录里还有能放回的：首页常驻「撤销上一次」（不只清完后那 10 秒的提示）
+    @Published var canUndo = false
 
     let home: URL
     private let usageLog: UsageLog
@@ -257,7 +259,11 @@ final class Store: ObservableObject {
         var d = decisions
         change(&d)
         decisions = d
-        if !readOnly { try? decisionLog.save(d) }
+        if !readOnly {
+            do { try decisionLog.save(d) } catch {
+                toast = Toast(text: "这个决定没保存成功（\(error.localizedDescription)），重启后会忘掉。", canUndo: false)
+            }
+        }
         // 选了保留的项马上不再默认勾选
         if let r = report {
             let findings = applyDecisions(r.findings, d)
@@ -273,6 +279,7 @@ final class Store: ObservableObject {
                            downloadsBytes: r.downloadsBytes, trashBytes: r.trashBytes, needsAccess: r.needsAccess)
         report = r
         disk = r.disk
+        if !readOnly { canUndo = cleaner.canUndo() }
         selected = Set(r.findings.filter(\.suggested).map(\.id))
         scanning = false
     }

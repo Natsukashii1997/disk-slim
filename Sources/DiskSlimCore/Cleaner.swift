@@ -70,14 +70,15 @@ public struct OperationLog {
     }
 
     /// 读不出来（文件坏了）时，先把坏文件改名留底再当作没有记录，下一次写入就不会把它覆盖掉（L-06）。
-    /// 返回值的 `backup` 是留底文件的位置，没坏时为 nil。
-    public func loadChecked() -> (batches: [Batch], backup: URL?) {
-        guard let data = try? Data(contentsOf: url) else { return ([], nil) }
-        if let batches = try? decoder.decode([Batch].self, from: data) { return (batches, nil) }
+    /// 返回值的 `backup` 是留底文件的位置，没坏时为 nil；`unreadable` 表示文件在但读不了（权限、读错误），这时不能写。
+    public func loadChecked() -> (batches: [Batch], backup: URL?, unreadable: Bool) {
+        guard FileManager.default.fileExists(atPath: url.path) else { return ([], nil, false) }
+        guard let data = try? Data(contentsOf: url) else { return ([], nil, true) }
+        if let batches = try? decoder.decode([Batch].self, from: data) { return (batches, nil, false) }
         let stamp = Int(Date().timeIntervalSince1970)
         let backup = url.deletingLastPathComponent().appendingPathComponent("history-damaged-\(stamp).json.bak")
-        try? FileManager.default.moveItem(at: url, to: backup)
-        return ([], backup)
+        guard (try? FileManager.default.moveItem(at: url, to: backup)) != nil else { return ([], nil, true) }
+        return ([], backup, false)
     }
 
     public func load() -> [Batch] { loadChecked().batches }
@@ -128,10 +129,19 @@ public struct Cleaner {
 
     /// 逐项执行并记一次操作记录。不允许的、已经不在的、正在使用的、复核不通过的都跳过，不会中断其他项。
     public func clean(_ findings: [Finding], now: Date = Date()) -> Batch {
+        let (all, backup, unreadable) = log.loadChecked()
+        // 操作记录在但读不了：清了也记不下来、会覆盖旧记录、也没法撤销，干脆一项都不清
+        if unreadable {
+            let items = findings.map { f in
+                ItemResult(title: f.title, paths: f.paths, cleanup: f.cleanup, outcome: .skipped,
+                           message: "操作记录读不了，为了能撤销这次没有清理", trashedBytes: 0, freedBytes: 0, trashed: [:])
+            }
+            return Batch(id: UUID().uuidString, at: now, items: items, undone: false, restored: [],
+                         note: "操作记录 \(log.url.lastPathComponent) 在但读不了（权限或读错误），这次没有清理任何东西")
+        }
         let processes = runner.run(["ps", "-axo", "command"], cwd: nil).output
         let items = findings.map { clean($0, processes: processes) }
         var batch = Batch(id: UUID().uuidString, at: now, items: items, undone: false, restored: [], note: nil)
-        let (all, backup) = log.loadChecked()
         var notes: [String] = []
         if let backup { notes.append("原来的操作记录读不出来，已另存为 \(backup.lastPathComponent)") }
         do {
@@ -211,12 +221,18 @@ public struct Cleaner {
         }
     }
 
-    /// 撤销：从最近一次往前，找第一批还没撤销完的，把还在废纸篓里的放回原处（可以一次次往前撤）。
+    /// 还有没有能放回的（应用里常驻「撤销上一次」用）
+    public func canUndo() -> Bool { log.load().contains { !$0.undone && !$0.pending.isEmpty } }
+
+    /// 撤销：从最近一次往前，找第一批还没撤销完、而且有文件可放回的，把还在废纸篓里的放回原处（可以一次次往前撤）。
     /// 放不回的（原位置有同名文件）下次还能再试；全部放回后这一批才算撤销完。
     /// 直接删除和清理命令无法撤销，会在结果里说明。
     public func undoLast() -> [String] {
         var all = log.load()
-        guard let i = all.lastIndex(where: { !$0.undone }) else { return ["没有可以撤销的操作"] }
+        // 跳过没有可放回文件的批次（什么都没清掉、或只有清理命令和直接删除的）
+        guard let i = all.lastIndex(where: { !$0.undone && !$0.pending.isEmpty }) else {
+            return ["没有可以撤销的操作（清理命令和直接删除的放不回去）"]
+        }
         let fm = FileManager.default
         var lines: [String] = []
         for item in all[i].items where item.outcome == .done && item.trashed.isEmpty {
@@ -225,7 +241,11 @@ public struct Cleaner {
         var restored = all[i].restored ?? []
         for (orig, inTrash) in all[i].pending {
             let name = URL(fileURLWithPath: orig).lastPathComponent
-            if fm.fileExists(atPath: orig) {
+            if fm.fileExists(atPath: orig) && !fm.fileExists(atPath: inTrash) {
+                // 用户已经在访达里放回原处了
+                lines.append("已在原处：\(name)")
+                restored.append(orig)
+            } else if fm.fileExists(atPath: orig) {
                 lines.append("没有放回：\(name)（原位置已有同名文件，挪开后可以再撤销）")
             } else if !fm.fileExists(atPath: inTrash) {
                 lines.append("没有放回：\(name)（废纸篓里找不到了，可能已清空）")

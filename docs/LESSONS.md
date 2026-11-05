@@ -86,6 +86,7 @@
 - 现象：`scripts/install.sh` 第一次真机安装时，旧的 dist 版进程没被停掉，菜单栏同时出现两份磁盘瘦身；脚本照常打印「已安装并启动」。
 - 根因：脚本用 `ps -p <pid> -o comm=` 取可执行文件路径再和期望路径比；脚本环境是 C 区域设置，`ps` 把「个人」输出成 `M-dM-8M-*M-dM-:M-:`，字符串永远对不上。
 - 正确做法：取进程路径时加 `LC_ALL=en_US.UTF-8`；装完用 `pgrep -fl` 核对只剩一份，不能只看脚本的成功提示。
+- 补充（全面审查 B1）：Swift 里起子进程同样要设。菜单栏应用从访达 / 登录项启动时环境里根本没有 LANG / LC_*，`ProcessRunner` 跑 `ps` 也会转义，导致「有进程在用这个构建产物」永远认不出；已在 `ProcessRunner` 里统一设 `LC_ALL=en_US.UTF-8`，测试 `FullReviewTests` 覆盖。
 - 证据：`evidence/2026-11-05-install.txt`（两份并存）、`evidence/2026-11-05-install-2.txt`（修复后只剩新装的一份）。
 - 升级：未升级。路径带中文的项目都会踩，提议提升为全局 G-xx，等用户批准。
 

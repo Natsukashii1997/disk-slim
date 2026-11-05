@@ -102,6 +102,8 @@ public struct ProcessRunner: CommandRunner {
         var env = ProcessInfo.processInfo.environment
         // 从菜单栏应用启动时 PATH 很短，补上 Homebrew 的位置
         env["PATH"] = (env["PATH"] ?? "/usr/bin:/bin") + ":/opt/homebrew/bin:/usr/local/bin"
+        // 从访达 / 登录项启动时没有区域设置，ps 会把路径里的中文转义成 M-dM-8…，和路径对不上（L-09）
+        env["LC_ALL"] = "en_US.UTF-8"
         p.environment = env
         let out = Pipe()
         p.standardOutput = out

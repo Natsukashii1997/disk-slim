@@ -118,6 +118,12 @@ struct HomeView: View {
             HStack {
                 Button("提醒设置") { store.page = .alerts }
                     .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(Palette.accent)
+                if store.canUndo {
+                    Button("撤销上一次清理") { store.undo() }
+                        .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(Palette.accent)
+                        .disabled(store.busy)
+                        .padding(.leading, 10)
+                }
                 Spacer()
                 Button("退出磁盘瘦身") { NSApp.terminate(nil) }
                     .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(.secondary)

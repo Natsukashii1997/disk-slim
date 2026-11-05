@@ -43,7 +43,7 @@ struct FakeTrasher: Trasher {
         #expect(c.undoLast() == ["已放回：old.dmg"])
         #expect(FileManager.default.fileExists(atPath: file.path))
         // 同一次不会被撤销两次
-        #expect(c.undoLast() == ["没有可以撤销的操作"])
+        #expect(c.undoLast() == ["没有可以撤销的操作（清理命令和直接删除的放不回去）"])
     }
 
     @Test func 原位置又有同名文件时不覆盖() {
@@ -70,7 +70,7 @@ struct FakeTrasher: Trasher {
         #expect(batch.items[1].outcome == .skipped)
         #expect(FileManager.default.fileExists(atPath: busyTarget.path))
         // 直接删除的不能撤销，撤销时要说清楚
-        #expect(cleaner(run).undoLast() == ["不能撤销：target，直接删除和清理命令放不回去"])
+        #expect(cleaner(run).undoLast() == ["没有可以撤销的操作（清理命令和直接删除的放不回去）"])
     }
 
     @Test func 安全门拒绝的一个字节都不动() {

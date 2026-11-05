@@ -64,6 +64,7 @@ public struct AlertStore {
     }
 
     public func save(_ state: AlertState) throws {
+        try refuseIfUnreadable(url)
         let e = JSONEncoder()
         e.outputFormatting = [.prettyPrinted, .sortedKeys]
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

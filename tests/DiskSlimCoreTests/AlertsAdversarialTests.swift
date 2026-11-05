@@ -380,13 +380,13 @@ private func writeJSON(_ text: String, name: String, in dir: TempDir) -> URL {
         #expect(Weekly.cards([f], decisions: d, now: t).count == 1)
     }
 
-    @Test func 同一路径在两张卡_按项记_另一张还会问() {
-        // 第 5 批审查后改为按项（分组 + 路径）记：换了分组算另一件事。现有扫描器不会让同一路径出现在两个分组
+    @Test func 同一路径在两张卡_保留一张另一张也不再问() {
+        // 全面审查后改为按路径记（B7）：同一个文件换了分组仍算保留过
         let x = item(.hidden, "备份", ["/h/x"], risk: .confirm)
         let y = item(.hidden, "虚拟机", ["/h/x"], risk: .confirm)
         var d = Decisions()
         d.keep(card([x]), now: t)
-        #expect(Weekly.cards([x, y], decisions: d, now: t).map(\.tag) == ["虚拟机"])
+        #expect(Weekly.cards([x, y], decisions: d, now: t).isEmpty)
     }
 
     @Test func 先下周再问再保留_保留生效() {

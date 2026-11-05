@@ -124,7 +124,7 @@ import Testing
         _ = c.clean([finding([home.appendingPathComponent("Downloads/b.dmg").path], .trash)], now: now)
         #expect(c.undoLast() == ["已放回：b.dmg"])
         #expect(c.undoLast() == ["已放回：a.dmg"])
-        #expect(c.undoLast() == ["没有可以撤销的操作"])
+        #expect(c.undoLast() == ["没有可以撤销的操作（清理命令和直接删除的放不回去）"])
     }
 
     // MARK: - WorktreeScanner 24 小时

@@ -27,7 +27,8 @@ public struct Kept: Codable, Equatable {
     }
 }
 
-/// 用户在卡片上做的决定，存在 decisions.json。按项（分组 + 路径，即 `Finding.id`）记。
+/// 用户在卡片上做的决定，存在 decisions.json。按路径记（`Finding.pathKey`），同一个文件换了分组也认得；
+/// 旧版按「分组 + 路径」（`Finding.id`）记的照样认。
 public struct Decisions: Codable, Equatable {
     /// 「保留」：以后不再问，也不再默认勾选；涨了超过 `regrowBytes` 就作废、重新问
     public var kept: [String: Kept] = [:]
@@ -49,22 +50,22 @@ public struct Decisions: Codable, Equatable {
     }
 
     public mutating func keep(_ card: WeeklyCard, now: Date) {
-        for f in card.findings { kept[f.id] = Kept(at: now, bytes: f.bytes); snoozed[f.id] = nil }
+        for f in card.findings { kept[f.pathKey] = Kept(at: now, bytes: f.bytes); snoozed[f.pathKey] = nil; snoozed[f.id] = nil }
     }
 
     /// 到下一次周报再问；周五 18:00 前点的跳过当天这次，到下周五
     public mutating func snooze(_ card: WeeklyCard, now: Date) {
         var until = Weekly.nextReport(after: now)
         if BeijingTime.dayNumber(until) == BeijingTime.dayNumber(now) { until = Weekly.nextReport(after: until) }
-        for f in card.findings { snoozed[f.id] = until }
+        for f in card.findings { snoozed[f.pathKey] = until }
     }
 
     public func isKept(_ f: Finding) -> Bool {
-        guard let k = kept[f.id] else { return false }
+        guard let k = kept[f.pathKey] ?? kept[f.id] else { return false }
         return f.bytes - k.bytes <= Self.regrowBytes
     }
 
-    func isSnoozed(_ f: Finding, now: Date) -> Bool { (snoozed[f.id] ?? .distantPast) > now }
+    func isSnoozed(_ f: Finding, now: Date) -> Bool { (snoozed[f.pathKey] ?? snoozed[f.id] ?? .distantPast) > now }
 }
 
 public struct DecisionLog {
@@ -90,7 +91,9 @@ public struct DecisionLog {
         return Decisions()
     }
 
+    /// 文件在但读不了（权限、读错误）时报错不写，免得把读不到的「保留」整份覆盖掉
     public func save(_ decisions: Decisions) throws {
+        try refuseIfUnreadable(url)
         let e = JSONEncoder()
         e.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         e.dateEncodingStrategy = .iso8601
@@ -168,5 +171,17 @@ extension Cleanup {
         case .command(let args): return !args.isEmpty
         default: return true
         }
+    }
+}
+
+extension Finding {
+    /// 按路径认一项（「保留」「下周再问」用）
+    public var pathKey: String { paths.joined(separator: "\n") }
+}
+
+/// 文件在但读不了时抛错：用户数据文件写之前调用，免得把读不到的旧内容覆盖掉
+func refuseIfUnreadable(_ url: URL) throws {
+    if FileManager.default.fileExists(atPath: url.path), (try? Data(contentsOf: url)) == nil {
+        throw CocoaError(.fileReadNoPermission, userInfo: [NSFilePathErrorKey: url.path])
     }
 }
