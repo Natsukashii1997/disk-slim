@@ -17,7 +17,25 @@
 
 ---
 
-还没有条目，第一条从 L-01 起，格式：
+## L-01 `npm cache clean --force` 清完 `~/.npm` 还剩 1 GB（2026-11-05）
+
+- 现象：清过 npm 缓存后，`~/.npm` 仍有约 1.2 GB；扫描若按整个 `~/.npm` 计算，「npm 缓存」永远显示 1 GB 多，清了也不变。
+- 根因：`npm cache clean` 只清 `~/.npm/_cacache`；剩下的大头在 `~/.npm/_npx`，是 npx 运行过的工具，命令不管它。有些 MCP 服务由 npx 启动，正在用这里的文件。
+- 正确做法：「npm 缓存」只算 `.npm/_cacache`、用官方命令清；`.npm/_npx` 单列为「需确认」，提示先关掉 Claude、Codex 再清（`Sources/DiskSlimCore/KnownPlaces.swift`）。
+- 证据：2026-11-05 `du -shx ~/.npm/*`：`_npx` 1.0G、`_cacache` 144M；扫描输出见 `~/Library/Application Support/disk-slim/evidence/2026-11-05-scan.txt`。
+- 升级：未升级。
+
+## L-02 测试里比较临时目录路径失败：`/var` 与 `/private/var`（2026-11-05）
+
+- 现象：worktree「正在编译」判定的单元测试失败，`ps` 输出里明明有该 worktree 的路径。
+- 根因：macOS 的临时目录在 `/var/folders/...`，`/var` 是指向 `/private/var` 的符号链接；扫描时拿到的路径和测试拼出来的路径写法不同，字符串比较不相等。
+- 正确做法：拿路径和外部输出做字符串比较时，同时比原路径和 `resolvingSymlinksInPath()` 后的路径（`WorktreeScanner.blockers`）。
+- 证据：第 1 批 `swift test` 首跑失败记录（本会话）；修复后 12/12 通过。
+- 升级：未升级。
+
+---
+
+格式：
 
 ```markdown
 ## L-01 <一句话现象>（<YYYY-MM-DD>）

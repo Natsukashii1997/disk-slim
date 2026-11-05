@@ -26,7 +26,14 @@ node --test tests/*.test.mjs     # 交接格式 + 通用规则（含自测）
 node scripts/check-rules.mjs     # 只跑通用规则检查
 ```
 
-Swift 代码（第 1 批起）的编译、测试、打包命令届时补在这里。
+```sh
+swift test                                   # 扫描引擎单元测试（Swift Testing）
+swift build -c release                       # 编译
+.build/release/diskslim scan                 # 只读扫描真实磁盘，按区域和分组列出；不删任何东西
+.build/release/diskslim scan --json          # 同上，输出 JSON
+```
+
+本机只有命令行工具、没有完整 Xcode；`swift build` 会打几行 `ld: warning: search path ... not found`，不影响结果。
 
 ## 结构
 
@@ -34,6 +41,12 @@ Swift 代码（第 1 批起）的编译、测试、打包命令届时补在这�
 AGENTS.md            入口（本文件）
 CURRENT.md           当前状态与唯一下一步；每轮交接写在顶部
 docs/PRD.md          需求（含调研结论、规则、分批计划）
+Package.swift        SwiftPM：DiskSlimCore（规则与模型）、diskslim（命令行）、DiskSlimCoreTests
+Sources/
+  DiskSlimCore/      Model（Finding、风险等级、清理方式）、System（元数据、大小、命令、格式）、
+                     DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、Scan（总入口）
+  diskslim/          命令行 `diskslim scan`
+Tests/DiskSlimCoreTests/  各条规则的单元测试
 docs/
   design/ui-v1.html  三版菜单栏界面预览（A 容量仪表 / B 涨幅雷达 / C 待清理收件箱）
   agents/            Matt Pocock 技能读的约定：issue 看板、分流标签、领域文档
