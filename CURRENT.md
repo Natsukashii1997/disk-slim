@@ -1,6 +1,17 @@
 # 当前状态
 
-更新：2026-11-05。第 1 批「扫描引擎」完成，在分支 `feat/scan-engine`。唯一下一步：用户确认后做第 2 批「清理执行与安全」（预览、进废纸篓、工具命令、日志、撤销），见 [docs/PRD.md](docs/PRD.md) 第 7 节。
+更新：2026-11-05。第 2 批「清理执行与安全」完成，在分支 `feat/cleaner`（基于 `feat/scan-engine`）。唯一下一步：用户确认后做第 3 批「菜单栏界面」，先出融合版界面预览（3 版）给用户挑，见 [docs/PRD.md](docs/PRD.md) 第 7 节。
+
+## 第 2 批：清理执行、安全门、操作记录与撤销（2026-11-05，Claude，用户同意做第 2 批；已提交到 `feat/cleaner`、无需发布）
+
+- 时间：开工 `2026-11-05 11:34`（`date '+%F %H:%M'` 记录）。来由：PRD 第 7 节第 2 批。
+- 改了哪些文件：新建 `Sources/DiskSlimCore/SafetyGuard.swift`（执行前按白名单重新核对：下载第一层、Codex 备份子目录才能进废纸篓；只有 `<work>/<项目>/.claude/worktrees/<名>/target` 和已知可再生目录能直接删；只认写死的清理命令；路径先规范化，`..` 绕不出去）、`Sources/DiskSlimCore/Cleaner.swift`（移到废纸篓 / 直接删除 / 清理命令；有程序在用的跳过；操作记录 `~/Library/Application Support/disk-slim/history.json`，留最近 200 次；撤销最近一次，原位置有同名文件不覆盖）；改 `Sources/diskslim/main.swift`（新增 `clean` 预览、`clean --yes` 执行、`undo`，`--home`、`--work` 沙盒选项）；新建 `tests/DiskSlimCoreTests/SafetyTests.swift`、`CleanerTests.swift`（假废纸篓，不碰真实废纸篓）；改 `AGENTS.md`（运行命令、结构）。
+- 测试：`swift test` 原样结果 `✔ Test run with 23 tests in 6 suites passed`；`node --test tests/*.test.mjs` 原样结果「ℹ tests 4 ℹ pass 4 ℹ fail 0」；`node scripts/check-rules.mjs` 输出「通用规则检查通过」。过程中一次失败是测试写错了期望标题（改测试）；还有一次整批编译报「找不到 TestingMacros 插件」，未改任何东西重跑即通过，工具链版本前后一致（Swift 6.4、CommandLineTools），原因未查明，再出现就记坑。
+- 验证：① 沙盒端到端（真实 `FileManager.trashItem`）：预览 → `--yes` 执行 → 文件进入真实废纸篓 `~/.Trash/自测-已解压.zip`（路径取自操作记录；终端无权列出 `~/.Trash`，系统隐私保护）→ `undo` 放回原处 → 再 `undo` 提示「没有可以撤销的操作」，输出存 `~/Library/Application Support/disk-slim/evidence/2026-11-05-sandbox-e2e.txt`；② 真实磁盘只跑预览：默认勾选 15 项，移到废纸篓 12 项 139 MB、清理命令 3 项 897 MB，输出存 `evidence/2026-11-05-clean-preview.txt`；真实主目录下没有 `history.json`，确认没有执行过任何真实清理。
+- 截图：无界面改动，无。
+- 发布与回读：无需发布。
+- 与授权不一致之处、遗留问题、范围外发现：① 没有在真实磁盘上执行清理（用户这轮只同意开发第 2 批）；② 移到废纸篓不会马上释放空间，命令行和记录都分开写「移到废纸篓」与「已释放」，界面也要照这样区分；③ 「直接删除」前的占用检查只看 `ps` 命令行里有没有这个路径，和第 1 批同样的局限；④ 第 1 批遗留的 ⑤（codex-runtimes、各应用缓存要不要加规则）和 GitHub 远端仍待用户定；⑤ `feat/scan-engine`、`feat/cleaner` 都还没合并到 `main`。
+- 本轮新坑：无。
 
 ## 第 1 批：扫描引擎与命令行工具（2026-11-05，Claude，用户同意做第 1 批；已提交到 `feat/scan-engine`、无需发布）
 

@@ -31,6 +31,10 @@ swift test                                   # 扫描引擎单元测试（Swift 
 swift build -c release                       # 编译
 .build/release/diskslim scan                 # 只读扫描真实磁盘，按区域和分组列出；不删任何东西
 .build/release/diskslim scan --json          # 同上，输出 JSON
+.build/release/diskslim clean                # 预览默认勾选的项会怎么处理，不执行
+.build/release/diskslim clean --yes          # 真正执行；只有用户在本轮明确同意清理真实磁盘时才能跑
+.build/release/diskslim undo                 # 撤销最近一次：把移到废纸篓的放回原处
+# 自测一律用沙盒：加 --home <沙盒>/home --work <沙盒>/home/work，沙盒放在证据目录下
 ```
 
 本机只有命令行工具、没有完整 Xcode；`swift build` 会打几行 `ld: warning: search path ... not found`，不影响结果。
@@ -44,7 +48,8 @@ docs/PRD.md          需求（含调研结论、规则、分批计划）
 Package.swift        SwiftPM：DiskSlimCore（规则与模型）、diskslim（命令行）、DiskSlimCoreTests
 Sources/
   DiskSlimCore/      Model（Finding、风险等级、清理方式）、System（元数据、大小、命令、格式）、
-                     DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、Scan（总入口）
+                     DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、Scan（总入口）、
+                     SafetyGuard（执行前重新核对路径和命令的白名单）、Cleaner（执行、操作记录、撤销）
   diskslim/          命令行 `diskslim scan`
 tests/DiskSlimCoreTests/  各条规则的单元测试（Swift；和 Node 测试同在 tests/）
 docs/
