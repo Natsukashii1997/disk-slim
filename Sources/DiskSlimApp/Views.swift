@@ -94,6 +94,7 @@ struct HomeView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             hero
+            if !store.unreadable.isEmpty { accessHint }
             growth
             VStack(alignment: .leading, spacing: 2) {
                 section("可以清")
@@ -161,6 +162,22 @@ struct HomeView: View {
         guard let r = store.report else { return "还没扫描" }
         let total = store.disk.map { "共 \(formatBytes($0.totalBytes))" } ?? ""
         return "\(total) · \(BeijingTime.hourMinute(r.scannedAt)) 扫描"
+    }
+
+    /// 没有「完全磁盘访问权限」时有些位置量不到：说清影响，一键打开系统设置那一页（授权要用户自己点）
+    private var accessHint: some View {
+        Button { store.openFullDiskAccessSettings() } label: {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "lock.shield").foregroundStyle(Palette.warn)
+                Text("\(store.unreadable.joined(separator: "、"))读不了，它们的变化会算进「其他」。点这里打开「完全磁盘访问权限」，把磁盘瘦身加进去。")
+                    .font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Palette.warn.opacity(0.1)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     /// 最近 7 天可用空间曲线和「比昨天少了 X，主要是 Y」，点进涨幅页；不够两天先说明
@@ -627,6 +644,9 @@ struct AlertsPage: View {
                 toggle(\.weekly, s.weekly, "每周五 18:00 发周报", "有待决定的事才发；那时没开着应用，之后打开会补发")
                 toggle(\.autoClean, s.autoClean, "自动清理缓存和构建产物",
                        "默认关。打开后只在可用低于 60 GB 时、每天最多一次，只清「缓存与构建产物」里默认勾选的项，下载文件夹不动。运行清理命令和直接删除的不能撤销。")
+                switchRow(store.loginItemOn, "开机自动打开",
+                          store.loginItemError ?? (store.installedInApplications ? "登录后自动出现在菜单栏" : "装进「应用程序」后才能打开（运行 scripts/install.sh）"),
+                          enabled: store.installedInApplications) { store.setLoginItem(!store.loginItemOn) }
             }
             .padding(.horizontal, 10).padding(.bottom, 12)
         }
@@ -642,7 +662,11 @@ struct AlertsPage: View {
     }
 
     private func toggle(_ key: WritableKeyPath<AlertSettings, Bool>, _ on: Bool, _ title: String, _ sub: String) -> some View {
-        Button { store.setSetting(key, !on) } label: {
+        switchRow(on, title, sub) { store.setSetting(key, !on) }
+    }
+
+    private func switchRow(_ on: Bool, _ title: String, _ sub: String, enabled: Bool = true, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
@@ -658,6 +682,8 @@ struct AlertsPage: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.5)
         .accessibilityValue(on ? "开" : "关")
     }
 }

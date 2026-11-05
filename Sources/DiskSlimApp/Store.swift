@@ -1,5 +1,6 @@
 import DiskSlimCore
 import Foundation
+import ServiceManagement
 import SwiftUI
 
 /// 面板里的页面：首页 + 四个下钻页（第 2 版「首页 + 下钻」）。
@@ -156,6 +157,41 @@ final class Store: ObservableObject {
         let friday = Weekly.lastReport(atOrBefore: now)
         if state.settings.weekly, let r = report, r.downloadsBytes != nil, cards.isEmpty { state.sent["weekly"] = BeijingTime.dayKey(friday) }
         if state != alertState { saveAlerts(state) }
+    }
+
+    // MARK: 开机自启
+
+    /// 只在装进「应用程序」后才能开：从 dist/ 注册的话，搬走或重新打包就失效了
+    var installedInApplications: Bool { Bundle.main.bundlePath.hasPrefix("/Applications/") }
+    @Published var loginItemOn = SMAppService.mainApp.status == .enabled
+    @Published var loginItemError: String?
+
+    func setLoginItem(_ on: Bool) {
+        guard !readOnly, installedInApplications else { return }
+        do {
+            if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+            loginItemError = nil
+        } catch {
+            loginItemError = "没设置成功：\(error.localizedDescription)"
+        }
+        let status = SMAppService.mainApp.status
+        loginItemOn = status == .enabled
+        if on && status == .requiresApproval { loginItemError = "要在「系统设置 › 通用 › 登录项」里允许磁盘瘦身" }
+    }
+
+    // MARK: 授权
+
+    /// 读不全的位置（多半是没给「完全磁盘访问权限」）：首页提示去授权
+    var unreadable: [String] {
+        guard let r = report else { return [] }
+        var list: [String] = []
+        if r.downloadsBytes == nil { list.append("下载文件夹") }
+        if r.trashBytes == nil { list.append("废纸篓") }
+        return list
+    }
+
+    func openFullDiskAccessSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") { NSWorkspace.shared.open(url) }
     }
 
     func refreshNotificationPermission() {
