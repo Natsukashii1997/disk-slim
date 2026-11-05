@@ -1,6 +1,18 @@
 # 当前状态
 
-更新：2026-11-05。第 5 批「提醒与每周卡片」已完成，在分支 `feat/alerts`（基于 `feat/growth`），未合并、未推送。唯一下一步：用户在「系统设置 › 通知 › DiskSlim」打开通知权限后，用 `--test-notify` 发示例通知确认收到；用户确认第 5 批后再开第 6 批（打包上线）。
+更新：2026-11-05。第 0–6 批都已完成，应用已装到 `/Applications/DiskSlim.app` 并在运行。分支 main → feat/scan-engine → feat/cleaner → feat/menubar-ui → feat/growth → feat/alerts → feat/launch，都没合并、没推送，GitHub 远端未建。唯一下一步：用户试用一周（第 6 批验收标准「使用一周无误删」），期间按需打开「完全磁盘访问权限」、通知和开机自启；决定是否停掉 Claude 定时任务 `disk-space-guard`。
+
+## 第 6 批：打包上线（2026-11-05，Claude，用户说「继续吧，做完」；已提交到 `feat/launch`、已安装到本机、未发布）
+
+- 时间：开工 `2026-11-05 13:31`（`date '+%F %H:%M'` 记录）。来由：PRD 第 7 节第 6 批，加上从第 4 批挪过来的开机自启。
+- 改了哪些文件：新建 `scripts/install.sh`（打包后装到 `/Applications/DiskSlim.app` 并启动：按 bundle id 核对后才替换；先完整复制到临时名再停旧进程、换上，换失败回滚并重开旧版；只停本仓库 dist 和已装的那份进程；应用正在清理时停下不替换；装好后删掉 dist 那份，免得同一 bundle id 两份）；`Store.swift`（开机自启 `SMAppService`，只在装进「应用程序」后能开，需要批准时打开系统设置的登录项页，打开设置页时重读状态；`needsAccess` 驱动首页授权提示；`Store.main`）；`DiskSlimApp.swift`（收到 SIGTERM 走正常退出；正在清理时拒绝退出并提示）；`Views.swift`（首页「完全磁盘访问」提示，点了打开系统设置那一页；提醒设置页「开机自动打开」开关）；核心 `System.swift` 加 `blockedByPrivacy`（只认 EPERM），`Model.swift` 加 `needsAccess`，`Scan.swift` 填它；测试 1 项；文档 `AGENTS.md`、`docs/PRD.md`（第 6 节）、`docs/LESSONS.md`（L-09）。
+- 测试：`scripts/test.sh` 原样结果 `✔ Test run with 208 tests in 27 suites passed`；`node --test tests/*.test.mjs` 原样结果「ℹ fail 0」；`node scripts/check-rules.mjs` 输出「通用规则检查通过」。
+- 验证：① `scripts/install.sh` 真机跑了两次：第一次装上了但旧的 dist 进程没停（L-09），修复后第二次两份旧进程都被认出并停掉，已装那份收到 SIGTERM 正常退出，现在只有 `/Applications/DiskSlim.app` 一个进程（58136），签名 ad-hoc、bundle id `local.nat.disk-slim`（`evidence/2026-11-05-install*.txt`）；② 装好的应用 13:41 自己扫描并更新了今天的记录（可用 41.9 GB）；③ 真实磁盘只读扫描（`evidence/2026-11-05-scan-after-install.txt`）：默认勾选 2 项、394 MB；只有「废纸篓」被隐私保护拦住（没给完全磁盘访问）；④ 离屏截图（`evidence/2026-11-05-launch-shots/`）看过首页授权提示、提醒设置页（开机自启灰着，dist 版不能开）。没有在真机上点过开机自启开关，没有打开任何系统权限，菜单栏面板没在屏幕上看过。
+- 独立审查（L-06）：只读审查员报 8 条 + 5 条待核实，核实后修了：安装先删后搬、中途失败留残件且之后永远拒绝安装；SIGTERM 硬杀会丢掉正在清理那批的撤销记录；重新打包后完全磁盘访问实际失效、提示误导；首页授权提示在目录不存在或普通权限位读不了时误报；`pkill -f` 范围过宽、超时不核对；PlistBuddy 输出混进提示；自启状态不刷新、需要批准时没入口；已安装判断不够严。本批没另派对抗测试员（改动主要是安装脚本和系统接口，审查员已在临时目录演练各种失败场景）。
+- 截图：见上面证据目录。
+- 发布与回读：未发布；已装到本机 `/Applications`。
+- 与授权不一致之处、遗留问题、范围外发现：① 开机自启、完全磁盘访问、通知三项都是系统级设置，我没替用户开：开机自启在「提醒设置」页由用户自己点；完全磁盘访问点首页提示去加；通知在「系统设置 › 通知 › DiskSlim」打开（目前是「已拒绝」）；② 待核实：ad-hoc 签名下 `SMAppService.register()` 能否成功、重装后登录项是否还有效（可用 `sfltool dumpbtm | grep -A8 disk-slim` 对比）；「App 管理」权限会不会拦住替换 `/Applications/DiskSlim.app`（本次没拦）；③ 验收标准「使用一周无误删」要等一周；④ PRD 要问用户是否停掉 Claude 定时任务 `disk-space-guard`（`~/.claude/scheduled-tasks/disk-space-guard`），还没停；⑤ 可用空间一路掉到 41.9 GB：postpane 的 worktree 构建产物 53.9 GB，全是「24 小时内编译过」，本工具按规则不清，要在 postpane 项目里根治；⑥ 第 5 批对抗测试员的 worktree 被会话锁着没删；⑦ L-03、L-04、L-07、L-08、L-09 提议提升为全局 G-xx，等用户批准。
+- 本轮新坑：L-09。
 
 ## 第 5 批：提醒与每周卡片 + 审查修复（2026-11-05，Claude，用户确认计划「按推荐开工」；已提交到 `feat/alerts`、未发布）
 

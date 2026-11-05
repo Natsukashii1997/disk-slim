@@ -37,6 +37,7 @@ swift build -c release                       # 编译
 .build/release/diskslim growth               # 最近 7 天可用空间和谁涨了多少；只读每日记录 usage.json，不扫描
 # 自测一律用沙盒：加 --home <沙盒>/home --work <沙盒>/home/work，沙盒放在证据目录下
 scripts/bundle.sh                            # 打包菜单栏应用到 dist/DiskSlim.app（本机签名，不安装、不启动）
+scripts/install.sh                           # 打包并装到 /Applications/DiskSlim.app 后启动；先复制后替换、失败回滚；应用正在清理时不替换
 .build/debug/DiskSlimApp --snapshot <目录>    # 用真实扫描离屏渲染各页面 PNG（浅色 / 深色），只读，不清理
 dist/DiskSlim.app/Contents/MacOS/DiskSlimApp --test-notify   # 用示例数据把每种提醒各发一条系统通知，标题带「示例」；只发通知，不扫描、不清理
 ```
@@ -65,6 +66,7 @@ docs/
   templates/handoff.md  交接一节的骨架
 scripts/
   bundle.sh          打包 dist/DiskSlim.app
+  install.sh         装到「应用程序」并启动（只替换我们自己的那份）
   test.sh            跑 Swift 单元测试（补上测试宏插件路径，L-04）
   check-rules.mjs    通用规则检查（只查机器能判定的）
 tests/               node:test 测试

@@ -22,7 +22,8 @@ bundle_id() {
 # 我们自己的进程：名字是 DiskSlimApp，且可执行文件是已装的那份或本仓库 dist 里的那份
 our_pids() {
   for pid in $(pgrep -x DiskSlimApp 2>/dev/null || true); do
-    exe=$(ps -p "$pid" -o comm= 2>/dev/null || true)
+    # C 区域设置下 ps 会把路径里的中文转义成 M-dM-8…，对不上，要按 UTF-8 输出
+    exe=$(LC_ALL=en_US.UTF-8 ps -p "$pid" -o comm= 2>/dev/null || true)
     [[ "$exe" == "$DEST_BIN" || "$exe" == "$REPO_BIN" ]] && echo "$pid"
   done
   return 0

@@ -77,7 +77,8 @@ macOS 菜单栏原生应用（SwiftUI `MenuBarExtra`），不在程序坞显示�
 ## 6. 技术选型
 - SwiftUI + SwiftPM，用命令行工具编译（本机没有完整 Xcode），用脚本打包成 `.app` 并本机签名。
 - 巡检在应用内用定时器执行，不用 launchd（避开全局坑 G-05）；需要用户授权一次「完全磁盘访问」。
-- 开机自启用 `SMAppService`。
+- 开机自启用 `SMAppService`，开关在「提醒设置」页，默认关，只有装进「应用程序」后才能开。
+- 安装用 `scripts/install.sh`；本机签名（ad-hoc）每次重新打包都会变，「完全磁盘访问权限」要先删掉旧条目再重新加。
 
 ## 7. 分批计划
 
