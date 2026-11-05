@@ -165,10 +165,23 @@ public struct Cleaner {
     /// 直接删除前先改名挪到这里（同一个卷，改名是瞬间的），再慢慢删；上次没删完的下次清理时补删
     var staging: URL { log.url.deletingLastPathComponent().appendingPathComponent("deleting") }
 
-    func clearStaging() {
+    /// 暂存目录和它的上一层都不是符号链接、确实是目录（或还不存在）才用；否则不暂存、原地删，也不补删
+    var stagingUsable: Bool {
+        [staging, staging.deletingLastPathComponent()].allSatisfy { u in
+            var st = stat()
+            if lstat(u.path, &st) != 0 { return errno == ENOENT }
+            return (st.st_mode & S_IFMT) == S_IFDIR
+        }
+    }
+
+    /// 补删上次没删完的：只删名字是 UUID、而且放了一小时以上的（别的进程可能正在删刚放进来的）
+    func clearStaging(now: Date = Date()) {
+        guard stagingUsable else { return }
         let fm = FileManager.default
-        for name in (try? fm.contentsOfDirectory(atPath: staging.path)) ?? [] {
-            try? fm.removeItem(at: staging.appendingPathComponent(name))
+        for name in (try? fm.contentsOfDirectory(atPath: staging.path)) ?? [] where UUID(uuidString: name) != nil {
+            let u = staging.appendingPathComponent(name)
+            let mtime = (try? fm.attributesOfItem(atPath: u.path)[.modificationDate] as? Date) ?? now
+            if now.timeIntervalSince(mtime) >= 3600 { try? fm.removeItem(at: u) }
         }
     }
 
@@ -221,15 +234,20 @@ public struct Cleaner {
                 guard let locks = WorktreeScanner.holdCargoLocks(u) else {
                     return result(.skipped, "正在编译，这次先不删", freedBytes: bytes)
                 }
+                // 只用 rename(2)：同卷瞬间完成；跨卷（EXDEV）或暂存目录不可用时不复制，改为持锁原地删
                 let staged = staging.appendingPathComponent(UUID().uuidString)
-                let moved = (try? fm.createDirectory(at: staging, withIntermediateDirectories: true)) != nil
-                    && (try? fm.moveItem(at: u, to: staged)) != nil
-                WorktreeScanner.release(locks)
+                let moved = stagingUsable
+                    && (try? fm.createDirectory(at: staging, withIntermediateDirectories: true)) != nil
+                    && stagingUsable
+                    && rename(u.path, staged.path) == 0
+                if moved { WorktreeScanner.release(locks) }
+                defer { if !moved { WorktreeScanner.release(locks) } }
                 do {
                     try fm.removeItem(at: moved ? staged : u)
                     bytes += size
                 } catch {
-                    return result(.failed, "删除失败：\(u.lastPathComponent)", freedBytes: bytes)
+                    let left = moved ? "（已挪进 \(staging.path)，下次清理时再补删）" : ""
+                    return result(.failed, "删除失败：\(u.lastPathComponent)\(left)", freedBytes: bytes)
                 }
             }
             return result(.done, "已删除（可再生，不能撤销）", freedBytes: bytes)

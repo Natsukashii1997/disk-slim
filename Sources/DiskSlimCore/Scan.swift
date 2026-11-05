@@ -45,7 +45,7 @@ public struct Scan {
                 let wt = target.deletingLastPathComponent()
                 let project = wt.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
                 let reasons = WorktreeScanner.inUse(wt, target: target, locked: WorktreeScanner.lockedWorktrees(project, runner: runner),
-                                                    openPaths: WorktreeScanner.openPaths(runner), processes: "", now: now)
+                                                    openPaths: WorktreeScanner.recentOpenPaths(runner, now: now), processes: "", now: now)
                 if !reasons.isEmpty { return "扫描后情况变了（\(reasons.joined(separator: "、"))），这次不删" }
             }
         }

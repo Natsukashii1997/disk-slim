@@ -97,7 +97,7 @@ import Testing
 
     @Test func squash合并后停在main上的分离HEAD_认作已落地() {
         let t = TempDir()
-        _ = single(t, built: now.addingTimeInterval(-3 * 3600))
+        _ = single(t, built: now.addingTimeInterval(-25 * 3600)) // 只靠「已在主分支里」认的，要静置 24 小时
         let run = FakeRunner()
         run.on(1, "") { a, _ in a.first == "gh" } // gh 不可用，只靠「已在主分支里」
         run.on(0, "") { a, _ in a.contains("--show-current") } // 分离 HEAD 没有分支名
@@ -177,14 +177,30 @@ import Testing
         let home = t.url
         let c = Cleaner(safety: SafetyGuard(home: home, workRoot: t.url), runner: FakeRunner(),
                         trasher: FakeTrasher(dir: t.url.appendingPathComponent("Trash")), log: .standard(home: home))
-        let leftover = c.staging.appendingPathComponent("old")
+        let leftover = c.staging.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: leftover, withIntermediateDirectories: true)
+        t.setModified(leftover, now) // 测试的 now 是固定的过去时间：相对真实现在早于一小时
+        let mine = c.staging.appendingPathComponent("不是我放的")
+        try Data().write(to: mine)
         let target = wt.appendingPathComponent("target")
         let f = Finding(area: .hidden, category: "已合并 worktree 的构建产物", title: "p · w", detail: "",
                         paths: [target.path], bytes: 1, risk: .safe, suggested: true, cleanup: .remove)
         #expect(c.clean([f]).items.first?.outcome == .done)
         #expect(!FileManager.default.fileExists(atPath: target.path))
-        #expect(((try? FileManager.default.contentsOfDirectory(atPath: c.staging.path)) ?? []).isEmpty)
+        #expect((try? FileManager.default.contentsOfDirectory(atPath: c.staging.path)) == ["不是我放的"]) // 只补删 UUID 名字的
+    }
+
+    @Test func 只靠已在主分支里认出的_24小时内编译过不清() {
+        let t = TempDir()
+        _ = single(t, built: now.addingTimeInterval(-3 * 3600))
+        let run = FakeRunner()
+        run.on(1, "") { a, _ in a.first == "gh" }
+        run.on(0, "origin/HEAD\n") { a, _ in a.contains("--verify") }
+        run.on(0, "") { a, _ in a.contains("--is-ancestor") }
+        healthyRunner(run, branch: "", head: "abc")
+        let f = scan(t, run)
+        #expect(f?.cleanup == Cleanup.none)
+        #expect(f?.detail.contains("24 小时内编译过") == true)
     }
 
     @Test func 扫描用的git命令都不改写index() {

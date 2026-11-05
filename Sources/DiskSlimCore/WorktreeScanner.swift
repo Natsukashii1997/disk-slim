@@ -46,6 +46,11 @@ public struct WorktreeScanner {
                 let title = "\(project.lastPathComponent) · \(wt.lastPathComponent)"
                 let built = BeijingTime.monthDay(Self.lastBuilt(target) ?? now)
                 let landed = landedReason(wt, merged: merged)
+                // 只靠「当前提交已在主分支里」认出来的（可能是刚切出来还没动、或常驻跟着 main 的），静置 24 小时才清
+                if landed?.hasPrefix("当前提交已在") == true, let last = Self.lastBuilt(target), now.timeIntervalSince(last) < 86_400,
+                   !reasons.contains("2 小时内编译过") {
+                    reasons.append("刚从主分支切出来或一直跟着主分支，24 小时内编译过")
+                }
                 let idleDays = Int(now.timeIntervalSince(idleSince(wt, target: target) ?? now) / 86_400)
                 if reasons.isEmpty, let landed {
                     found.append(Finding(area: .hidden, category: "已合并 worktree 的构建产物", title: title,
@@ -108,6 +113,18 @@ public struct WorktreeScanner {
             .split(separator: "\n").filter { $0.hasPrefix("n/") }.map { String($0.dropFirst()) }
     }
 
+    /// 同一批清理的复核里一分钟内复用上一次的 lsof 结果（整机跑一次 1–2 秒）
+    public static func recentOpenPaths(_ runner: CommandRunner, now: Date = Date()) -> [String] {
+        lsofCache.lock.lock(); defer { lsofCache.lock.unlock() }
+        if let (at, paths) = lsofCache.value, now.timeIntervalSince(at) < 60, now >= at { return paths }
+        let paths = openPaths(runner)
+        lsofCache.value = (now, paths)
+        return paths
+    }
+
+    final class LsofCache: @unchecked Sendable { let lock = NSLock(); var value: (Date, [String])? }
+    static let lsofCache = LsofCache()
+
     /// `git worktree list --porcelain` 里被锁住的 worktree：路径 → 锁的原因（不解析里面的 pid，有锁就算在用）
     public static func lockedWorktrees(_ project: URL, runner: CommandRunner) -> [String: String] {
         let out = runner.run(["git", "--no-optional-locks", "-C", project.path, "worktree", "list", "--porcelain"], cwd: nil).output
@@ -115,10 +132,28 @@ public struct WorktreeScanner {
         for line in out.split(separator: "\n", omittingEmptySubsequences: false) {
             if line.hasPrefix("worktree ") { current = String(line.dropFirst("worktree ".count)) }
             else if line == "locked" || line.hasPrefix("locked "), let c = current {
-                result[c] = line.count > 7 ? String(line.dropFirst(7)) : ""
+                result[c] = line.count > 7 ? unquoteGit(String(line.dropFirst(7))) : ""
             }
         }
         return result
+    }
+
+    /// git 对带非 ASCII 字符的文字加引号并用八进制转义（"\346\265\213"），还原成原文
+    static func unquoteGit(_ s: String) -> String {
+        guard s.count >= 2, s.hasPrefix("\""), s.hasSuffix("\"") else { return s }
+        var bytes: [UInt8] = [], chars = Array(s.utf8.dropFirst().dropLast()), i = 0
+        while i < chars.count {
+            if chars[i] == UInt8(ascii: "\\"), i + 1 < chars.count {
+                let next = chars[i + 1]
+                if i + 3 < chars.count, (48...55).contains(next), (48...55).contains(chars[i + 2]), (48...55).contains(chars[i + 3]) {
+                    bytes.append((next - 48) * 64 + (chars[i + 2] - 48) * 8 + (chars[i + 3] - 48)); i += 4; continue
+                }
+                let map: [UInt8: UInt8] = [UInt8(ascii: "n"): 10, UInt8(ascii: "t"): 9, UInt8(ascii: "\""): 34, UInt8(ascii: "\\"): 92]
+                bytes.append(map[next] ?? next); i += 2; continue
+            }
+            bytes.append(chars[i]); i += 1
+        }
+        return String(decoding: bytes, as: UTF8.self)
     }
 
     /// cargo 编译时会用 flock 占住 `target/<profile>/.cargo*lock`：试着非阻塞地拿一下，拿不到就是正在编译。只读打开，不创建
@@ -200,8 +235,18 @@ public struct WorktreeScanner {
     static func busy(_ wt: URL, processes: String) -> Bool {
         let paths = Set([wt.path, wt.resolvingSymlinksInPath().path])
         return processes.split(separator: "\n").contains { line in
-            paths.contains { line.contains($0) } && (line.contains("cargo") || line.contains("rustc") || line.contains("tauri"))
+            paths.contains { mentions(String(line), $0) } && (line.contains("cargo") || line.contains("rustc") || line.contains("tauri"))
         }
+    }
+
+    /// 命令行里出现了这个路径本身（后面紧跟「/」、空白或行尾），`/a/wt` 不算提到 `/a/wt-building`
+    static func mentions(_ line: String, _ path: String) -> Bool {
+        var from = line.startIndex
+        while let r = line.range(of: path, range: from..<line.endIndex) {
+            if r.upperBound == line.endIndex || ["/", " ", "\t"].contains(line[r.upperBound]) { return true }
+            from = r.upperBound
+        }
+        return false
     }
 
     /// `target/` 往下三层里最新的修改时间。cargo 增量编译改的是 `target/debug/deps/*` 这一层的文件（L-06）。
