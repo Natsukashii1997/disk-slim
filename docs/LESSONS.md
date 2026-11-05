@@ -33,6 +33,22 @@
 - 证据：第 1 批 `swift test` 首跑失败记录（本会话）；修复后 12/12 通过。
 - 升级：未升级。
 
+## L-03 macOS 不区分大小写：只差大小写的目录、目标、可执行文件会撞在一起（2026-11-05）
+
+- 现象：① 第 1 批把 Swift 测试写到 `Tests/`，实际落进已有的 `tests/`；② 第 3 批把应用代码写到 `Sources/DiskSlim/`，实际和命令行的 `Sources/diskslim/main.swift` 混在一个目录，编译报重复声明；分开目录后，可执行文件 `DiskSlim` 和 `diskslim` 在 `.build/` 里又撞成同一个文件，链接失败。
+- 根因：macOS 默认的 APFS 不区分大小写，`DiskSlim` 和 `diskslim` 是同一个路径；写文件、SwiftPM 的目标目录和产物目录都会悄悄合并。
+- 正确做法：目录名、SwiftPM 目标名、可执行文件名之间不能只差大小写。现在命令行在 `Sources/DiskSlimCLI`（目标 `diskslim`），应用在 `Sources/DiskSlimApp`（目标 `DiskSlimApp`），测试路径在 `Package.swift` 写明。撞名后要 `rm -rf .build` 清掉旧产物。
+- 证据：提交 `44d4bb2`（测试目录）；第 3 批编译错误「invalid redeclaration of 'total'」「no such file or directory ... diskslim-p.build/.../main.o」。
+- 升级：同类第 2 次，已写进 AGENTS.md「规则」。换个项目也成立，提议提升为全局 G-xx（待用户批准）。
+
+## L-04 `swift test` 偶发「plugin for module 'TestingMacros' not found」（2026-11-05）
+
+- 现象：`swift test` 编译测试时偶尔报找不到 Swift Testing 的宏插件，什么都不改重跑一次就通过；第 2、3 批各出现一次，连跑三次是「通过、失败、通过」。
+- 根因：未查明。工具链是 CommandLineTools 里的 Swift 6.4（没有完整 Xcode），宏插件目录存在；怀疑和增量编译缓存有关，未核实。
+- 正确做法：遇到这条报错原样重跑一次 `swift test`；连续两次都报再停下来查。交接里如实写出现过几次。
+- 证据：第 2 批交接「测试」一行；第 3 批连跑记录（本会话）。
+- 升级：同类第 2 次，已写进 AGENTS.md「运行」。
+
 ---
 
 格式：

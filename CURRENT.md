@@ -1,6 +1,17 @@
 # 当前状态
 
-更新：2026-11-05。第 3 批「菜单栏界面」第一步：融合版三版预览已出，在分支 `feat/menubar-ui`（基于 `feat/cleaner`）。唯一下一步：等用户从三版里选定（或给修改意见），再用 SwiftUI 实现。
+更新：2026-11-05。第 3 批「菜单栏界面」完成（按用户选定的第 2 版「首页 + 下钻」），在分支 `feat/menubar-ui`，已打包 `dist/DiskSlim.app` 但未启动。唯一下一步：用户自己打开应用试用并反馈；之后做第 4 批「涨幅追踪」。
+
+## 第 3 批：菜单栏应用（首页 + 下钻）（2026-11-05，Claude，用户选定第 2 版；已提交到 `feat/menubar-ui`、未发布、未安装）
+
+- 时间：开工 `2026-11-05 11:46`（`date '+%F %H:%M'` 记录）。来由：用户在融合版三版里选第 2 版「首页 + 下钻」。
+- 改了哪些文件：`Package.swift`（新增目标 `DiskSlimApp`；命令行源码改到 `Sources/DiskSlimCLI`，两个目标都写明路径）；新建 `Sources/DiskSlimApp/`（`DiskSlimApp.swift` 菜单栏入口与图标；`Store.swift` 扫描、勾选、清理前确认、清理、撤销；`Views.swift` 首页四行汇总与「清理建议项」、四个下钻页、确认框、清理后提示；`Snapshot.swift` 离屏截图）；`Sources/DiskSlimCore/System.swift` 加 `BeijingTime.hourMinute`；新建 `scripts/bundle.sh`；改 `AGENTS.md`（运行、结构、规则）、`docs/LESSONS.md`（L-03、L-04）。
+- 测试：`swift test` 原样结果 `✔ Test run with 23 tests in 6 suites passed`；连跑三次是「通过、失败（TestingMacros 插件找不到）、通过」，另有一次打包后紧接着跑时没截到结果行，见 L-04；`node --test tests/*.test.mjs` 原样结果「ℹ pass 4」「ℹ fail 0」；`node scripts/check-rules.mjs` 输出「通用规则检查通过」。
+- 验证：`.build/debug/DiskSlimApp --snapshot` 用 11:50 的真实扫描离屏渲染 7 个页面 × 浅色 / 深色共 14 张 PNG，存 `~/Library/Application Support/disk-slim/evidence/2026-11-05-ui-shots/`；看过首页（浅、深）、下载（深）、要你决定（浅）、清理前确认（浅），布局与设计稿第 2 版一致；据此改了两处：有建议勾选的组排在前面、说明文字允许两行，大数字改用普通字体加等宽数字。`scripts/bundle.sh` 打出 `dist/DiskSlim.app`（940 KB，ad-hoc 签名，`plutil -lint` 通过）。**没有在菜单栏里实际启动应用**，也没有在应用里点过清理。
+- 截图：见上面证据目录，14 张。
+- 发布与回读：未发布、未安装（安装和开机自启在第 6 批）。
+- 与授权不一致之处、遗留问题、范围外发现：① 首页的涨幅曲线和「本周待决定」、提醒设置分别在第 4、5 批做，首页先放一句「从今天开始每天记录」；② 应用里点「确认清理」会真的清理你的文件（有确认框），自测请用命令行沙盒；③ 扫描期间 postpane 又多了 `54-reply-list`，可用空间降到 77.7 GB；`50-strip-tokens` 的 PR 已合并，只剩「24 小时内编译过」一条阻挡，规则按预期工作；④ L-03 换个项目也成立，提议提升为全局 G-xx，等用户批准；⑤ 三个功能分支都还没合并到 `main`，GitHub 远端未建。
+- 本轮新坑：L-03、L-04。
 
 ## 第 3 批第一步：融合版界面三版预览（2026-11-05，Claude，用户同意做第 3 批；已提交到 `feat/menubar-ui`、已发布 Artifact）
 

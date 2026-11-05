@@ -97,7 +97,16 @@ public enum BeijingTime {
         return f
     }()
 
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
     public static func monthDay(_ date: Date) -> String { formatter.string(from: date) }
+    public static func hourMinute(_ date: Date) -> String { timeFormatter.string(from: date) }
 }
 
 /// 按 1024 进位，和 `du -h`、访达一致的写法：「43 MB」「6.2 GB」。

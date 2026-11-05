@@ -27,7 +27,7 @@ node scripts/check-rules.mjs     # 只跑通用规则检查
 ```
 
 ```sh
-swift test                                   # 扫描引擎单元测试（Swift Testing）
+swift test                                   # 单元测试（Swift Testing）；偶发 TestingMacros 插件报错就原样重跑一次（L-04）
 swift build -c release                       # 编译
 .build/release/diskslim scan                 # 只读扫描真实磁盘，按区域和分组列出；不删任何东西
 .build/release/diskslim scan --json          # 同上，输出 JSON
@@ -35,6 +35,8 @@ swift build -c release                       # 编译
 .build/release/diskslim clean --yes          # 真正执行；只有用户在本轮明确同意清理真实磁盘时才能跑
 .build/release/diskslim undo                 # 撤销最近一次：把移到废纸篓的放回原处
 # 自测一律用沙盒：加 --home <沙盒>/home --work <沙盒>/home/work，沙盒放在证据目录下
+scripts/bundle.sh                            # 打包菜单栏应用到 dist/DiskSlim.app（本机签名，不安装、不启动）
+.build/debug/DiskSlimApp --snapshot <目录>    # 用真实扫描离屏渲染各页面 PNG（浅色 / 深色），只读，不清理
 ```
 
 本机只有命令行工具、没有完整 Xcode；`swift build` 会打几行 `ld: warning: search path ... not found`，不影响结果。
@@ -45,12 +47,13 @@ swift build -c release                       # 编译
 AGENTS.md            入口（本文件）
 CURRENT.md           当前状态与唯一下一步；每轮交接写在顶部
 docs/PRD.md          需求（含调研结论、规则、分批计划）
-Package.swift        SwiftPM：DiskSlimCore（规则与模型）、diskslim（命令行）、DiskSlimCoreTests
+Package.swift        SwiftPM：DiskSlimCore（规则与模型）、diskslim（命令行）、DiskSlimApp（菜单栏应用）、DiskSlimCoreTests
 Sources/
   DiskSlimCore/      Model（Finding、风险等级、清理方式）、System（元数据、大小、命令、格式）、
                      DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、Scan（总入口）、
                      SafetyGuard（执行前重新核对路径和命令的白名单）、Cleaner（执行、操作记录、撤销）
-  diskslim/          命令行 `diskslim scan`
+  DiskSlimCLI/       命令行 `diskslim`（scan / clean / undo）
+  DiskSlimApp/       菜单栏应用：Store（扫描、勾选、清理、撤销）、Views（首页 + 下钻、确认、提示）、Snapshot（离屏截图）
 tests/DiskSlimCoreTests/  各条规则的单元测试（Swift；和 Node 测试同在 tests/）
 docs/
   design/ui-v1.html  三版菜单栏界面预览（A 容量仪表 / B 涨幅雷达 / C 待清理收件箱）
@@ -59,6 +62,7 @@ docs/
   OPERATIONS.md      操作手册：交接写法、报告与验收
   templates/handoff.md  交接一节的骨架
 scripts/
+  bundle.sh          打包 dist/DiskSlim.app
   check-rules.mjs    通用规则检查（只查机器能判定的）
 tests/               node:test 测试
 ```
@@ -85,6 +89,7 @@ single-context：根目录 `GLOSSARY.md` 与 `docs/adr/`，用到时再建。见
 
 - 验证用的备份、日志等证据放 `~/Library/Application Support/disk-slim/evidence/`，不放 `/tmp`（全局坑 G-01）；私人数据与完整日志不进仓库。
 - 新增 Swift 包依赖，先在交接里说明理由，经用户同意再加。
+- 目录名、SwiftPM 目标名、可执行文件名之间不能只差大小写（macOS 不区分大小写，会悄悄合并，L-03）。
 - 安全底线（[docs/PRD.md](docs/PRD.md) 第 5 节）：用户文件只移到废纸篓，不直接删除、不自动清空废纸篓；「只展示」的项任何路径都删不了；清理前可预览、留日志、可撤销；不用 `sudo`。
 - 界面上的时间经统一的格式化函数按北京时间显示，不直接截取 ISO 字符串（全局坑 G-02）。
 

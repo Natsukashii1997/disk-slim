@@ -1,0 +1,389 @@
+import DiskSlimCore
+import SwiftUI
+
+// 第 2 版「首页 + 下钻」（docs/design/ui-v2.html#v2）。
+// 控件都用自绘样式：离屏截图（--snapshot）渲染不了 AppKit 自带的按钮和勾选框。
+
+let panelWidth: CGFloat = 368
+let isSnapshot = CommandLine.arguments.contains("--snapshot")
+
+enum Palette {
+    static let accent = Color.accentColor
+    static let ok = Color(red: 0.12, green: 0.62, blue: 0.33)
+    static let warn = Color(red: 0.78, green: 0.49, blue: 0.07)
+    static let bad = Color(red: 0.84, green: 0.27, blue: 0.27)
+    static let downloads = Color(red: 0.16, green: 0.63, blue: 0.60)
+    static let caches = Color(red: 0.54, green: 0.39, blue: 0.82)
+    static let projects = Color(red: 0.88, green: 0.47, blue: 0.23)
+    static let system = Color(red: 0.60, green: 0.64, blue: 0.70)
+}
+
+struct PrimaryButton: ButtonStyle {
+    var enabled = true
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12.5, weight: .semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .frame(maxWidth: .infinity)
+            .background(RoundedRectangle(cornerRadius: 7).fill(Palette.accent.opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.35)))
+    }
+}
+
+struct QuietButton: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12.5, weight: .semibold))
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .frame(maxWidth: .infinity)
+            .background(RoundedRectangle(cornerRadius: 7).stroke(.separator))
+            .opacity(configuration.isPressed ? 0.7 : 1)
+    }
+}
+
+/// 滚动区；离屏截图时换成普通堆叠，否则 ScrollView 渲染出来是空的
+struct Scroller<Content: View>: View {
+    @ViewBuilder let content: Content
+    var body: some View {
+        if isSnapshot {
+            VStack(alignment: .leading, spacing: 0) { content }.padding(.horizontal, 8)
+        } else {
+            ScrollView { VStack(alignment: .leading, spacing: 0) { content }.padding(.horizontal, 8) }
+                .frame(maxHeight: 380)
+        }
+    }
+}
+
+// MARK: - 面板
+
+struct PanelView: View {
+    @EnvironmentObject var store: Store
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            Group {
+                switch store.page {
+                case .home: HomeView()
+                case .downloads: ListPage(page: .downloads, title: "下载文件夹", action: "移到废纸篓")
+                case .caches: ListPage(page: .caches, title: "缓存与构建产物", action: "清理")
+                case .decide: ListPage(page: .decide, title: "要你决定的", action: "处理所选")
+                case .records: ListPage(page: .records, title: "对话记录", action: nil)
+                }
+            }
+            .disabled(store.confirming != nil)
+            .blur(radius: store.confirming != nil ? 2 : 0)
+
+            if let list = store.confirming { ConfirmView(list: list).padding(10) }
+            if let t = store.toast, store.confirming == nil { ToastView(toast: t).padding(10) }
+        }
+        .frame(width: panelWidth)
+        .font(.system(size: 13))
+    }
+}
+
+// MARK: - 首页
+
+struct HomeView: View {
+    @EnvironmentObject var store: Store
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            hero
+            growth
+            VStack(alignment: .leading, spacing: 2) {
+                section("可以清")
+                row(.downloads, color: Palette.downloads, title: "下载文件夹", sub: downloadsSub, value: total(store.picked(.downloads)))
+                row(.caches, color: Palette.caches, title: "缓存与构建产物", sub: "\(store.picked(.caches).count) 项 · 官方命令清或直接删", value: total(store.picked(.caches)))
+                section("要你决定").padding(.top, 6)
+                row(.decide, color: Palette.projects, title: "备份、虚拟机、在用的构建产物", sub: "默认不勾，逐项看", value: total(store.findings(.decide)))
+                row(.records, color: Palette.system, title: "对话记录", sub: "只展示，不会删", value: total(store.findings(.records)))
+            }
+            .padding(.horizontal, -6)
+
+            let picks = store.suggestedPicks
+            Button(store.working ? "正在清理…" : "清理建议项 · \(formatBytes(total(picks)))") { store.askToClean(picks) }
+                .buttonStyle(PrimaryButton(enabled: !picks.isEmpty && !store.working))
+                .disabled(picks.isEmpty || store.working)
+        }
+        .padding(16)
+    }
+
+    private var downloadsSub: String {
+        let all = store.findings(.downloads).count, picked = store.picked(.downloads).count
+        return "建议 \(picked) 项 · 另有 \(all - picked) 项可以看看"
+    }
+
+    private var hero: some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(store.disk.map { String(format: "%.1f", Double($0.availableBytes) / 1_073_741_824) } ?? "—")
+                        .font(.system(size: 34, weight: .semibold)).monospacedDigit()
+                        .foregroundStyle(freeColor)
+                    Text("GB 可用").foregroundStyle(.secondary)
+                }
+                Text(statusLine).font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button { store.scan() } label: {
+                Image(systemName: "arrow.clockwise").foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("重新扫描")
+        }
+    }
+
+    private var freeColor: Color {
+        guard let d = store.disk else { return .primary }
+        let gb = Double(d.availableBytes) / 1_073_741_824
+        return gb < 30 ? Palette.bad : gb < 60 ? Palette.warn : .primary
+    }
+
+    private var statusLine: String {
+        if store.scanning { return "正在扫描…" }
+        guard let r = store.report else { return "还没扫描" }
+        let total = store.disk.map { "共 \(formatBytes($0.totalBytes))" } ?? ""
+        return "\(total) · \(BeijingTime.hourMinute(r.scannedAt)) 扫描"
+    }
+
+    /// 涨幅曲线要有每日记录（第 4 批），先说明从今天开始记
+    private var growth: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "chart.line.uptrend.xyaxis").foregroundStyle(.secondary)
+            Text("从今天开始每天记一次各目录大小，攒够两天就能看到谁在涨。")
+                .font(.system(size: 11.5)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary.opacity(0.5)))
+    }
+
+    private func section(_ text: String) -> some View {
+        Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 6)
+    }
+
+    private func row(_ page: Page, color: Color, title: String, sub: String, value: Int64) -> some View {
+        Button { store.page = page } label: {
+            HStack(spacing: 10) {
+                Circle().fill(color).frame(width: 8, height: 8)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                    Text(sub).font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                Text(formatBytes(value)).font(.system(size: 12.5, weight: .semibold, design: .monospaced))
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 6).padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - 下钻页
+
+struct ListPage: View {
+    @EnvironmentObject var store: Store
+    let page: Page
+    let title: String
+    /// nil 表示这一页只展示，没有清理按钮
+    let action: String?
+
+    /// 一组超过这么多项时默认折叠，只露最大的几项
+    private let foldOver = 8
+    private let foldShow = 6
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button { store.page = .home } label: { Label("返回", systemImage: "chevron.left") }
+                    .buttonStyle(.plain).foregroundStyle(Palette.accent)
+                Spacer()
+                Text(title).font(.system(size: 13, weight: .semibold))
+                Spacer()
+                Color.clear.frame(width: 44, height: 1)
+            }
+            .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 6)
+
+            let items = store.findings(page)
+            Scroller {
+                if items.isEmpty {
+                    Text(store.scanning ? "正在扫描…" : "这里没有东西").foregroundStyle(.secondary).padding(16)
+                }
+                ForEach(groups(items), id: \.name) { g in group(g) }
+                if page == .records {
+                    Text("要清 Codex 对话请在 Codex 里操作；Claude 对话在 Claude 设置 › 存储里看。")
+                        .font(.system(size: 11.5)).foregroundStyle(.secondary).padding(8)
+                }
+            }
+
+            if let action {
+                let picks = store.picked(page)
+                HStack(spacing: 10) {
+                    Text("已选 \(picks.count) 项 · \(formatBytes(total(picks)))").font(.system(size: 11.5)).foregroundStyle(.secondary)
+                    Spacer()
+                    Button(action) { store.askToClean(picks) }
+                        .buttonStyle(PrimaryButton(enabled: !picks.isEmpty && !store.working))
+                        .disabled(picks.isEmpty || store.working)
+                        .fixedSize()
+                }
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .overlay(alignment: .top) { Divider() }
+            }
+        }
+    }
+
+    private struct Group: Hashable { let name: String; let items: [Finding]
+        static func == (a: Group, b: Group) -> Bool { a.name == b.name }
+        func hash(into h: inout Hasher) { h.combine(name) }
+    }
+
+    private func groups(_ items: [Finding]) -> [Group] {
+        var order: [String] = []
+        for f in items where !order.contains(f.category) { order.append(f.category) }
+        let groups = order.map { name in Group(name: name, items: items.filter { $0.category == name }.sorted { $0.bytes > $1.bytes }) }
+        // 有建议勾选的组在前，其次是能勾的，最后是不能清的；同档保持扫描顺序
+        func rank(_ g: Group) -> Int {
+            g.items.contains(where: \.suggested) ? 0 : g.items.contains(where: \.selectable) ? 1 : 2
+        }
+        return groups.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element)
+    }
+
+    @ViewBuilder private func group(_ g: Group) -> some View {
+        let folded = g.items.count > foldOver && !store.expanded.contains(g.name)
+        let shown = folded ? Array(g.items.prefix(foldShow)) : g.items
+        HStack {
+            Text(g.name).font(.system(size: 11.5, weight: .semibold))
+            Text("\(g.items.count) 项").font(.system(size: 11.5)).foregroundStyle(.secondary)
+            Spacer()
+            Text(formatBytes(total(g.items))).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 8).padding(.top, 10).padding(.bottom, 4)
+        ForEach(shown) { f in ItemRow(f: f) }
+        if g.items.count > foldOver {
+            Button {
+                if folded { store.expanded.insert(g.name) } else { store.expanded.remove(g.name) }
+            } label: {
+                let rest = g.items.dropFirst(foldShow)
+                Text(folded ? "还有 \(rest.count) 项 · \(formatBytes(total(Array(rest))))，展开" : "收起")
+                    .font(.system(size: 12)).foregroundStyle(Palette.accent)
+                    .padding(.horizontal, 34).padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+struct ItemRow: View {
+    @EnvironmentObject var store: Store
+    let f: Finding
+
+    var body: some View {
+        Button { store.toggle(f) } label: {
+            HStack(spacing: 8) {
+                Group {
+                    if f.selectable {
+                        Image(systemName: store.selected.contains(f.id) ? "checkmark.square.fill" : "square")
+                            .foregroundStyle(store.selected.contains(f.id) ? Palette.accent : .secondary)
+                    } else {
+                        Color.clear
+                    }
+                }
+                .frame(width: 16)
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 5) {
+                        Text(f.title).lineLimit(1).truncationMode(.middle)
+                        chip
+                    }
+                    Text(f.detail).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 6)
+                Text(formatBytes(f.bytes)).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 8).padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(f.paths.joined(separator: "\n"))
+    }
+
+    @ViewBuilder private var chip: some View {
+        if f.risk == .readOnly { tag("只展示", .secondary) }
+        else if f.cleanup == .none { tag("不能清", .secondary) }
+        else if f.risk == .confirm { tag("需确认", Palette.warn) }
+    }
+
+    private func tag(_ text: String, _ color: Color) -> some View {
+        Text(text).font(.system(size: 10, weight: .semibold)).foregroundStyle(color)
+            .padding(.horizontal, 5).padding(.vertical, 1)
+            .background(RoundedRectangle(cornerRadius: 4).fill(color.opacity(0.15)))
+            .fixedSize()
+    }
+}
+
+// MARK: - 清理前确认、清理后提示
+
+struct ConfirmView: View {
+    @EnvironmentObject var store: Store
+    let list: [Finding]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("确认清理 \(list.count) 项").font(.system(size: 14, weight: .semibold))
+            VStack(alignment: .leading, spacing: 6) {
+                line("移到废纸篓，可以撤销", list.filter { $0.cleanup == .trash })
+                line("直接删除可再生的目录，不能撤销", list.filter { $0.cleanup == .remove })
+                line("运行官方清理命令，不能撤销", list.filter { if case .command = $0.cleanup { return true }; return false })
+            }
+            if list.contains(where: { $0.risk == .confirm }) {
+                Text("其中有「需确认」的项，请确认你已经看过。").font(.system(size: 11.5)).foregroundStyle(Palette.warn)
+            }
+            Text("移到废纸篓的要清空废纸篓后才真正腾出空间。").font(.system(size: 11.5)).foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Button("取消") { store.confirming = nil }.buttonStyle(QuietButton())
+                Button("确认清理") { store.clean(list) }.buttonStyle(PrimaryButton())
+            }
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 12).fill(.background).shadow(color: .black.opacity(0.25), radius: 14, y: 6))
+    }
+
+    @ViewBuilder private func line(_ text: String, _ group: [Finding]) -> some View {
+        if !group.isEmpty {
+            HStack {
+                Text(text)
+                Spacer()
+                Text("\(group.count) 项 · \(formatBytes(total(group)))").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+            }
+            .font(.system(size: 12.5))
+        }
+    }
+}
+
+struct ToastView: View {
+    @EnvironmentObject var store: Store
+    let toast: Toast
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(toast.text).font(.system(size: 12)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            if toast.canUndo {
+                Button("撤销") { store.undo() }.buttonStyle(.plain).font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color(red: 0.56, green: 0.75, blue: 1))
+            }
+            Button { store.toast = nil } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .bold)) }
+                .buttonStyle(.plain).foregroundStyle(.white.opacity(0.6))
+        }
+        .padding(.horizontal, 12).padding(.vertical, 9)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color(white: 0.13)))
+        .task(id: toast.id) {
+            if isSnapshot { return }
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            if store.toast?.id == toast.id { store.toast = nil }
+        }
+    }
+}
