@@ -5,7 +5,7 @@
 ## 第 1 批：扫描引擎与命令行工具（2026-11-05，Claude，用户同意做第 1 批；已提交到 `feat/scan-engine`、无需发布）
 
 - 时间：开工 `2026-11-05 11:22`（估计值：本轮开工时漏了用 `date` 记录，取首次提交之后、本轮收尾 `date` 11:28 之前）。来由：PRD 第 7 节第 1 批，先做只读扫描、不做界面。
-- 改了哪些文件：新建 `Package.swift`；`Sources/DiskSlimCore/`（`Model.swift` 数据模型与「只展示项不可清」的强制；`System.swift` Spotlight 元数据、占用大小、外部命令、北京时间与大小格式；`DownloadsScanner.swift` 下载区四类规则；`WorktreeScanner.swift` worktree 构建产物四条件；`KnownPlaces.swift` 缓存 / 需确认 / 只展示；`Scan.swift` 总入口）；`Sources/diskslim/main.swift` 命令行；`Tests/DiskSlimCoreTests/` 四个测试文件；改 `AGENTS.md`（运行命令、结构）、`docs/LESSONS.md`（L-01、L-02）。
+- 改了哪些文件：新建 `Package.swift`；`Sources/DiskSlimCore/`（`Model.swift` 数据模型与「只展示项不可清」的强制；`System.swift` Spotlight 元数据、占用大小、外部命令、北京时间与大小格式；`DownloadsScanner.swift` 下载区四类规则；`WorktreeScanner.swift` worktree 构建产物四条件；`KnownPlaces.swift` 缓存 / 需确认 / 只展示；`Scan.swift` 总入口）；`Sources/diskslim/main.swift` 命令行；`tests/DiskSlimCoreTests/` 四个测试文件（和 Node 测试同在小写 `tests/`，`Package.swift` 写明了路径）；改 `AGENTS.md`（运行命令、结构）、`docs/LESSONS.md`（L-01、L-02）。
 - 测试：`swift test` 原样结果 `✔ Test run with 12 tests in 4 suites passed`；`node --test tests/*.test.mjs` 原样结果「ℹ tests 4 ℹ pass 4 ℹ fail 0」；`node scripts/check-rules.mjs` 输出「通用规则检查通过」。首跑 `swift test` 有 5 处失败：2 处是测试把小文件的块大小（4 KB）当成了大文件，改了测试的阈值；3 处是 L-02 的路径问题，改了代码。
 - 验证：真实磁盘只读扫描（`.build/release/diskslim scan`），用时 2.8 秒，可用 80.6 GB / 460.4 GB；输出存 `~/Library/Application Support/disk-slim/evidence/2026-11-05-scan.txt` 与 `.json`（185 项）。和今天上午手动排查对账：Codex 备份 10.9 GB（手动 11 GB）、Colima 4.4 GB、Cowork 虚拟机 10.3 GB（手动 10 GB）、Claude 对话 4.4 GB、Codex 对话 31.5 GB（手动 31 GB）、Homebrew 283 MB、pnpm 469 MB，一致；上午已清的 14 个 worktree 构建产物、uv、pip、Playwright、Puppeteer 都不再出现。
 - 截图：无界面改动，无。

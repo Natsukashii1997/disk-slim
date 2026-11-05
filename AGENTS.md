@@ -46,7 +46,7 @@ Sources/
   DiskSlimCore/      Model（Finding、风险等级、清理方式）、System（元数据、大小、命令、格式）、
                      DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、Scan（总入口）
   diskslim/          命令行 `diskslim scan`
-Tests/DiskSlimCoreTests/  各条规则的单元测试
+tests/DiskSlimCoreTests/  各条规则的单元测试（Swift；和 Node 测试同在 tests/）
 docs/
   design/ui-v1.html  三版菜单栏界面预览（A 容量仪表 / B 涨幅雷达 / C 待清理收件箱）
   agents/            Matt Pocock 技能读的约定：issue 看板、分流标签、领域文档
