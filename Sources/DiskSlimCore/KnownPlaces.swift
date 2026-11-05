@@ -12,9 +12,11 @@ public struct Place {
     public let detail: String
     /// 每个子目录各算一项（如 Codex 的多份备份）
     public let perChild: Bool
+    /// 进程命令行里出现这些字样时先不清（例如 Homebrew 正在下载）
+    public let busyWhen: [String]
 
     public init(_ category: String, _ title: String, _ paths: [String], risk: Risk, suggested: Bool = false,
-                cleanup: Cleanup = .none, detail: String, perChild: Bool = false) {
+                cleanup: Cleanup = .none, detail: String, perChild: Bool = false, busyWhen: [String] = []) {
         self.category = category
         self.title = title
         self.paths = paths
@@ -23,6 +25,7 @@ public struct Place {
         self.cleanup = cleanup
         self.detail = detail
         self.perChild = perChild
+        self.busyWhen = busyWhen
     }
 }
 
@@ -36,8 +39,10 @@ public enum KnownPlaces {
               cleanup: .command(["uv", "cache", "clean"]), detail: "下次安装时会重新下载"),
         Place("包管理器缓存", "pnpm 存储", ["Library/pnpm/store"], risk: .safe, suggested: true,
               cleanup: .command(["pnpm", "store", "prune"]), detail: "只删没有项目引用的包"),
-        Place("包管理器缓存", "Homebrew 缓存", ["Library/Caches/Homebrew"], risk: .safe, suggested: true,
-              cleanup: .command(["brew", "cleanup", "-s"]), detail: "旧版本安装包和下载缓存"),
+        // 不用 `brew cleanup`：它还会删已安装软件的旧版本、自动卸载没人依赖的软件，都不能撤销（L-06）。
+        // 只删下载缓存，下次安装时重新下载
+        Place("包管理器缓存", "Homebrew 下载缓存", ["Library/Caches/Homebrew/downloads"], risk: .safe, suggested: true,
+              cleanup: .remove, detail: "下次安装时会重新下载", busyWhen: ["Homebrew/brew.rb"]),
         Place("包管理器缓存", "pip 缓存", ["Library/Caches/pip"], risk: .safe, suggested: true,
               cleanup: .command(["pip3", "cache", "purge"]), detail: "下次安装时会重新下载"),
         Place("测试用浏览器", "Playwright 浏览器", ["Library/Caches/ms-playwright"], risk: .safe, suggested: true,
@@ -46,7 +51,7 @@ public enum KnownPlaces {
               cleanup: .remove, detail: "下次跑测试时会自动重新下载"),
 
         // 需确认：不默认勾选
-        Place("包管理器缓存", "npx 运行过的工具", [".npm/_npx"], risk: .confirm, cleanup: .remove,
+        Place("包管理器缓存", "npx 运行过的工具", [".npm/_npx"], risk: .confirm, cleanup: .trash,
               detail: "下次运行会重新下载；有些 MCP 服务正靠它运行，先关掉 Claude、Codex 再清"),
         Place("备份快照", "Codex 备份", [".codex/recovery"], risk: .confirm,
               cleanup: .trash, detail: "你自己做的备份；Codex 用着正常的话，可以只留最新一份", perChild: true),
@@ -81,7 +86,9 @@ public struct KnownPlacesScanner {
         let fm = FileManager.default
         var found: [Finding] = []
         for place in places {
-            let urls = place.paths.map { home.appendingPathComponent($0) }.filter { fm.fileExists(atPath: $0.path) }
+            // 位置本身或中间某层是符号链接的不看，免得顺着链接把别处的东西列进来
+            let urls = place.paths.map { home.appendingPathComponent($0) }
+                .filter { fm.fileExists(atPath: $0.path) && !hasSymlink($0.path, under: home) }
             if urls.isEmpty { continue }
 
             if place.perChild {

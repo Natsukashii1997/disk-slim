@@ -44,17 +44,20 @@ public struct DownloadsScanner {
             ?? now
         let opened = meta.lastUsed(url)
 
-        func finding(_ category: String, _ detail: String, suggested: Bool, bytes: Int64? = nil) -> Finding {
+        func finding(_ category: String, _ detail: String, suggested: Bool, bytes: Int64? = nil,
+                     cleanup: Cleanup = .trash) -> Finding {
             Finding(area: .downloads, category: category, title: name, detail: detail,
                     paths: [url.path], bytes: bytes ?? allocatedSize(url),
-                    risk: .safe, suggested: suggested, cleanup: .trash)
+                    risk: .safe, suggested: suggested, cleanup: cleanup)
         }
+        let isFile = (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true
 
         if installerExts.contains(url.pathExtension.lowercased()), days(since: added) > rules.installerDays {
             return finding("安装包", "\(BeijingTime.monthDay(added)) 下载，装完就用不上了", suggested: true)
         }
 
-        if let stem = archiveStem(name) {
+        // 只认普通文件：名字以 .zip 结尾的文件夹不是压缩包
+        if isFile, let stem = archiveStem(name) {
             var isDir: ObjCBool = false
             let sibling = root.appendingPathComponent(stem)
             if FileManager.default.fileExists(atPath: sibling.path, isDirectory: &isDir), isDir.boolValue {
@@ -71,7 +74,9 @@ public struct DownloadsScanner {
         if days(since: added) <= rules.recentDays {
             let bytes = allocatedSize(url)
             if bytes > rules.bigBytes {
-                return finding("最近下载的大文件", "\(BeijingTime.monthDay(added)) 下载", suggested: false, bytes: bytes)
+                // PRD 4.1：只提示，不能勾选；要删请自己判断
+                return finding("最近下载的大文件", "\(BeijingTime.monthDay(added)) 下载，只提示，要删请自己判断",
+                               suggested: false, bytes: bytes, cleanup: .none)
             }
         }
         return nil

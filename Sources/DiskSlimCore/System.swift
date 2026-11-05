@@ -63,7 +63,10 @@ public protocol CommandRunner {
 }
 
 public struct ProcessRunner: CommandRunner {
-    public init() {}
+    /// 超时就结束进程并返回退出码 124，免得 gh 卡在网络上时扫描一直转圈
+    let timeout: TimeInterval
+
+    public init(timeout: TimeInterval = 120) { self.timeout = timeout }
 
     public func run(_ args: [String], cwd: URL?) -> (status: Int32, output: String) {
         let p = Process()
@@ -78,11 +81,38 @@ public struct ProcessRunner: CommandRunner {
         p.standardOutput = out
         p.standardError = FileHandle.nullDevice
         do { try p.run() } catch { return (127, "") }
-        // 先读完再等退出，避免输出塞满管道卡死
-        let data = out.fileHandleForReading.readDataToEndOfFile()
+        // 在后台读完输出，避免输出塞满管道卡死；主线等读完或超时
+        var data = Data()
+        let done = DispatchGroup()
+        done.enter()
+        DispatchQueue.global().async {
+            data = out.fileHandleForReading.readDataToEndOfFile()
+            done.leave()
+        }
+        if done.wait(timeout: .now() + timeout) == .timedOut {
+            p.terminate()
+            _ = done.wait(timeout: .now() + 2)
+            return (124, "")
+        }
         p.waitUntilExit()
         return (p.terminationStatus, String(decoding: data, as: UTF8.self))
     }
+}
+
+/// 从 `root` 往下到 `path` 的每一层里，有没有符号链接。`includingLast` 为 false 时不看最后一层本身。
+/// `root` 自己是不是链接不管（那是用户配置的位置）。
+public func hasSymlink(_ path: String, under root: URL, includingLast: Bool = true) -> Bool {
+    let rootParts = root.standardizedFileURL.pathComponents
+    let parts = URL(fileURLWithPath: path).standardizedFileURL.pathComponents
+    guard parts.count > rootParts.count, Array(parts.prefix(rootParts.count)) == rootParts else { return true }
+    let last = includingLast ? parts.count : parts.count - 1
+    var current = root.standardizedFileURL
+    for i in rootParts.count..<parts.count {
+        current.appendPathComponent(parts[i])
+        guard i < last else { break }
+        if (try? FileManager.default.destinationOfSymbolicLink(atPath: current.path)) != nil { return true }
+    }
+    return false
 }
 
 // MARK: - 显示格式

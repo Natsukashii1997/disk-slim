@@ -27,7 +27,7 @@ node scripts/check-rules.mjs     # 只跑通用规则检查
 ```
 
 ```sh
-swift test                                   # 单元测试（Swift Testing）；偶发 TestingMacros 插件报错就原样重跑一次（L-04）
+scripts/test.sh                              # 单元测试（Swift Testing）；不要直接用 swift test，原因见 L-04
 swift build -c release                       # 编译
 .build/release/diskslim scan                 # 只读扫描真实磁盘，按区域和分组列出；不删任何东西
 .build/release/diskslim scan --json          # 同上，输出 JSON
@@ -50,7 +50,7 @@ docs/PRD.md          需求（含调研结论、规则、分批计划）
 Package.swift        SwiftPM：DiskSlimCore（规则与模型）、diskslim（命令行）、DiskSlimApp（菜单栏应用）、DiskSlimCoreTests
 Sources/
   DiskSlimCore/      Model（Finding、风险等级、清理方式）、System（元数据、大小、命令、格式）、
-                     DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、History（按上次实际释放校正清理命令）、Scan（总入口）、
+                     DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、History（按上次实际释放校正清理命令）、Scan（总入口、执行前复核）、
                      SafetyGuard（执行前重新核对路径和命令的白名单）、Cleaner（执行、操作记录、撤销）
   DiskSlimCLI/       命令行 `diskslim`（scan / clean / undo）
   DiskSlimApp/       菜单栏应用：Store（扫描、勾选、清理、撤销）、Views（首页 + 下钻、确认、提示）、Snapshot（离屏截图）
@@ -63,6 +63,7 @@ docs/
   templates/handoff.md  交接一节的骨架
 scripts/
   bundle.sh          打包 dist/DiskSlim.app
+  test.sh            跑 Swift 单元测试（补上测试宏插件路径，L-04）
   check-rules.mjs    通用规则检查（只查机器能判定的）
 tests/               node:test 测试
 ```
@@ -90,6 +91,7 @@ single-context：根目录 `GLOSSARY.md` 与 `docs/adr/`，用到时再建。见
 - 验证用的备份、日志等证据放 `~/Library/Application Support/disk-slim/evidence/`，不放 `/tmp`（全局坑 G-01）；私人数据与完整日志不进仓库。
 - 新增 Swift 包依赖，先在交接里说明理由，经用户同意再加。
 - 目录名、SwiftPM 目标名、可执行文件名之间不能只差大小写（macOS 不区分大小写，会悄悄合并，L-03）。
+- 引入外部清理命令前，先读它的源码或用 `--dry-run` 看清副作用；每批做完让独立 agent 做一次只读审查和对抗测试（L-06）。
 - 安全底线（[docs/PRD.md](docs/PRD.md) 第 5 节）：用户文件只移到废纸篓，不直接删除、不自动清空废纸篓；「只展示」的项任何路径都删不了；清理前可预览、留日志、可撤销；不用 `sudo`。
 - 界面上的时间经统一的格式化函数按北京时间显示，不直接截取 ISO 字符串（全局坑 G-02）。
 

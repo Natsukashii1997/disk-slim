@@ -8,6 +8,7 @@ import Testing
         let t = TempDir()
         let old = daysAgo(3)
         for name in ["ok", "open", "dirty", "hot", "busy"] {
+            t.file("proj/.claude/worktrees/\(name)/Cargo.toml")
             t.file("proj/.claude/worktrees/\(name)/target/debug/app", bytes: 100, modified: old)
             t.setModified(t.url.appendingPathComponent("proj/.claude/worktrees/\(name)/target/debug"), old)
             t.setModified(t.url.appendingPathComponent("proj/.claude/worktrees/\(name)/target"), old)
@@ -17,10 +18,12 @@ import Testing
         t.file("proj/target/debug/app", bytes: 100)
 
         let run = FakeRunner()
-        run.on(0, "claude/ok\nclaude/dirty\nclaude/hot\nclaude/busy\n") { a, _ in a.starts(with: ["gh", "pr", "list"]) }
+        run.on(0, "claude/ok h-ok\nclaude/dirty h-dirty\nclaude/hot h-hot\nclaude/busy h-busy\n") { a, _ in a.starts(with: ["gh", "pr", "list"]) }
         for name in ["ok", "open", "dirty", "hot", "busy"] {
             run.on(0, "claude/\(name)\n") { a, _ in a.contains("branch") && a[2].hasSuffix("/\(name)") }
+            run.on(0, "h-\(name)\n") { a, _ in a.contains("rev-parse") && a[2].hasSuffix("/\(name)") }
         }
+        run.on(0, "") { a, _ in a.contains("check-ignore") }
         run.on(0, " M src/main.rs\n?? notes.txt\n") { a, _ in a.contains("status") && a[2].hasSuffix("/dirty") }
         run.on(0, "?? scratch.txt\n") { a, _ in a.contains("status") }
         let busyPath = t.url.appendingPathComponent("proj/.claude/worktrees/busy").path
@@ -55,5 +58,25 @@ import Testing
         let found = WorktreeScanner(workRoot: t.url, now: now, runner: run).scan()
         #expect(found.allSatisfy { !$0.suggested })
         #expect(found.first { $0.title == "proj · ok" }?.detail == "查不到 PR 状态")
+    }
+
+    @Test func 不是Rust构建目录_没被git忽略_分支复用都不建议删() {
+        let t = TempDir()
+        for name in ["norust", "tracked", "reused"] {
+            t.file("p/.claude/worktrees/\(name)/target/a", modified: daysAgo(3))
+            t.setModified(t.url.appendingPathComponent("p/.claude/worktrees/\(name)/target"), daysAgo(3))
+        }
+        t.file("p/.claude/worktrees/tracked/Cargo.toml")
+        t.file("p/.claude/worktrees/reused/Cargo.toml")
+        let run = FakeRunner()
+        run.on(1, "") { a, _ in a.contains("check-ignore") && a[2].hasSuffix("/tracked") }
+        // reused 的分支名在已合并 PR 里，但 worktree 现在停在另一个提交上
+        run.on(0, "other\n") { a, _ in a.contains("rev-parse") && a[2].hasSuffix("/reused") }
+        healthyRunner(run)
+        let r = Dictionary(uniqueKeysWithValues: WorktreeScanner(workRoot: t.url, now: now, runner: run, sizeOf: { _ in 1 }).scan().map { ($0.title, $0) })
+        #expect(r["p · norust"]?.detail == "不是 Rust 项目")
+        #expect(r["p · tracked"]?.detail == "target 没被 git 忽略")
+        #expect(r["p · reused"]?.detail == "PR 还没合并")
+        #expect(r.values.allSatisfy { !$0.suggested })
     }
 }

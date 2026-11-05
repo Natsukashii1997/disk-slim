@@ -51,7 +51,7 @@ struct FakeTrasher: Trasher {
         let c = cleaner()
         _ = c.clean([f("Downloads/a.zip", .trash)])
         t.file("home/Downloads/a.zip")
-        #expect(c.undoLast() == ["没有放回：a.zip（原位置已有同名文件）"])
+        #expect(c.undoLast() == ["没有放回：a.zip（原位置已有同名文件，挪开后可以再撤销）"])
         #expect(FileManager.default.fileExists(atPath: trash.appendingPathComponent("a.zip").path))
     }
 
@@ -88,15 +88,15 @@ struct FakeTrasher: Trasher {
         let run = FakeRunner()
         var called: [[String]] = []
         run.on(0, "") { a, _ in if a.first == "npm" { called.append(a); return true }; return false }
-        run.on(127, "") { a, _ in a.first == "brew" }
+        run.on(127, "") { a, _ in a.first == "pip3" }
         let batch = cleaner(run).clean([
             f(".npm/_cacache", .command(["npm", "cache", "clean", "--force"])),
-            f("Library/Caches/Homebrew", .command(["brew", "cleanup", "-s"])),
+            f("Library/Caches/pip", .command(["pip3", "cache", "purge"])),
         ])
         #expect(called == [["npm", "cache", "clean", "--force"]])
         #expect(batch.items[0].outcome == .done)
         #expect(batch.items[1].outcome == .skipped)
-        #expect(batch.items[1].message == "没装 brew，跳过")
+        #expect(batch.items[1].message == "没装 pip3，跳过")
     }
 
     @Test func 每次操作都写进记录() {
@@ -108,5 +108,53 @@ struct FakeTrasher: Trasher {
         #expect(log.count == 2)
         #expect(log[0].items.first?.trashed.isEmpty == false)
         #expect(log[1].items.first?.outcome == .skipped)
+    }
+
+    @Test func 执行前复核不通过的跳过_不动文件() {
+        let file = t.file("home/Downloads/kept.dmg")
+        let c = Cleaner(safety: SafetyGuard(home: home, workRoot: work), runner: FakeRunner(), trasher: FakeTrasher(dir: trash),
+                        log: .standard(home: home), recheck: { _ in "扫描后标了「保留」，这次不清" })
+        let batch = c.clean([f("Downloads/kept.dmg", .trash)])
+        #expect(batch.items[0].outcome == .skipped)
+        #expect(batch.items[0].message == "扫描后标了「保留」，这次不清")
+        #expect(FileManager.default.fileExists(atPath: file.path))
+    }
+
+    @Test func 沙盒模式不运行清理命令() {
+        t.file("home/.npm/_cacache/a", bytes: 4_000)
+        let run = FakeRunner()
+        var called = false
+        run.on(0, "") { a, _ in if a.first == "npm" { called = true; return true }; return false }
+        let c = Cleaner(safety: SafetyGuard(home: home, workRoot: work), runner: run, trasher: FakeTrasher(dir: trash),
+                        log: .standard(home: home), allowCommands: false)
+        let batch = c.clean([f(".npm/_cacache", .command(["npm", "cache", "clean", "--force"]))])
+        #expect(!called)
+        #expect(batch.items[0].outcome == .skipped)
+    }
+
+    @Test func 相关程序在跑时不删Homebrew下载缓存() {
+        let dl = t.dir("home/Library/Caches/Homebrew/downloads")
+        let run = FakeRunner()
+        run.on(0, "/opt/homebrew/Library/Homebrew/vendor/portable-ruby/ruby /opt/homebrew/Library/Homebrew/brew.rb install wget\n") { a, _ in a.first == "ps" }
+        let batch = cleaner(run).clean([f("Library/Caches/Homebrew/downloads", .remove)])
+        #expect(batch.items[0].outcome == .skipped)
+        #expect(FileManager.default.fileExists(atPath: dl.path))
+        // 没在跑时可以删
+        let batch2 = cleaner().clean([f("Library/Caches/Homebrew/downloads", .remove)])
+        #expect(batch2.items[0].outcome == .done)
+        #expect(!FileManager.default.fileExists(atPath: dl.path))
+    }
+
+    @Test func 操作记录损坏时留底并提示_不提供撤销() throws {
+        let log = OperationLog.standard(home: home)
+        try FileManager.default.createDirectory(at: log.url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("{ broken".utf8).write(to: log.url)
+        t.file("home/Downloads/a.dmg")
+        let batch = cleaner().clean([f("Downloads/a.dmg", .trash)])
+        #expect(batch.note?.contains("另存为") == true)
+        let backups = try FileManager.default.contentsOfDirectory(atPath: log.url.deletingLastPathComponent().path)
+            .filter { $0.hasPrefix("history-damaged-") }
+        #expect(backups.count == 1)
+        #expect(log.load().count == 1) // 新记录照常写入
     }
 }

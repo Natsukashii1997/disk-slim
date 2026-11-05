@@ -56,3 +56,15 @@ final class FakeRunner: CommandRunner {
 
 let now = Date(timeIntervalSince1970: 1_793_840_000) // 2026-11-05 前后，测试只看相对天数
 func daysAgo(_ d: Double) -> Date { now.addingTimeInterval(-d * 86_400) }
+
+/// 让 worktree 满足「是 Rust 构建目录、PR 已合并、没改动、没在编译」的假回复；测某一条时只破坏那一条。
+@discardableResult
+func healthyRunner(_ run: FakeRunner = FakeRunner(), branch: String = "feat-x", head: String = "abc123") -> FakeRunner {
+    run.on(0, "\(branch) \(head)\n") { a, _ in a.first == "gh" }
+    run.on(0, branch + "\n") { a, _ in a.contains("--show-current") }
+    run.on(0, head + "\n") { a, _ in a.contains("rev-parse") }
+    run.on(0, "") { a, _ in a.contains("check-ignore") }
+    run.on(0, "") { a, _ in a.contains("--porcelain") }
+    run.on(0, "") { a, _ in a.first == "ps" }
+    return run
+}

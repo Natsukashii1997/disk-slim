@@ -20,9 +20,11 @@ func option(_ name: String) -> URL? {
     return URL(fileURLWithPath: (value as NSString).expandingTildeInPath)
 }
 
-let home = option("--home") ?? FileManager.default.homeDirectoryForCurrentUser
+let sandboxHome = option("--home")
+let home = sandboxHome ?? FileManager.default.homeDirectoryForCurrentUser
 let scan = Scan(home: home, workRoot: option("--work"))
-let cleaner = Cleaner(safety: SafetyGuard(home: scan.home, workRoot: scan.workRoot), log: .standard(home: home))
+// 指定了 --home 就是沙盒自测：不运行清理命令，它们会作用在真实电脑上
+let cleaner = scan.cleaner(sandbox: sandboxHome != nil)
 let riskLabel: [Risk: String] = [.safe: "安全", .confirm: "需确认", .readOnly: "只展示"]
 
 func total(_ items: [Finding]) -> Int64 { items.reduce(0) { $0 + $1.bytes } }
@@ -86,7 +88,8 @@ case "clean":
     print("")
     for r in batch.items { print("  [\(r.outcome == .done ? "完成" : r.outcome == .skipped ? "跳过" : "失败")] \(r.title) — \(r.message)") }
     print("\n移到废纸篓 \(formatBytes(batch.trashedBytes))（清空废纸篓后才真正释放），已释放 \(formatBytes(batch.freedBytes))。")
-    print("后悔了可以运行 diskslim undo，把这次移到废纸篓的东西放回原处。")
+    if let note = batch.note { print("注意：\(note)") }
+    else { print("后悔了可以运行 diskslim undo，把这次移到废纸篓的东西放回原处。") }
 
 case "undo":
     for line in cleaner.undoLast() { print(line) }

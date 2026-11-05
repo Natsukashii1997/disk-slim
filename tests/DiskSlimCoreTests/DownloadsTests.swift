@@ -55,6 +55,7 @@ import Testing
         let r = scan(t, FakeMetadata(added: ["big.mp4": daysAgo(1), "small.mp4": daysAgo(1)]), bigBytes: 20_000)
         #expect(r["big.mp4"]?.category == "最近下载的大文件")
         #expect(r["big.mp4"]?.suggested == false)
+        #expect(r["big.mp4"]?.cleanup == Cleanup.none) // PRD 4.1：只提示，不能勾选
         #expect(r["small.mp4"] == nil)
     }
 

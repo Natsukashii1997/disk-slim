@@ -44,10 +44,10 @@
 ## L-04 `swift test` 偶发「plugin for module 'TestingMacros' not found」（2026-11-05）
 
 - 现象：`swift test` 编译测试时偶尔报找不到 Swift Testing 的宏插件，什么都不改重跑一次就通过；第 2、3 批各出现一次，连跑三次是「通过、失败、通过」。
-- 根因：未查明。工具链是 CommandLineTools 里的 Swift 6.4（没有完整 Xcode），宏插件目录存在；怀疑和增量编译缓存有关，未核实。
-- 正确做法：遇到这条报错原样重跑一次 `swift test`；连续两次都报再停下来查。交接里如实写出现过几次。
-- 证据：第 2 批交接「测试」一行；第 3 批连跑记录（本会话）。
-- 升级：同类第 2 次，已写进 AGENTS.md「运行」。
+- 根因（2026-11-05 独立测试员查明）：只有 CommandLineTools、没有完整 Xcode 时，SwiftPM 只把 Observation、SwiftMacros 两个插件路径传给编译器，没传 Swift Testing 的；能不能找到插件看缓存状态，所以时好时坏。
+- 正确做法：一律用 `scripts/test.sh` 跑测试，它补上 `-Xswiftc -plugin-path -Xswiftc /Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing`。
+- 证据：第 2、3 批记录；测试员在新 worktree 里连续 3 次复现、加参数后每次通过；修复后本项目 `scripts/test.sh` 43 项一次通过。
+- 升级：已写进 AGENTS.md「运行」（改为 `scripts/test.sh`）。换个只装 CommandLineTools 的 Swift 项目也成立，可一起提议提升为全局 G-xx。
 
 ## L-05 清理命令腾出的空间远小于目录大小，首页「可清」被高估（2026-11-05）
 
@@ -56,6 +56,14 @@
 - 正确做法：用操作记录校正：最近 30 天同一条命令上次实际释放不到 10 MB，就不再默认勾选，说明里写上次的结果（`Sources/DiskSlimCore/History.swift`，测试 `HistoryTests`）。
 - 证据：`~/Library/Application Support/disk-slim/history.json` 11:54 那一批；修复后扫描 `evidence/2026-11-05-scan-after-fix.txt`。
 - 升级：未升级。
+
+## L-06 独立审查和测试发现的安全与正确性问题（2026-11-05）
+
+- 现象：两个独立 agent（只读审查 + worktree 里的对抗测试）找到：① `brew cleanup -s` 默认会删已安装软件的旧版本、自动卸载没人依赖的软件，却被当成「安全的缓存」默认勾选；② worktree 目录是符号链接时，会把工作区以外真实的 `target/` 删掉；③ 撤销时有一项放不回就整批标成已撤销；④ `history.json` 损坏时被当成空记录，下次清理整个覆盖；⑤ 「24 小时内编译过」只看 `target/` 前两层，增量编译改的更深层文件看不到；⑥ 应用里扫描未完成时清理、清理中撤销，会显示过期结果或互相覆盖记录；以及名字以 `.zip` 结尾的文件夹被当压缩包、npx 标「需确认」却直接删、最近大文件可勾选、外部命令没超时、只按分支名认「已合并」、非 Rust 的 `target/` 也会被当构建产物、`--home` 沙盒下清理命令仍作用于真机。
+- 根因：自己写的测试只覆盖了自己想到的输入；安全门只按路径字面核对；外部工具的副作用没去读源码。
+- 正确做法：已全部修复（提交见交接）。以后：引入任何外部清理命令前先读它的源码或 `--dry-run` 看副作用；路径类安全检查一律考虑符号链接、`..`、大小写；每批做完让独立 agent 审查和对抗测试一次。
+- 证据：测试员的 11 个对抗用例并入 `tests/DiskSlimCoreTests/ReviewAdversarialTests.swift`（修复前 5 个失败，修复后全过）；Homebrew 源码 `/opt/homebrew/Library/Homebrew/cleanup.rb:471`；用户 11:54 那次 `brew cleanup -s` 没有改动 Cellar（目录修改时间仍为 10 月 16 日）。
+- 升级：「每批做完让独立 agent 审查和测试」写进 AGENTS.md「规则」。
 
 ---
 

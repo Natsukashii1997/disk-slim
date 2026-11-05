@@ -101,9 +101,9 @@ struct HomeView: View {
             .padding(.horizontal, -6)
 
             let picks = store.suggestedPicks
-            Button(store.working ? "正在清理…" : "清理建议项 · \(formatBytes(total(picks)))") { store.askToClean(picks) }
-                .buttonStyle(PrimaryButton(enabled: !picks.isEmpty && !store.working))
-                .disabled(picks.isEmpty || store.working)
+            Button(store.working ? "正在清理…" : picks.isEmpty ? "暂时没有建议清理的" : "清理建议项 · \(formatBytes(total(picks)))") { store.askToClean(picks) }
+                .buttonStyle(PrimaryButton(enabled: !picks.isEmpty && !store.busy))
+                .disabled(picks.isEmpty || store.busy)
         }
         .padding(16)
     }
@@ -225,8 +225,8 @@ struct ListPage: View {
                     Text("已选 \(picks.count) 项 · \(formatBytes(total(picks)))").font(.system(size: 11.5)).foregroundStyle(.secondary)
                     Spacer()
                     Button(action) { store.askToClean(picks) }
-                        .buttonStyle(PrimaryButton(enabled: !picks.isEmpty && !store.working))
-                        .disabled(picks.isEmpty || store.working)
+                        .buttonStyle(PrimaryButton(enabled: !picks.isEmpty && !store.busy))
+                        .disabled(picks.isEmpty || store.busy)
                         .fixedSize()
                 }
                 .padding(.horizontal, 14).padding(.vertical, 10)
@@ -312,7 +312,7 @@ struct ItemRow: View {
 
     @ViewBuilder private var chip: some View {
         if f.risk == .readOnly { tag("只展示", .secondary) }
-        else if f.cleanup == .none { tag("不能清", .secondary) }
+        else if f.cleanup == .none { tag(f.area == .downloads ? "只提示" : "不能清", .secondary) }
         else if f.risk == .confirm { tag("需确认", Palette.warn) }
     }
 
@@ -374,6 +374,7 @@ struct ToastView: View {
             if toast.canUndo {
                 Button("撤销") { store.undo() }.buttonStyle(.plain).font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color(red: 0.56, green: 0.75, blue: 1))
+                    .disabled(store.working)
             }
             Button { store.toast = nil } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .bold)) }
                 .buttonStyle(.plain).foregroundStyle(.white.opacity(0.6))

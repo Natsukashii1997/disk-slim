@@ -35,7 +35,11 @@ import Testing
         #expect(guardian.refusal(for: f(["/Users/someone/Documents/work/postpane/.claude/worktrees/48-a"], .remove)) != nil)
         #expect(guardian.refusal(for: f(["/Users/someone/Documents/work/postpane/.claude/worktrees/48-a/src"], .remove)) != nil)
         #expect(guardian.refusal(for: f(["/Users/someone/Library/Caches/ms-playwright"], .remove)) == nil)
-        #expect(guardian.refusal(for: f(["/Users/someone/.npm/_npx"], .remove)) == nil)
+        #expect(guardian.refusal(for: f(["/Users/someone/Library/Caches/Homebrew/downloads"], .remove)) == nil)
+        #expect(guardian.refusal(for: f(["/Users/someone/Library/Caches/Homebrew"], .remove)) != nil)
+        // npx 是「需确认」，只能进废纸篓，不能直接删
+        #expect(guardian.refusal(for: f(["/Users/someone/.npm/_npx"], .remove)) != nil)
+        #expect(guardian.refusal(for: f(["/Users/someone/.npm/_npx"], .trash, risk: .confirm)) == nil)
         #expect(guardian.refusal(for: f(["/Users/someone/.npm"], .remove)) != nil)
         #expect(guardian.refusal(for: f(["/Users/someone/Library/Caches"], .remove)) != nil)
         // 一项里只要有一条路径不合规，整项拒绝
@@ -46,6 +50,10 @@ import Testing
         #expect(guardian.refusal(for: f(["/Users/someone/.npm/_cacache"], .command(["npm", "cache", "clean", "--force"]))) == nil)
         #expect(guardian.refusal(for: f(["/Users/someone/.npm/_cacache"], .command(["rm", "-rf", "/Users/someone"]))) != nil)
         #expect(guardian.refusal(for: f(["/Users/someone/.npm/_cacache"], .command(["npm", "cache", "clean"]))) != nil)
+        // 命令要配它自己的位置：拿 npm 的命令去「清」下载文件夹不行
+        #expect(guardian.refusal(for: f(["/Users/someone/Downloads"], .command(["npm", "cache", "clean", "--force"]))) != nil)
+        // brew cleanup 已从表里拿掉（会卸载软件，L-06）
+        #expect(guardian.refusal(for: f(["/Users/someone/Library/Caches/Homebrew"], .command(["brew", "cleanup", "-s"]))) != nil)
     }
 
     @Test func 只展示和没有清理方式的一律拒绝() {

@@ -26,4 +26,22 @@ public struct Scan {
         return ScanReport(scannedAt: now, seconds: Date().timeIntervalSince(start),
                           disk: diskStatus(of: home), findings: findings)
     }
+
+    /// 执行前复核会随时间变化的规则：扫描后又标了「保留」的下载项、扫描后又编译过的构建产物。
+    public func recheck(_ f: Finding, now: Date = Date()) -> String? {
+        let urls = f.paths.map { URL(fileURLWithPath: $0) }
+        if f.area == .downloads, urls.contains(where: { meta.tags($0).contains(DownloadsRules().keepTag) }) {
+            return "扫描后标了「保留」，这次不清"
+        }
+        if f.cleanup == .remove, urls.contains(where: { $0.path.hasPrefix(workRoot.path + "/") && WorktreeScanner.recentlyBuilt($0, now: now) }) {
+            return "扫描后又编译过，这次不删"
+        }
+        return nil
+    }
+
+    /// 命令行和菜单栏应用共用的清理器。`sandbox` 为 true 时不运行清理命令（它们作用在真实电脑上）。
+    public func cleaner(sandbox: Bool = false) -> Cleaner {
+        Cleaner(safety: SafetyGuard(home: home, workRoot: workRoot), runner: runner, log: .standard(home: home),
+                recheck: { self.recheck($0) }, allowCommands: !sandbox)
+    }
 }

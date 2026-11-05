@@ -39,16 +39,18 @@ final class Store: ObservableObject {
     @Published var toast: Toast?
 
     let home: URL
+    /// 每次扫描加一；扫描结果回来时代次不对就丢掉（清理后的新扫描要盖过清理前发起的旧扫描）
+    private var scanGeneration = 0
+
+    /// 正在扫描或清理时，清理和撤销按钮都不能点
+    var busy: Bool { scanning || working }
 
     init(home: URL = FileManager.default.homeDirectoryForCurrentUser) {
         self.home = home
         disk = diskStatus(of: home)
     }
 
-    private var cleaner: Cleaner {
-        let scan = Scan(home: home)
-        return Cleaner(safety: SafetyGuard(home: scan.home, workRoot: scan.workRoot), log: .standard(home: home))
-    }
+    private var cleaner: Cleaner { Scan(home: home).cleaner() }
 
     // MARK: 扫描
 
@@ -61,13 +63,19 @@ final class Store: ObservableObject {
         scan()
     }
 
-    func scan() {
-        guard !scanning else { return }
+    /// `force` 为 true 时（清理、撤销之后）即使正在扫描也重新开始，旧的那次结果会被丢掉
+    func scan(force: Bool = false) {
+        if scanning && !force { return }
+        scanGeneration += 1
+        let generation = scanGeneration
         scanning = true
         let home = home
         Task.detached {
             let r = Scan(home: home).run()
-            await MainActor.run { self.apply(r) }
+            await MainActor.run {
+                guard generation == self.scanGeneration else { return }
+                self.apply(r)
+            }
         }
     }
 
@@ -92,25 +100,29 @@ final class Store: ObservableObject {
 
     // MARK: 清理
 
-    func askToClean(_ list: [Finding]) { if !list.isEmpty { confirming = list } }
+    func askToClean(_ list: [Finding]) { if !list.isEmpty && !busy { confirming = list } }
 
     func clean(_ list: [Finding]) {
         confirming = nil
+        guard !busy else { return }
         working = true
+        toast = nil
         let cleaner = cleaner
         Task.detached {
             let batch = cleaner.clean(list)
             await MainActor.run {
                 self.working = false
-                self.toast = Toast(text: Self.summary(batch), canUndo: batch.trashedBytes > 0)
+                self.toast = Toast(text: Self.summary(batch), canUndo: batch.trashedBytes > 0 && batch.note == nil)
                 self.report = nil
-                self.scan()
+                self.scan(force: true)
             }
         }
     }
 
     func undo() {
+        guard !working else { return }
         toast = nil
+        working = true
         let cleaner = cleaner
         Task.detached {
             let lines = cleaner.undoLast()
@@ -119,9 +131,10 @@ final class Store: ObservableObject {
                 let others = lines.filter { !$0.hasPrefix("已放回") }
                 var text = placed > 0 ? "已放回 \(placed) 项" : ""
                 if !others.isEmpty { text += (text.isEmpty ? "" : "；") + others.joined(separator: "；") }
+                self.working = false
                 self.toast = Toast(text: text, canUndo: false)
                 self.report = nil
-                self.scan()
+                self.scan(force: true)
             }
         }
     }
@@ -131,8 +144,10 @@ final class Store: ObservableObject {
         if b.trashedBytes > 0 { parts.append("移到废纸篓 \(formatBytes(b.trashedBytes))（清空后才释放）") }
         if b.freedBytes > 0 { parts.append("已释放 \(formatBytes(b.freedBytes))") }
         let skipped = b.items.filter { $0.outcome != .done }.count
-        if skipped > 0 { parts.append("\(skipped) 项没清（正在使用、已经不在或没装对应工具）") }
-        return parts.isEmpty ? "没有清理任何东西" : parts.joined(separator: "，")
+        if skipped > 0 { parts.append("\(skipped) 项没清（正在使用、刚有变化、已经不在或没装对应工具）") }
+        var text = parts.isEmpty ? "没有清理任何东西" : parts.joined(separator: "，")
+        if let note = b.note { text += "。注意：\(note)" }
+        return text
     }
 }
 

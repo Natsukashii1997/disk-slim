@@ -1,6 +1,27 @@
 # 当前状态
 
-更新：2026-11-05。第 3 批完成并修了用户试用发现的「清理命令高估」，在分支 `feat/menubar-ui`，新版应用已重新打包并在运行。唯一下一步：等用户反馈试用感受；之后做第 4 批「涨幅追踪」。
+更新：2026-11-05。独立审查与对抗测试发现的问题已全部修复，在分支 `feat/menubar-ui`，新版应用已重新打包并在运行。唯一下一步：用户确认后做第 4 批「涨幅追踪」。
+
+## 修复：独立审查与对抗测试发现的问题（2026-11-05，Claude，用户同意「全部修」；已提交到 `feat/menubar-ui`、未发布）
+
+- 时间：开工 `2026-11-05 12:11`（`date '+%F %H:%M'` 记录）。来由：用户要求另派 agent 审核测试；一个只读审查、一个在独立 worktree 里做对抗测试，报告经逐条核实（Homebrew 源码、复跑对抗用例）后用户同意全部修。
+- 改了哪些文件：
+  - `SafetyGuard.swift`：任何一层符号链接、带 `.` / `..` 的路径一律拒绝（下载文件夹本身可以是链接）；清理命令必须对应它自己的位置；`busyMarkers`。
+  - `KnownPlaces.swift`：Homebrew 改为只删 `Library/Caches/Homebrew/downloads`，Homebrew 在运行时跳过；npx 改为进废纸篓；位置是符号链接的不列出。
+  - `WorktreeScanner.swift`：要求 `Cargo.toml` 且 `target` 被 git 忽略；按「分支名 + PR 最后提交」认已合并；编译时间看 `target/` 往下三层；路径有符号链接的跳过。
+  - `DownloadsScanner.swift`：压缩包只认普通文件；最近大文件只提示、不能勾选。
+  - `Cleaner.swift`：执行前复核、沙盒不跑命令、超时处理；撤销按项记录、放不回的可再试、可以逐次往前撤；`history.json` 坏了先改名留底再写；记录没写成功时在结果里说明且不提供撤销。
+  - `System.swift`：外部命令 120 秒超时；`hasSymlink`。
+  - `Scan.swift`：`recheck`、`cleaner(sandbox:)`。
+  - `Sources/DiskSlimCLI/main.swift`：`--home` 视为沙盒。
+  - `Sources/DiskSlimApp/Store.swift`、`Views.swift`：扫描代次号丢弃过期结果；扫描或清理中禁用清理和撤销；没有建议项时按钮写「暂时没有建议清理的」；下载区不能清的项标「只提示」。
+  - 新建 `scripts/test.sh`（L-04 修法）；并入测试员的 `tests/DiskSlimCoreTests/ReviewAdversarialTests.swift`（补齐其余条件，让每个用例只测它要测的那一条）；更新 `Support.swift`（`healthyRunner`）、`WorktreeTests`、`CleanerTests`、`SafetyTests`、`DownloadsTests`；改 `docs/PRD.md`（4.1、4.2、第 5 节）、`docs/LESSONS.md`（L-04 根因、L-06）、`AGENTS.md`。
+- 测试：`scripts/test.sh` 原样结果 `✔ Test run with 43 tests in 8 suites passed`（修复前同一套 38 项有 5 项失败）；`node --test tests/*.test.mjs` 原样结果「ℹ tests 4 ℹ pass 4 ℹ fail 0」；`node scripts/check-rules.mjs` 输出「通用规则检查通过」。
+- 验证：① 真实磁盘只读扫描（`evidence/2026-11-05-scan-after-review.txt`）：可用 69.4 GB；Homebrew 只列下载缓存 239 MB；npx 为「需确认」；postpane 4 个 worktree 都是「24 小时内编译过」；② 沙盒端到端（`evidence/2026-11-05-sandbox-review-fix.txt`）：名为「夹子.zip」的文件夹不再被当压缩包；原位置有同名文件时撤销不覆盖，挪开后再撤销能放回，再撤销提示没有可撤销的；③ 离屏截图 14 张（`evidence/2026-11-05-ui-shots-after-review/`），看过「缓存与构建产物」页；④ 重新打包并重启应用，新进程 73908 在运行，新版面板没在屏幕上看过。
+- 截图：见上面证据目录。
+- 发布与回读：未发布。
+- 与授权不一致之处、遗留问题、范围外发现：① 撤销语义按测试员的用例定为「从最近一次往前逐次撤」，审查员认为应只撤最近一次，两者冲突，我选了前者（只放回、不造成损失），PRD 已同步；② 应用和命令行同时写 `history.json` 仍可能互相覆盖（应用内已串行），没有加文件锁；③ 用户 11:54 执行过的 `brew cleanup -s` 经核实没有改动已安装软件；④ 可用空间一上午从 91 GB 掉到 69.4 GB，主要是 postpane 的 worktree 构建产物，需要在 postpane 里根治；⑤ L-03、L-04 换个项目也成立，提议提升为全局 G-xx，等用户批准；⑥ 测试员的 worktree 与分支在测试并入后删除。
+- 本轮新坑：L-06（L-04 补了根因）。
 
 ## 修复：清理命令的可清空间被高估（2026-11-05，Claude，用户同意「修一下」；已提交到 `feat/menubar-ui`、未发布）
 
