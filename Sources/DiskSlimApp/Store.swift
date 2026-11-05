@@ -42,17 +42,20 @@ final class Store: ObservableObject {
 
     let home: URL
     private let usageLog: UsageLog
+    /// 离屏截图用：只读记录，文件坏了也不挪，也不写
+    private let readOnlyUsage: Bool
     /// 每次扫描加一；扫描结果回来时代次不对就丢掉（清理后的新扫描要盖过清理前发起的旧扫描）
     private var scanGeneration = 0
 
     /// 正在扫描或清理时，清理和撤销按钮都不能点
     var busy: Bool { scanning || working }
 
-    init(home: URL = FileManager.default.homeDirectoryForCurrentUser) {
+    init(home: URL = FileManager.default.homeDirectoryForCurrentUser, readOnlyUsage: Bool = false) {
         self.home = home
+        self.readOnlyUsage = readOnlyUsage
         usageLog = UsageLog.standard(home: home)
         disk = diskStatus(of: home)
-        samples = usageLog.load()
+        samples = usageLog.load(readOnly: readOnlyUsage)
     }
 
     private var cleaner: Cleaner { Scan(home: home).cleaner() }
@@ -87,7 +90,7 @@ final class Store: ObservableObject {
 
     /// 只在真实扫描完成后记（不放进 apply：离屏截图也会调 apply）
     private func recordUsage(_ r: ScanReport) {
-        guard let s = Usage.sample(from: r), let all = try? usageLog.record(s) else { return }
+        guard !readOnlyUsage, let s = Usage.sample(from: r), let all = try? usageLog.record(s) else { return }
         samples = all
     }
 
@@ -112,10 +115,10 @@ final class Store: ObservableObject {
     /// 最近 7 天每天最后一份记录
     var dailySamples: [UsageSample] { Usage.daily(samples, now: Date()) }
 
-    /// 涨幅排行里某个位置对应哪个下钻页（「其他」和已经扫不到的位置没有）
+    /// 涨幅排行里某个位置对应哪个下钻页：只认里面有能勾选清理的项的那一页（「其他」、废纸篓、只展示的、已经扫不到的都没有）
     func pageFor(part name: String) -> Page? {
-        if name == "下载文件夹" { return .downloads }
-        return report?.findings.first { $0.area == .hidden && Usage.partName($0) == name }?.page
+        if name == Usage.downloads { return .downloads }
+        return report?.findings.first { $0.area == .hidden && $0.selectable && Usage.partName($0) == name }?.page
     }
 
     func findings(_ page: Page) -> [Finding] { report?.findings.filter { $0.page == page } ?? [] }

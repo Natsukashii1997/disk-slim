@@ -70,13 +70,16 @@ public struct ScanReport: Codable {
     public let findings: [Finding]
     /// 下载文件夹整体占用（涨幅追踪用；旧的扫描结果里没有）
     public var downloadsBytes: Int64?
+    /// 废纸篓占用（涨幅追踪用：移到废纸篓的东西清空前还占空间）；读不了时为 nil
+    public var trashBytes: Int64?
 
-    public init(scannedAt: Date, seconds: Double, disk: DiskStatus?, findings: [Finding], downloadsBytes: Int64? = nil) {
+    public init(scannedAt: Date, seconds: Double, disk: DiskStatus?, findings: [Finding], downloadsBytes: Int64? = nil, trashBytes: Int64? = nil) {
         self.scannedAt = scannedAt
         self.seconds = seconds
         self.disk = disk
         self.findings = findings
         self.downloadsBytes = downloadsBytes
+        self.trashBytes = trashBytes
     }
 
     public var suggestedBytes: Int64 {

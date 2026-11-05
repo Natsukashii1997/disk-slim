@@ -35,17 +35,32 @@ public struct SpotlightMetadata: FileMetadata {
 
 // MARK: - 占用大小
 
-/// 文件或目录实际占用的磁盘空间（目录递归累加，不跟随符号链接）。
-public func allocatedSize(_ url: URL) -> Int64 {
+/// 文件或目录实际占用的磁盘空间（目录递归累加，不跟随符号链接）。读不了的部分按 0 算。
+public func allocatedSize(_ url: URL) -> Int64 { measure(url, onError: {}) }
+
+/// 同上，出错时调 `onError`
+private func measure(_ url: URL, onError: () -> Void) -> Int64 {
     let keys: [URLResourceKey] = [.isDirectoryKey, .totalFileAllocatedSizeKey]
-    guard let values = try? url.resourceValues(forKeys: Set(keys)) else { return 0 }
+    guard let values = try? url.resourceValues(forKeys: Set(keys)) else { onError(); return 0 }
     if values.isDirectory != true { return Int64(values.totalFileAllocatedSize ?? 0) }
-    guard let e = FileManager.default.enumerator(at: url, includingPropertiesForKeys: keys, options: [], errorHandler: { _, _ in true }) else { return 0 }
+    var failed = false
+    guard let e = FileManager.default.enumerator(at: url, includingPropertiesForKeys: keys, options: [],
+                                                  errorHandler: { _, _ in failed = true; return true }) else { onError(); return 0 }
     var total: Int64 = 0
     for case let child as URL in e {
-        total += Int64((try? child.resourceValues(forKeys: [.totalFileAllocatedSizeKey]))?.totalFileAllocatedSize ?? 0)
+        if let v = try? child.resourceValues(forKeys: [.totalFileAllocatedSizeKey]) {
+            total += Int64(v.totalFileAllocatedSize ?? 0)
+        } else { failed = true }
     }
+    if failed { onError() }
     return total
+}
+
+/// 同上，但有任何一处读不了（没权限、读出错）就返回 nil：每日记录用，免得把「没量到」记成 0
+public func allocatedSizeIfReadable(_ url: URL) -> Int64? {
+    var failed = false
+    let size = measure(url) { failed = true }
+    return failed ? nil : size
 }
 
 public func diskStatus(of url: URL) -> DiskStatus? {
@@ -154,6 +169,8 @@ public enum BeijingTime {
     public static func monthDay(_ date: Date) -> String { formatter.string(from: date) }
     /// 北京时间的日期，按天归并记录用，如「2026-11-05」
     public static func dayKey(_ date: Date) -> String { dayFormatter.string(from: date) }
+    /// 北京时间第几天（从 1970-01-01 算起）。北京没有夏令时，按 +8 小时整除即可；用来算相隔几天
+    public static func dayNumber(_ date: Date) -> Int { Int(((date.timeIntervalSince1970 + 8 * 3600) / 86_400).rounded(.down)) }
     /// 图表横轴用，如「11/5」
     public static func shortDay(_ date: Date) -> String { shortDayFormatter.string(from: date) }
     public static func hourMinute(_ date: Date) -> String { timeFormatter.string(from: date) }
@@ -169,5 +186,5 @@ public func formatBytes(_ bytes: Int64) -> String {
 
 /// 带正负号的变化量：「+2.8 GB」「−340 MB」
 public func formatDelta(_ bytes: Int64) -> String {
-    (bytes < 0 ? "−" : "+") + formatBytes(abs(bytes))
+    (bytes < 0 ? "−" : "+") + formatBytes(bytes == .min ? .max : abs(bytes))
 }

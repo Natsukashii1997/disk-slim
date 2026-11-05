@@ -162,7 +162,7 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 6) {
                 if days.count >= 2 {
                     FreeChart(days: days, height: 64, showDates: false)
-                    if let line = Usage.headline(days) {
+                    if let line = Usage.headline(days, now: Date()) {
                         Text(line).font(.system(size: 11.5)).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -423,22 +423,36 @@ struct ToastView: View {
 
 // MARK: - 涨幅
 
-/// 每天一个点的可用空间折线（GB）
+/// 每天一个点的可用空间折线（GB）。横轴按相隔天数排，中间缺的天会空出来
 struct FreeChart: View {
     let days: [UsageSample]
     let height: CGFloat
     let showDates: Bool
 
+    private var start: Int { days.first.map { BeijingTime.dayNumber($0.at) } ?? 0 }
+    private func x(_ s: UsageSample) -> Double { Double(BeijingTime.dayNumber(s.at) - start) }
+
     var body: some View {
         Chart(days, id: \.at) { s in
             let gb = Double(s.freeBytes) / 1_073_741_824
-            LineMark(x: .value("日期", BeijingTime.shortDay(s.at)), y: .value("可用 GB", gb))
+            LineMark(x: .value("第几天", x(s)), y: .value("可用 GB", gb))
                 .foregroundStyle(Palette.accent)
-            PointMark(x: .value("日期", BeijingTime.shortDay(s.at)), y: .value("可用 GB", gb))
+            PointMark(x: .value("第几天", x(s)), y: .value("可用 GB", gb))
                 .foregroundStyle(gb < 30 ? Palette.bad : gb < 60 ? Palette.warn : Palette.accent)
                 .symbolSize(showDates ? 28 : 16)
         }
-        .chartXAxis(showDates ? .automatic : .hidden)
+        // 两头各留小半天，第一天和最后一天的点和日期不会被裁掉
+        .chartXScale(domain: -0.4...(max(1, days.last.map(x) ?? 1) + 0.4))
+        .chartXAxis {
+            if showDates {
+                AxisMarks(values: days.map(x)) { v in
+                    AxisGridLine()
+                    AxisValueLabel(anchor: .top) {
+                        if let i = v.as(Double.self), let s = days.first(where: { x($0) == i }) { Text(BeijingTime.shortDay(s.at)) }
+                    }
+                }
+            }
+        }
         .chartYAxis {
             // 首页是小图，只留网格线；涨幅页的大图带刻度
             AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { v in
@@ -468,15 +482,15 @@ struct GrowthPage: View {
                     Text("最近 7 天可用空间").font(.system(size: 11.5)).foregroundStyle(.secondary).padding(.horizontal, 6)
                     FreeChart(days: days, height: 120, showDates: true).padding(6)
                     if let (new, old) = Usage.latestAndPrevious(days) {
-                        section("谁涨了多少（\(BeijingTime.shortDay(old.at)) → \(BeijingTime.shortDay(new.at))）", Usage.headline(days))
+                        section("谁涨了多少（\(BeijingTime.shortDay(old.at)) → \(BeijingTime.shortDay(new.at))）", Usage.headline(days, now: Date()))
                         changes(Usage.changes(from: old, to: new))
                     }
                     if let first = days.first, let last = days.last, days.count > 2 {
                         section("近 7 天合计（\(BeijingTime.shortDay(first.at)) → \(BeijingTime.shortDay(last.at))）",
-                                "可用空间\(last.freeBytes < first.freeBytes ? "少了" : "多了") \(formatBytes(abs(last.freeBytes - first.freeBytes)))")
+                                Usage.freeChange(from: first, to: last))
                         changes(Usage.changes(from: first, to: last))
                     }
-                    Text("扫描完成就记一次，同一天只留最后一份；变化不到 50 MB 的不列。")
+                    Text("扫描完成就记一次，同一天只留最后一份；变化不到 50 MB 的不列。移到废纸篓的东西清空前仍占空间；读不了的位置（比如没有权限）当天不单列，变化算进「其他」。")
                         .font(.system(size: 11)).foregroundStyle(.tertiary).padding(8)
                 }
             }
@@ -495,7 +509,7 @@ struct GrowthPage: View {
         if list.isEmpty {
             Text("没有超过 50 MB 的变化").font(.system(size: 11.5)).foregroundStyle(.secondary).padding(6)
         }
-        let biggest = list.map { abs($0.delta) }.max() ?? 1
+        let biggest = list.map(\.delta.magnitude).max() ?? 1
         ForEach(list, id: \.name) { c in
             let target = store.pageFor(part: c.name)
             HStack(spacing: 8) {
@@ -504,7 +518,7 @@ struct GrowthPage: View {
                     GeometryReader { g in
                         RoundedRectangle(cornerRadius: 2)
                             .fill(c.delta > 0 ? Palette.bad.opacity(0.7) : Palette.ok.opacity(0.7))
-                            .frame(width: max(3, g.size.width * CGFloat(abs(c.delta)) / CGFloat(biggest)))
+                            .frame(width: max(3, g.size.width * CGFloat(c.delta.magnitude) / CGFloat(max(1, biggest))))
                     }
                     .frame(height: 4)
                 }

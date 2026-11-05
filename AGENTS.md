@@ -34,6 +34,7 @@ swift build -c release                       # 编译
 .build/release/diskslim clean                # 预览默认勾选的项会怎么处理，不执行
 .build/release/diskslim clean --yes          # 真正执行；只有用户在本轮明确同意清理真实磁盘时才能跑
 .build/release/diskslim undo                 # 撤销最近一次：把移到废纸篓的放回原处
+.build/release/diskslim growth               # 最近 7 天可用空间和谁涨了多少；只读每日记录 usage.json，不扫描
 # 自测一律用沙盒：加 --home <沙盒>/home --work <沙盒>/home/work，沙盒放在证据目录下
 scripts/bundle.sh                            # 打包菜单栏应用到 dist/DiskSlim.app（本机签名，不安装、不启动）
 .build/debug/DiskSlimApp --snapshot <目录>    # 用真实扫描离屏渲染各页面 PNG（浅色 / 深色），只读，不清理
@@ -50,10 +51,10 @@ docs/PRD.md          需求（含调研结论、规则、分批计划）
 Package.swift        SwiftPM：DiskSlimCore（规则与模型）、diskslim（命令行）、DiskSlimApp（菜单栏应用）、DiskSlimCoreTests
 Sources/
   DiskSlimCore/      Model（Finding、风险等级、清理方式）、System（元数据、大小、命令、格式）、
-                     DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、History（按上次实际释放校正清理命令）、Scan（总入口、执行前复核）、
+                     DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、History（按上次实际释放校正清理命令）、Usage（每日记录、7 天曲线、谁涨了多少）、Scan（总入口、执行前复核）、
                      SafetyGuard（执行前重新核对路径和命令的白名单）、Cleaner（执行、操作记录、撤销）
   DiskSlimCLI/       命令行 `diskslim`（scan / clean / undo）
-  DiskSlimApp/       菜单栏应用：Store（扫描、勾选、清理、撤销）、Views（首页 + 下钻、确认、提示）、Snapshot（离屏截图）
+  DiskSlimApp/       菜单栏应用：Store（扫描、勾选、清理、撤销）、Views（首页 + 下钻、涨幅页、确认、提示）、Snapshot（离屏截图）
 tests/DiskSlimCoreTests/  各条规则的单元测试（Swift；和 Node 测试同在 tests/）
 docs/
   design/ui-v1.html  三版菜单栏界面预览（A 容量仪表 / B 涨幅雷达 / C 待清理收件箱）

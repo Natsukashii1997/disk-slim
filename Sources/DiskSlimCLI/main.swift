@@ -110,15 +110,14 @@ case "growth":
         for c in list { print("  \(formatDelta(c.delta).padding(toLength: 10, withPad: " ", startingAt: 0)) \(c.name)") }
     }
     if let (new, old) = Usage.latestAndPrevious(days) {
-        print("\n\(Usage.headline(days) ?? "")")
+        print("\n\(Usage.headline(days, now: Date()) ?? "")")
         print("谁涨了多少（\(BeijingTime.shortDay(old.at)) → \(BeijingTime.shortDay(new.at))）：")
         ranking(Usage.changes(from: old, to: new))
     } else {
         print("\n只有 1 天的记录，攒够两天才能比。")
     }
     if days.count > 2, let first = days.first, let last = days.last {
-        let d = last.freeBytes - first.freeBytes
-        print("\n近 7 天合计（\(BeijingTime.shortDay(first.at)) → \(BeijingTime.shortDay(last.at))）：可用空间\(d < 0 ? "少了" : "多了") \(formatBytes(abs(d)))")
+        print("\n近 7 天合计（\(BeijingTime.shortDay(first.at)) → \(BeijingTime.shortDay(last.at))）：\(Usage.freeChange(from: first, to: last))")
         ranking(Usage.changes(from: first, to: last))
     }
     print("\n本命令只读记录，不扫描、不删除。")

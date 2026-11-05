@@ -26,7 +26,8 @@ public struct Scan {
         let downloads = home.appendingPathComponent("Downloads")
         return ScanReport(scannedAt: now, seconds: Date().timeIntervalSince(start),
                           disk: diskStatus(of: home), findings: findings,
-                          downloadsBytes: FileManager.default.fileExists(atPath: downloads.path) ? allocatedSize(downloads) : nil)
+                          downloadsBytes: FileManager.default.fileExists(atPath: downloads.path) ? allocatedSizeIfReadable(downloads) : nil,
+                          trashBytes: allocatedSizeIfReadable(home.appendingPathComponent(".Trash")))
     }
 
     /// 执行前复核会随时间变化的规则：扫描后又标了「保留」的下载项、扫描后又编译过的构建产物。

@@ -105,13 +105,56 @@ import Testing
     @Test func 首页一句话_说少了多少和主要是谁() {
         let a = sample(bj("2026-11-04T10:00:00"), free: 80, ["下载文件夹": 5, "postpane · worktree 构建产物": 10])
         let b = sample(bj("2026-11-05T10:00:00"), free: 76.5, ["下载文件夹": 5.5, "postpane · worktree 构建产物": 13])
-        #expect(Usage.headline([a, b]) == "比昨天少了 3.5 GB，主要是postpane · worktree 构建产物（+3.0 GB）")
+        let nov5 = bj("2026-11-05T12:00:00")
+        #expect(Usage.headline([a, b], now: nov5) == "比昨天少了 3.5 GB，主要是postpane · worktree 构建产物（+3.0 GB）")
         // 隔了几天：写日期；可用变多时说减得最多的
         let c = sample(bj("2026-11-07T10:00:00"), free: 85, ["下载文件夹": 1, "postpane · worktree 构建产物": 10])
-        #expect(Usage.headline([a, c]) == "比 11/4 多了 5.0 GB，主要是下载文件夹（−4.0 GB）")
+        #expect(Usage.headline([a, c], now: bj("2026-11-07T12:00:00")) == "比 11/4 多了 5.0 GB，主要是下载文件夹（−4.0 GB）")
         // 变化很小、只有一天
-        #expect(Usage.headline([a, sample(bj("2026-11-05T10:00:00"), free: 80.01, [:])])?.hasPrefix("可用空间和昨天差不多") == true)
-        #expect(Usage.headline([a]) == nil)
+        #expect(Usage.headline([a, sample(bj("2026-11-05T10:00:00"), free: 80.01, [:])], now: nov5)?.hasPrefix("可用空间和昨天差不多") == true)
+        #expect(Usage.headline([a], now: nov5) == nil)
+    }
+
+    @Test func 最新记录不是今天时_写明是哪天比哪天() {
+        let a = sample(bj("2026-11-01T10:00:00"), free: 80, [:])
+        let b = sample(bj("2026-11-02T10:00:00"), free: 70, [:])
+        #expect(Usage.headline([a, b], now: bj("2026-11-05T12:00:00")) == "11/2 比 11/1 少了 10.0 GB，主要是其他（没跟踪的地方）（+10.0 GB）")
+    }
+
+    @Test func 最近7天按北京日期算_不会多出第8天() {
+        let now = bj("2026-11-05T12:34:00")
+        let days = Usage.daily([
+            sample(bj("2026-10-29T13:34:00"), free: 90, [:]), // 不到 7×24 小时前，但已是第 8 个日期
+            sample(bj("2026-10-30T00:00:00"), free: 85, [:]), // 7 天里的第一天
+            sample(now, free: 80, [:]),
+        ], now: now)
+        #expect(days.map { BeijingTime.shortDay($0.at) } == ["10/30", "11/5"])
+    }
+
+    @Test func 只在一天出现的位置_小的和下载文件夹归进其他_大的照列() {
+        let old = sample(bj("2026-11-04T10:00:00"), free: 80, ["旧项目 · worktree 构建产物": 6]) // pip 那天不到 50 MB 没列出
+        // 下载文件夹那天读不了（没记），pip 刚过 50 MB 门槛，新项目冒出 3 GB，旧项目被清掉
+        let new = sample(bj("2026-11-05T10:00:00"), free: 81, ["下载文件夹": 10, "pip 缓存": 0.05, "新项目 · worktree 构建产物": 3])
+        let list = Usage.changes(from: old, to: new)
+        #expect(list.map(\.name) == ["新项目 · worktree 构建产物", Usage.untracked, "旧项目 · worktree 构建产物"])
+        #expect(list.first { $0.name == Usage.untracked }?.delta == 2 * gb) // −1 GB 已用 − (3 − 6)
+    }
+
+    @Test func 记录文件读不出来时不覆盖() throws {
+        let t = TempDir()
+        let url = t.url.appendingPathComponent("usage.json")
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true) // 是个目录：存在但读不出来
+        #expect(throws: (any Error).self) { try UsageLog(url: url).record(sample(bj("2026-11-05T10:00:00"), free: 70, [:])) }
+        var isDir: ObjCBool = false
+        #expect(FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue)
+    }
+
+    @Test func 只读加载_坏文件不挪() throws {
+        let t = TempDir()
+        let url = t.url.appendingPathComponent("usage.json")
+        try Data("[{ broken".utf8).write(to: url)
+        #expect(UsageLog(url: url).load(readOnly: true).isEmpty)
+        #expect(FileManager.default.fileExists(atPath: url.path))
     }
 }
 

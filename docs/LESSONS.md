@@ -65,6 +65,14 @@
 - 证据：测试员的 11 个对抗用例并入 `tests/DiskSlimCoreTests/ReviewAdversarialTests.swift`（修复前 5 个失败，修复后全过）；Homebrew 源码 `/opt/homebrew/Library/Homebrew/cleanup.rb:471`；用户 11:54 那次 `brew cleanup -s` 没有改动 Cellar（目录修改时间仍为 10 月 16 日）。
 - 升级：「每批做完让独立 agent 审查和测试」写进 AGENTS.md「规则」。
 
+## L-07 每日对比里「没量到」被当成 0，「最近 7 天」按 7×24 小时滚动多出第 8 天（2026-11-05）
+
+- 现象：独立审查和对抗测试发现，涨幅排行在某天少了一个位置（下载文件夹没权限读、缓存刚跨过 50 MB 列出门槛）时，会报「下载文件夹 +10 GB」「其他 −11 GB」这类虚假大涨大跌；「最近 7 天」把 6 天 23 小时前、已经是第 8 个日期的记录也画进曲线；另有同一天后写的旧时间记录盖掉新记录、记录文件读失败时被一条新记录覆盖、离屏截图会挪走真实的坏记录文件、极端数值相减溢出崩溃。
+- 根因：把「没有这一项」和「这一项是 0」混为一谈（`allocatedSize` 吞掉读错误返回 0、列出门槛决定了有没有这一项）；按日期展示的东西用了时长窗口；读文件时没区分「不存在」和「读不了」。
+- 正确做法：大小读不全就记「没量到」（`allocatedSizeIfReadable` 返回 nil）；对比两天时只单列两边都有的位置，只在一边出现的不到 1 GB 归进「其他」、下载文件夹一律归进「其他」；按北京日期（`BeijingTime.dayNumber`）切窗口；写入前文件在但读不了就报错不写；差值一律用不会溢出的加减。
+- 证据：`tests/DiskSlimCoreTests/GrowthAdversarialTests.swift`（对抗测试员写的 46 项，修复前 13 项失败）、`UsageTests.swift` 新增 5 项；沙盒输出 `evidence/2026-11-05-growth-sandbox/growth-output-after-review.txt`。
+- 升级：未升级。「缺测值不能当 0、按日期展示就按日期切」换个项目也成立，提议提升为全局 G-xx，等用户批准。
+
 ---
 
 格式：

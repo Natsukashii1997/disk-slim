@@ -23,7 +23,7 @@ enum Snapshot {
         ]
         for (name, setup) in shots {
             for scheme in [ColorScheme.light, .dark] {
-                let store = Store()
+                let store = Store(readOnlyUsage: true)
                 store.apply(report)
                 setup(store)
                 let view = PanelView()
