@@ -68,6 +68,16 @@ public struct ScanReport: Codable {
     public let seconds: Double
     public let disk: DiskStatus?
     public let findings: [Finding]
+    /// 下载文件夹整体占用（涨幅追踪用；旧的扫描结果里没有）
+    public var downloadsBytes: Int64?
+
+    public init(scannedAt: Date, seconds: Double, disk: DiskStatus?, findings: [Finding], downloadsBytes: Int64? = nil) {
+        self.scannedAt = scannedAt
+        self.seconds = seconds
+        self.disk = disk
+        self.findings = findings
+        self.downloadsBytes = downloadsBytes
+    }
 
     public var suggestedBytes: Int64 {
         findings.filter(\.suggested).reduce(0) { $0 + $1.bytes }

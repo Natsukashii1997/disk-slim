@@ -135,7 +135,27 @@ public enum BeijingTime {
         return f
     }()
 
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private static let shortDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        f.dateFormat = "M/d"
+        return f
+    }()
+
     public static func monthDay(_ date: Date) -> String { formatter.string(from: date) }
+    /// 北京时间的日期，按天归并记录用，如「2026-11-05」
+    public static func dayKey(_ date: Date) -> String { dayFormatter.string(from: date) }
+    /// 图表横轴用，如「11/5」
+    public static func shortDay(_ date: Date) -> String { shortDayFormatter.string(from: date) }
     public static func hourMinute(_ date: Date) -> String { timeFormatter.string(from: date) }
 }
 

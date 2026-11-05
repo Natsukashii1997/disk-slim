@@ -1,6 +1,17 @@
 # 当前状态
 
-更新：2026-11-05。独立审查与对抗测试发现的问题已全部修复，在分支 `feat/menubar-ui`，新版应用已重新打包并在运行。唯一下一步：用户确认后做第 4 批「涨幅追踪」。
+更新：2026-11-05。第 4 批「涨幅追踪」做了一半：核心（每日记录、曲线数据、谁涨的）和测试已完成，在分支 `feat/growth`（基于 `feat/menubar-ui`）。唯一下一步：在新会话里接着做应用部分（自动记录、首页曲线、涨幅页、退出按钮）、命令行 `diskslim growth`、截图核对、独立 agent 审查与对抗测试。
+
+## 第 4 批（进行中）：涨幅追踪的核心部分（2026-11-05，Claude，用户同意做第 4 批；已提交到 `feat/growth`、未发布）
+
+- 时间：开工 `2026-11-05 12:22`（`date '+%F %H:%M'` 记录）。来由：PRD 第 7 节第 4 批。会话上下文到 50%，在核心完成、测试全过的断点停下交接。
+- 改了哪些文件：新建 `Sources/DiskSlimCore/Usage.swift`（`UsageSample` 每日记录；`UsageLog` 存 `~/Library/Application Support/disk-slim/usage.json`，同一北京日期只留最后一份、保留 90 天、坏了先留底；`Usage.sample(from:)` 从扫描结果生成记录，下载文件夹按整体大小、同项目 worktree 构建产物合并、多份 Codex 备份合并；`Usage.daily` 最近 7 天每天最后一份；`Usage.latestAndPrevious` 最新一份与前一天最后一份；`Usage.changes` 各位置变化，另算「其他（没跟踪的地方）」= 已用变化 − 各位置变化之和，变化小于 50 MB 不列）；`Model.swift` 的 `ScanReport` 加 `downloadsBytes`；`Scan.swift` 扫描时计算下载文件夹整体大小；`System.swift` 加 `BeijingTime.dayKey`、`shortDay`；新建 `tests/DiskSlimCoreTests/UsageTests.swift`（7 项）。
+- 测试：`scripts/test.sh` 原样结果 `✔ Test run with 50 tests in 9 suites passed`；`node --test tests/*.test.mjs` 原样结果「ℹ tests 4 ℹ pass 4 ℹ fail 0」。
+- 验证：只有单元测试；应用和命令行还没接上，没有在真实磁盘上记录过。
+- 截图：无。
+- 发布与回读：未发布。
+- 与授权不一致之处、遗留问题、范围外发现：① PRD 把「开机自启」放在第 4 批，我改到第 6 批（从 `dist/` 注册自启，搬进「应用程序」后会失效），需要用户知情；② 剩余计划：Store 在每次扫描完成后写一份记录（快照模式不写）；菜单栏标签上挂每 30 分钟检查、当天没记录就后台扫描；首页把占位文字换成 7 天曲线 + 「比昨天少了 X，主要是 Y」，点进新的「涨幅」页（大图 + 比昨天的变化排行 + 近 7 天合计）；首页加「退出」按钮；命令行加 `diskslim growth`；离屏截图里用标明「示例」的假记录画涨幅页；最后照 L-06 派独立 agent 审查和对抗测试；③ 图表打算用系统的 Swift Charts，离屏截图能不能渲染还没验证；④ 今天只有一天的数据，曲线最早明天才会出现。
+- 本轮新坑：无。
 
 ## 修复：独立审查与对抗测试发现的问题（2026-11-05，Claude，用户同意「全部修」；已提交到 `feat/menubar-ui`、未发布）
 

@@ -23,8 +23,10 @@ public struct Scan {
             DownloadsScanner(root: home.appendingPathComponent("Downloads"), now: now, meta: meta).scan()
             + WorktreeScanner(workRoot: workRoot, now: now, runner: runner).scan()
             + applyHistory(KnownPlacesScanner(home: home).scan(), history: OperationLog.standard(home: home).load(), now: now)
+        let downloads = home.appendingPathComponent("Downloads")
         return ScanReport(scannedAt: now, seconds: Date().timeIntervalSince(start),
-                          disk: diskStatus(of: home), findings: findings)
+                          disk: diskStatus(of: home), findings: findings,
+                          downloadsBytes: FileManager.default.fileExists(atPath: downloads.path) ? allocatedSize(downloads) : nil)
     }
 
     /// 执行前复核会随时间变化的规则：扫描后又标了「保留」的下载项、扫描后又编译过的构建产物。
