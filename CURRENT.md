@@ -1,6 +1,17 @@
 # 当前状态
 
-更新：2026-11-05。第 0–6 批都已完成，应用已装到 `/Applications/DiskSlim.app` 并在运行。分支 main → feat/scan-engine → feat/cleaner → feat/menubar-ui → feat/growth → feat/alerts → feat/launch，都没合并、没推送，GitHub 远端未建。唯一下一步：用户试用一周（第 6 批验收标准「使用一周无误删」），期间按需打开「完全磁盘访问权限」、通知和开机自启；决定是否停掉 Claude 定时任务 `disk-space-guard`；看 `docs/reviews/2026-11-05-全面审查与优化建议.md`，决定先修哪些（建议先修 B1）。
+更新：2026-11-05。第 0–6 批都已完成，全面审查的 B1–B7 已修，应用已装到 `/Applications/DiskSlim.app` 并在运行。分支 main → feat/scan-engine → feat/cleaner → feat/menubar-ui → feat/growth → feat/alerts → feat/launch → feat/review-fixes，都没合并、没推送，GitHub 远端未建。唯一下一步：用户试用一周（第 6 批验收标准「使用一周无误删」），期间按需打开「完全磁盘访问权限」、通知和开机自启；决定是否停掉 Claude 定时任务 `disk-space-guard`；看 `docs/reviews/2026-11-05-全面审查与优化建议.md`，决定 B8–B12 和优化建议做不做。
+
+## 修复全面审查 B1–B7（2026-11-05，Claude，用户说「修 B1 到 B7」；已提交到 `feat/review-fixes`、已重新安装、未发布）
+
+- 时间：开工 `2026-11-05 14:01`（`date '+%F %H:%M'` 记录）。来由：`docs/reviews/2026-11-05-全面审查与优化建议.md` 第一节。
+- 改了哪些文件：`System.swift`（B1：`ProcessRunner` 给子进程设 `LC_ALL=en_US.UTF-8`）；`Cleaner.swift`（B2：废纸篓里那份不在、原位置有文件时算「已在原处」；B4：撤销跳过没有可放回文件的批次，提示改为「没有可以撤销的操作（清理命令和直接删除的放不回去）」；B5：`loadChecked` 区分「不存在」和「读不了」，读不了时一项都不清；新增 `canUndo()`）；`Weekly.swift`（B6：`refuseIfUnreadable`，决定记录文件在但读不了时不写；B7：「保留」「下周再问」按路径记 `Finding.pathKey`，旧的按「分组 + 路径」记的照样认）；`Alerts.swift`（B6：提醒记录同样）；`Store.swift`、`Views.swift`（B3：首页常驻「撤销上一次清理」；决定没保存成功时提示）；测试：并入审查员的 `FullReviewTests.swift`（6 项），按新撤销提示更新 `CleanerTests`、`ReviewAdversarialTests` 3 处期望，按 B7 改回 `AlertsAdversarialTests` 1 项；`docs/LESSONS.md`（L-09 补 Swift 子进程）；审查文档标了状态。
+- 测试：`scripts/test.sh` 原样结果 `✔ Test run with 214 tests in 30 suites passed`；`node --test tests/*.test.mjs` 原样结果「ℹ fail 0」；`node scripts/check-rules.mjs` 输出「通用规则检查通过」。
+- 验证：审查员的 6 项对抗测试修复前全部失败、修复后全部通过（B1 那项在没有区域设置的环境里起一个带 target 路径的进程，确认构建产物不被删）；离屏截图 24 张（`evidence/2026-11-05-review-fix-shots/`），没逐张看；`scripts/install.sh` 重新安装（`evidence/2026-11-05-install-3.txt`），现在只有 `/Applications/DiskSlim.app` 一个进程（92782）。首页「撤销上一次清理」在真机上没看过（离屏截图是只读模式，不显示这个按钮）。
+- 截图：见上面证据目录。
+- 发布与回读：未发布；已重新安装到本机。
+- 与授权不一致之处、遗留问题、范围外发现：① B8–B12 没修（确认框不自动消失、扫描会挪坏掉的操作记录、只给 `--work` 不算沙盒、通知被拒也记已发、json 没有跨进程锁）；② 操作记录读不了时现在整批不清（比「清了但记不下来」保守），应用里会在提示里说明；③ 重新打包后签名又变了，「完全磁盘访问」如果之前加过要删掉重加（目前没加过）；④ 审查员的 worktree `.claude/worktrees/agent-a9ea9d62e085fae6c` 还在。
+- 本轮新坑：无（B1 补进 L-09）。
 
 ## 全面审查与优化调研（2026-11-05，Claude，用户要求「开两个 agent 一个审查测试，一个查最佳实践，给出优化建议」；已提交到 `feat/launch`、未发布）
 
