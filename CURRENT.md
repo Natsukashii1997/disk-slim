@@ -1,6 +1,17 @@
 # 当前状态
 
-更新：2026-11-05。第 0–6 批都已完成，应用已装到 `/Applications/DiskSlim.app` 并在运行。分支 main → feat/scan-engine → feat/cleaner → feat/menubar-ui → feat/growth → feat/alerts → feat/launch，都没合并、没推送，GitHub 远端未建。唯一下一步：用户试用一周（第 6 批验收标准「使用一周无误删」），期间按需打开「完全磁盘访问权限」、通知和开机自启；决定是否停掉 Claude 定时任务 `disk-space-guard`。
+更新：2026-11-05。第 0–6 批都已完成，应用已装到 `/Applications/DiskSlim.app` 并在运行。分支 main → feat/scan-engine → feat/cleaner → feat/menubar-ui → feat/growth → feat/alerts → feat/launch，都没合并、没推送，GitHub 远端未建。唯一下一步：用户试用一周（第 6 批验收标准「使用一周无误删」），期间按需打开「完全磁盘访问权限」、通知和开机自启；决定是否停掉 Claude 定时任务 `disk-space-guard`；看 `docs/reviews/2026-11-05-全面审查与优化建议.md`，决定先修哪些（建议先修 B1）。
+
+## 全面审查与优化调研（2026-11-05，Claude，用户要求「开两个 agent 一个审查测试，一个查最佳实践，给出优化建议」；已提交到 `feat/launch`、未发布）
+
+- 时间：开工 `2026-11-05 13:50`（`date '+%F %H:%M'` 记录）。来由：第 0–6 批完成后用户要一次整体审查和优化建议；只出建议，没改代码。
+- 改了哪些文件：新建 `docs/reviews/2026-11-05-全面审查与优化建议.md`（12 个 bug + 12 条优化建议 + 下一步）；本节交接。
+- 测试：未改代码，没重跑；审查员在自己的 worktree 里跑 `scripts/test.sh` 原样结果「✘ Test run with 214 tests in 30 suites failed … with 6 issues」，原有 208 项全过，6 项失败都是它新写的对抗测试（分支 `worktree-agent-a9ea9d62e085fae6c`，提交 `38572dd`，没并入）。
+- 验证：亲自核实了 B1（已装应用环境里没有 LANG/LC_*，无区域设置时 `ps` 输出 27 行中文路径被转义，加 `LC_ALL=en_US.UTF-8` 后正常）；调研里的 postpane `.cargo/config.toml` 写死 `target-dir = "target"`、`Cargo.toml` 没有 `[profile]`、23 个 worktree（1 个被锁）、`~/.codex/sessions` 26 GB。其余条目按报告和代码对照，没逐条复现。
+- 截图：审查员的截图在 `evidence/fullreview-20261105/shots/`，我没看。
+- 发布与回读：未发布。
+- 与授权不一致之处、遗留问题、范围外发现：① B1 是高危：菜单栏应用认不出正在运行的构建产物，只靠「24 小时内编译过」兜底，建议马上修；② postpane 的 Cargo 配置要在 postpane 项目里改，不在本项目范围；③ 审查员和第 5 批测试员的 worktree 都还在（`.claude/worktrees/`）；④ `disk-space-guard` 用户说回头再定。
+- 本轮新坑：无（B1 和 L-09 是同一个坑，修的时候在 L-09 里补一句「Swift 里起子进程也要设」）。
 
 ## 第 6 批：打包上线（2026-11-05，Claude，用户说「继续吧，做完」；已提交到 `feat/launch`、已安装到本机、未发布）
 
