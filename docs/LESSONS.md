@@ -73,6 +73,14 @@
 - 证据：`tests/DiskSlimCoreTests/GrowthAdversarialTests.swift`（对抗测试员写的 46 项，修复前 13 项失败）、`UsageTests.swift` 新增 5 项；沙盒输出 `evidence/2026-11-05-growth-sandbox/growth-output-after-review.txt`。
 - 升级：未升级。「缺测值不能当 0、按日期展示就按日期切」换个项目也成立，提议提升为全局 G-xx，等用户批准。
 
+## L-08 Swift 自动生成的 Codable 不用属性默认值：缺一个键整份读不出来（2026-11-05）
+
+- 现象：对抗测试发现，`alerts.json` 少了一个开关、或 `decisions.json` 里一条「下周再问」的日期写坏，整份文件就按默认值处理：用户关掉的提醒重新打开、同一天的提醒重发，所有「保留」丢掉、保留过的下载文件重新被默认勾选，点「清理建议项」就会移走。
+- 根因：结构体属性写了默认值，但编译器合成的 `init(from:)` 仍要求每个键都在、每个值都合法，任何一处失败整个解码抛错，外面的 `try?` 再把它变成「全部默认」。
+- 正确做法：用户数据文件的结构体手写 `init(from:)`，逐个字段 `decodeIfPresent ?? 默认值`；字典里逐条宽松解码（坏一条丢一条，见 `Weekly.swift` 的 `Lenient`）；整份读不出来时先改名留底再写。
+- 证据：`tests/DiskSlimCoreTests/AlertsAdversarialTests.swift` 里 `autoClean字段缺失_…`、`sent字段缺失_…`、`某个开关缺失_…`、`某个下周再问的日期坏了_…`、`缺snoozed字段_…`，修复前失败、修复后通过。
+- 升级：未升级。换个项目也成立，提议提升为全局 G-xx，等用户批准。
+
 ---
 
 格式：

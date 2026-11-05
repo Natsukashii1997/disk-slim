@@ -95,13 +95,14 @@ public enum Usage {
     /// 没跟踪到的部分：已用空间的变化减去所有被跟踪位置的变化
     public static let untracked = "其他（没跟踪的地方）"
     public static let downloads = "下载文件夹"
+    public static let trash = "废纸篓"
 
     /// 从一次扫描结果得到一份记录。没有磁盘信息时返回 nil。
     public static func sample(from r: ScanReport) -> UsageSample? {
         guard let disk = r.disk else { return nil }
         var parts: [String: Int64] = [:]
         if let dl = r.downloadsBytes { parts[downloads] = dl }
-        if let trash = r.trashBytes { parts["废纸篓"] = trash }
+        if let trash = r.trashBytes { parts[Usage.trash] = trash }
         for f in r.findings where f.area == .hidden {
             parts[partName(f), default: 0] += f.bytes
         }

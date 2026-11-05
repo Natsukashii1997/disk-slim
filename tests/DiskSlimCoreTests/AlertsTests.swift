@@ -66,7 +66,7 @@ import Testing
         let log = DecisionLog(url: t.url.appendingPathComponent("decisions.json"))
         #expect(log.load() == Decisions())
         var d = Decisions()
-        d.kept["/d/a.dmg"] = bj("2026-11-06T18:00:00")
+        d.kept["安装包|/d/a.dmg"] = Kept(at: bj("2026-11-06T18:00:00"), bytes: 5)
         try log.save(d)
         #expect(log.load() == d)
     }
@@ -146,4 +146,36 @@ import Testing
         try store.save(s)
         #expect(store.load() == s)
     }
+
+    @Test func 周五18点前点下周再问_跳过当天这次() {
+        let card = WeeklyCard(id: "x", tag: "备份", title: "t", why: "w",
+                              findings: [finding(.hidden, "备份", "/h/backup", gb: 20, risk: .confirm, suggested: false)])
+        var d = Decisions()
+        d.snooze(card, now: bj("2026-11-06T17:00:00"))
+        #expect(Weekly.cards(card.findings, decisions: d, now: bj("2026-11-06T18:00:01")).isEmpty)
+        #expect(Weekly.cards(card.findings, decisions: d, now: bj("2026-11-13T18:00:01")).count == 1)
+        // 周六点的，到下周五再问，不会拖到下下周
+        var e = Decisions()
+        e.snooze(card, now: bj("2026-11-07T10:00:00"))
+        #expect(Weekly.cards(card.findings, decisions: e, now: bj("2026-11-13T18:00:01")).count == 1)
+    }
+
+    @Test func 保留后涨了超过1GB再问() {
+        let small = finding(.hidden, "备份", "/h/backup", gb: 2, risk: .confirm, suggested: false)
+        let card = WeeklyCard(id: "x", tag: "备份", title: "t", why: "w", findings: [small])
+        var d = Decisions()
+        d.keep(card, now: bj("2026-11-06T18:00:00"))
+        let now = bj("2026-11-20T18:00:00")
+        #expect(Weekly.cards([finding(.hidden, "备份", "/h/backup", gb: 2.9, risk: .confirm, suggested: false)], decisions: d, now: now).isEmpty)
+        #expect(Weekly.cards([finding(.hidden, "备份", "/h/backup", gb: 3.5, risk: .confirm, suggested: false)], decisions: d, now: now).count == 1)
+    }
+
+    @Test func 废纸篓涨了不报() {
+        let samples = [
+            sample(bj("2026-11-04T12:00:00"), free: 50, ["下载文件夹": 20, "废纸篓": 0]),
+            sample(bj("2026-11-05T11:00:00"), free: 50, ["下载文件夹": 8, "废纸篓": 12]),
+        ]
+        #expect(Alerts.due(now: bj("2026-11-05T12:00:00"), free: 50 * gb, samples: samples, cards: nil, state: AlertState()).isEmpty)
+    }
 }
+

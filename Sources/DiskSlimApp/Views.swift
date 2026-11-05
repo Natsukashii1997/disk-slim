@@ -593,7 +593,7 @@ struct WeekPage: View {
                         Button("保留") { store.keep(card) }.buttonStyle(QuietButton()).disabled(store.busy)
                         Button("下周再问") { store.snooze(card) }.buttonStyle(QuietButton()).disabled(store.busy)
                     }
-                    Text("「保留」以后不再问，也不会再被默认勾选；「下周再问」到下周五 18:00 再出现。")
+                    Text("「保留」以后不再问、也不再默认勾选（涨了超过 1 GB 会再问）；「下周再问」到下周五 18:00 再出现。")
                         .font(.system(size: 11)).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 16).padding(.bottom, 16)
@@ -615,6 +615,11 @@ struct AlertsPage: View {
         let free = store.disk.map { "现在 \(formatBytes($0.availableBytes))" } ?? ""
         VStack(alignment: .leading, spacing: 0) {
             PageHeader(title: "提醒设置")
+            if store.notificationsAllowed == false {
+                Text("系统没允许磁盘瘦身发通知，下面的提醒收不到。到「系统设置 › 通知 › DiskSlim」里打开「允许通知」。")
+                    .font(.system(size: 11.5)).foregroundStyle(Palette.bad).fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16).padding(.bottom, 4)
+            }
             VStack(alignment: .leading, spacing: 0) {
                 info("可用低于 60 GB 图标变橙、低于 30 GB 变红", free)
                 toggle(\.lowSpace, s.lowSpace, "可用低于 30 GB 时发通知", "一天最多一次")
@@ -625,6 +630,7 @@ struct AlertsPage: View {
             }
             .padding(.horizontal, 10).padding(.bottom, 12)
         }
+        .onAppear { store.refreshNotificationPermission() }
     }
 
     private func info(_ title: String, _ sub: String) -> some View {

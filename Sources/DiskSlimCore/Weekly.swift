@@ -16,29 +16,55 @@ public struct WeeklyCard: Identifiable {
     public var actionLabel: String { findings.allSatisfy { $0.cleanup == .trash } ? "移到废纸篓" : "清理" }
 }
 
-/// 用户在卡片上做的决定，存在 decisions.json。
+/// 选「保留」时这一项多大：以后涨了超过 1 GB 就再问
+public struct Kept: Codable, Equatable {
+    public let at: Date
+    public let bytes: Int64
+
+    public init(at: Date, bytes: Int64) {
+        self.at = at
+        self.bytes = bytes
+    }
+}
+
+/// 用户在卡片上做的决定，存在 decisions.json。按项（分组 + 路径，即 `Finding.id`）记。
 public struct Decisions: Codable, Equatable {
-    /// 「保留」：路径 → 什么时候决定的。以后不再问，也不再默认勾选
-    public var kept: [String: Date] = [:]
-    /// 「下周再问」：路径 → 到这个时间之前不问
+    /// 「保留」：以后不再问，也不再默认勾选；涨了超过 `regrowBytes` 就作废、重新问
+    public var kept: [String: Kept] = [:]
+    /// 「下周再问」：到这个时间之前不问
     public var snoozed: [String: Date] = [:]
 
-    public init(kept: [String: Date] = [:], snoozed: [String: Date] = [:]) {
+    public static let regrowBytes: Int64 = 1_073_741_824
+
+    public init(kept: [String: Kept] = [:], snoozed: [String: Date] = [:]) {
         self.kept = kept
         self.snoozed = snoozed
     }
 
+    /// 宽松地读：缺字段、某一条坏了只丢那一条，不把所有「保留」一起丢掉（丢了会被重新默认勾选）
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        kept = ((try? c.decodeIfPresent([String: Lenient<Kept>].self, forKey: .kept)) ?? nil)?.compactMapValues(\.value) ?? [:]
+        snoozed = ((try? c.decodeIfPresent([String: Lenient<Date>].self, forKey: .snoozed)) ?? nil)?.compactMapValues(\.value) ?? [:]
+    }
+
     public mutating func keep(_ card: WeeklyCard, now: Date) {
-        for p in card.paths { kept[p] = now; snoozed[p] = nil }
+        for f in card.findings { kept[f.id] = Kept(at: now, bytes: f.bytes); snoozed[f.id] = nil }
     }
 
+    /// 到下一次周报再问；周五 18:00 前点的跳过当天这次，到下周五
     public mutating func snooze(_ card: WeeklyCard, now: Date) {
-        let until = Weekly.nextReport(after: now)
-        for p in card.paths { snoozed[p] = until }
+        var until = Weekly.nextReport(after: now)
+        if BeijingTime.dayNumber(until) == BeijingTime.dayNumber(now) { until = Weekly.nextReport(after: until) }
+        for f in card.findings { snoozed[f.id] = until }
     }
 
-    public func isKept(_ f: Finding) -> Bool { !f.paths.isEmpty && f.paths.allSatisfy { kept[$0] != nil } }
-    func isSnoozed(_ f: Finding, now: Date) -> Bool { !f.paths.isEmpty && f.paths.allSatisfy { (snoozed[$0] ?? .distantPast) > now } }
+    public func isKept(_ f: Finding) -> Bool {
+        guard let k = kept[f.id] else { return false }
+        return f.bytes - k.bytes <= Self.regrowBytes
+    }
+
+    func isSnoozed(_ f: Finding, now: Date) -> Bool { (snoozed[f.id] ?? .distantPast) > now }
 }
 
 public struct DecisionLog {
@@ -50,12 +76,18 @@ public struct DecisionLog {
         DecisionLog(url: home.appendingPathComponent("Library/Application Support/disk-slim/decisions.json"))
     }
 
-    /// 没有文件或读不出来都当没有决定（最坏是多问一次，不会多删）
-    public func load() -> Decisions {
+    /// 没有文件当没有决定；整份读不出来时先改名留底（`readOnly` 时不挪），免得下次保存把它覆盖掉
+    public func load(readOnly: Bool = false) -> Decisions {
         guard let data = try? Data(contentsOf: url) else { return Decisions() }
         let d = JSONDecoder()
         d.dateDecodingStrategy = .iso8601
-        return (try? d.decode(Decisions.self, from: data)) ?? Decisions()
+        if let decisions = try? d.decode(Decisions.self, from: data) { return decisions }
+        if !readOnly {
+            let stamp = Int(Date().timeIntervalSince1970)
+            try? FileManager.default.moveItem(at: url, to: url.deletingLastPathComponent()
+                .appendingPathComponent("decisions-damaged-\(stamp)-\(UUID().uuidString.prefix(8)).json.bak"))
+        }
+        return Decisions()
     }
 
     public func save(_ decisions: Decisions) throws {
@@ -93,7 +125,7 @@ public enum Weekly {
     /// 这次扫描里还要问的卡片，大的在前
     public static func cards(_ findings: [Finding], decisions: Decisions, now: Date) -> [WeeklyCard] {
         let open = findings.filter { f in
-            f.risk != .readOnly && f.cleanup != .none && !decisions.isKept(f) && !decisions.isSnoozed(f, now: now)
+            f.risk != .readOnly && f.cleanup.runnable && !decisions.isKept(f) && !decisions.isSnoozed(f, now: now)
         }
         var cards: [WeeklyCard] = []
         let downloads = open.filter { $0.area == .downloads }
@@ -119,5 +151,22 @@ public enum Weekly {
     public static func nextReport(after now: Date) -> Date {
         beijing.nextDate(after: now, matching: DateComponents(hour: 18, minute: 0, second: 0, weekday: 6),
                          matchingPolicy: .nextTime)!
+    }
+}
+
+/// 解码失败时得到 nil，不让一条坏数据拖垮整份
+struct Lenient<T: Decodable>: Decodable {
+    let value: T?
+    init(from decoder: Decoder) throws { value = try? decoder.singleValueContainer().decode(T.self) }
+}
+
+extension Cleanup {
+    /// 真能执行：不是「不能清」，也不是空命令
+    public var runnable: Bool {
+        switch self {
+        case .none: return false
+        case .command(let args): return !args.isEmpty
+        default: return true
+        }
     }
 }

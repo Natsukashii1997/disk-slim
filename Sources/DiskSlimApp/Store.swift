@@ -43,13 +43,17 @@ final class Store: ObservableObject {
     @Published var decisions: Decisions
     /// 提醒开关和发过的记录（alerts.json）
     @Published var alertState: AlertState
+    /// 系统通知权限：false 时提醒设置页提示去系统设置打开
+    @Published var notificationsAllowed: Bool?
 
     let home: URL
     private let usageLog: UsageLog
     private let decisionLog: DecisionLog
     private let alertStore: AlertStore
-    /// 离屏截图用：只读，不写任何记录，不发通知，不自动清理
+    /// 离屏截图、示例通知用：只读，不写任何记录，不发通知，不自动清理
     private let readOnly: Bool
+    /// 提醒和自动清理只在打包版里跑：调试版发不了通知，也不该把真实的「已发」记录和自动清理用掉
+    private var alertsActive: Bool { !readOnly && Notifier.shared.available }
     /// 每次扫描加一；扫描结果回来时代次不对就丢掉（清理后的新扫描要盖过清理前发起的旧扫描）
     private var scanGeneration = 0
 
@@ -64,10 +68,10 @@ final class Store: ObservableObject {
         alertStore = AlertStore.standard(home: home)
         disk = diskStatus(of: home)
         samples = usageLog.load(readOnly: readOnly)
-        decisions = decisionLog.load()
-        alertState = alertStore.load()
+        decisions = decisionLog.load(readOnly: readOnly)
+        alertState = alertStore.load(readOnly: readOnly)
         // 第一次运行：从下一个周五开始发周报，不补发装上之前那个周五的
-        if !readOnly, alertState.sent["weekly"] == nil {
+        if !readOnly, Notifier.shared.available, alertState.sent["weekly"] == nil {
             alertState.sent["weekly"] = BeijingTime.dayKey(Weekly.lastReport(atOrBefore: Date()))
             try? alertStore.save(alertState)
         }
@@ -114,6 +118,7 @@ final class Store: ObservableObject {
     /// 应用开着时每 30 分钟看一次：今天（北京时间）还没有记录、或者周报 / 自动清理到点了而扫描结果超过一小时，
     /// 就在后台扫描一次（扫描完成会写记录、查提醒、按需自动清理）；否则直接查提醒
     func dailyLoop() async {
+        guard !readOnly else { return }
         while !Task.isCancelled {
             refreshDisk()
             if needsScan(now: Date()) { scan() } else { checkAlerts(); autoCleanIfDue() }
@@ -137,7 +142,7 @@ final class Store: ObservableObject {
     var cards: [WeeklyCard] { report.map { Weekly.cards($0.findings, decisions: decisions, now: Date()) } ?? [] }
 
     func checkAlerts() {
-        guard !readOnly else { return }
+        guard alertsActive else { return }
         let now = Date()
         let due = Alerts.due(now: now, free: disk?.availableBytes, samples: samples,
                              cards: report == nil ? nil : cards, state: alertState)
@@ -146,15 +151,23 @@ final class Store: ObservableObject {
             Notifier.shared.send(title: a.title, body: a.body)
             state.sent[a.key] = a.day
         }
-        // 周报到点时没有要决定的：记成这周已处理，免得每小时重扫一次去等卡片
+        // 周报到点时没有要决定的：记成这周已处理，免得每小时重扫一次去等卡片。
+        // 下载文件夹没读到（比如没授权）时不算，授权后本周还能提醒
         let friday = Weekly.lastReport(atOrBefore: now)
-        if state.settings.weekly, report != nil, cards.isEmpty { state.sent["weekly"] = BeijingTime.dayKey(friday) }
+        if state.settings.weekly, let r = report, r.downloadsBytes != nil, cards.isEmpty { state.sent["weekly"] = BeijingTime.dayKey(friday) }
         if state != alertState { saveAlerts(state) }
+    }
+
+    func refreshNotificationPermission() {
+        guard alertsActive else { return }
+        Notifier.shared.allowed { ok in Task { @MainActor in self.notificationsAllowed = ok } }
     }
 
     func setSetting(_ key: WritableKeyPath<AlertSettings, Bool>, _ on: Bool) {
         var state = alertState
         state.settings[keyPath: key] = on
+        // 重新打开周报：从下一个周五开始，不补发关着期间的
+        if key == \.weekly, on { state.sent["weekly"] = BeijingTime.dayKey(Weekly.lastReport(atOrBefore: Date())) }
         saveAlerts(state)
     }
 
@@ -165,7 +178,8 @@ final class Store: ObservableObject {
 
     /// 自动清理（默认关）：可用低于 60 GB、今天还没跑过时，只清「看不见的」里安全、默认勾选的项；下载文件夹不动
     func autoCleanIfDue() {
-        guard !readOnly, !busy, let r = report,
+        // 用户正在确认清理、或者刚清完还能撤销时不插队，下一轮再说（这时不记今天已跑）
+        guard alertsActive, !busy, confirming == nil, toast?.canUndo != true, let r = report,
               Alerts.shouldAutoClean(now: Date(), free: disk?.availableBytes, state: alertState) else { return }
         var state = alertState
         state.autoCleanDay = BeijingTime.dayKey(Date())
@@ -178,9 +192,13 @@ final class Store: ObservableObject {
             let batch = cleaner.clean(picks)
             await MainActor.run {
                 self.working = false
-                let text = Self.summary(batch)
-                self.toast = Toast(text: "自动清理：" + text, canUndo: batch.trashedBytes > 0 && batch.note == nil)
-                Notifier.shared.send(title: "自动清理腾出了 \(formatBytes(batch.freedBytes + batch.trashedBytes))", body: text)
+                // 什么都没清掉（都在用或被跳过）就不打扰
+                let gained = batch.freedBytes + batch.trashedBytes
+                if gained > 0 {
+                    let text = Self.summary(batch)
+                    if self.toast == nil { self.toast = Toast(text: "自动清理：" + text, canUndo: false) }
+                    Notifier.shared.send(title: "自动清理腾出了 \(formatBytes(gained))", body: text)
+                }
                 self.report = nil
                 self.scan(force: true)
             }
@@ -207,6 +225,9 @@ final class Store: ObservableObject {
     }
 
     func apply(_ r: ScanReport) {
+        // 扫描时从磁盘读决定；万一上次保存失败，这里再用内存里的套一次，选过保留的不会又被勾上
+        let r = ScanReport(scannedAt: r.scannedAt, seconds: r.seconds, disk: r.disk, findings: applyDecisions(r.findings, decisions),
+                           downloadsBytes: r.downloadsBytes, trashBytes: r.trashBytes)
         report = r
         disk = r.disk
         selected = Set(r.findings.filter(\.suggested).map(\.id))
@@ -240,7 +261,10 @@ final class Store: ObservableObject {
 
     func clean(_ list: [Finding]) {
         confirming = nil
-        guard !busy else { return }
+        guard !busy else {
+            toast = Toast(text: "正在扫描或清理，没有执行。等它结束再点一次。", canUndo: false)
+            return
+        }
         working = true
         toast = nil
         let cleaner = cleaner

@@ -4,7 +4,7 @@ import Foundation
 public struct AlertSettings: Codable, Equatable {
     /// 可用低于 30 GB 时发通知
     public var lowSpace = true
-    /// 某个被跟踪的位置一天涨超过 10 GB 时发通知
+    /// 某个被跟踪的位置一天涨超过 10 GB（不含正好 10 GB）时发通知
     public var growth = true
     /// 每周五 18:00 发周报（本周待决定）
     public var weekly = true
@@ -12,6 +12,15 @@ public struct AlertSettings: Codable, Equatable {
     public var autoClean = false
 
     public init() {}
+
+    /// 宽松地读：缺哪个开关就用默认值，其他照读；autoClean 读不出来一律当关
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        lowSpace = (try? c.decodeIfPresent(Bool.self, forKey: .lowSpace)) ?? nil ?? true
+        growth = (try? c.decodeIfPresent(Bool.self, forKey: .growth)) ?? nil ?? true
+        weekly = (try? c.decodeIfPresent(Bool.self, forKey: .weekly)) ?? nil ?? true
+        autoClean = (try? c.decodeIfPresent(Bool.self, forKey: .autoClean)) ?? nil ?? false
+    }
 }
 
 /// alerts.json：开关 + 各条提醒上次发在哪天，免得重复发。
@@ -23,6 +32,14 @@ public struct AlertState: Codable, Equatable {
     public var autoCleanDay: String?
 
     public init() {}
+
+    /// 宽松地读：缺字段或某个字段坏了只用那个字段的默认值，不把开关和「发过」记录一起丢掉
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        settings = (try? c.decodeIfPresent(AlertSettings.self, forKey: .settings)) ?? nil ?? AlertSettings()
+        sent = (try? c.decodeIfPresent([String: String].self, forKey: .sent)) ?? nil ?? [:]
+        autoCleanDay = (try? c.decodeIfPresent(String.self, forKey: .autoCleanDay)) ?? nil
+    }
 }
 
 public struct AlertStore {
@@ -34,10 +51,16 @@ public struct AlertStore {
         AlertStore(url: home.appendingPathComponent("Library/Application Support/disk-slim/alerts.json"))
     }
 
-    /// 读不出来按默认值（自动清理默认关，读坏了也不会被打开）
-    public func load() -> AlertState {
+    /// 读不出来按默认值（自动清理默认关，读坏了也不会被打开）；内容坏了先改名留底（`readOnly` 时不挪）
+    public func load(readOnly: Bool = false) -> AlertState {
         guard let data = try? Data(contentsOf: url) else { return AlertState() }
-        return (try? JSONDecoder().decode(AlertState.self, from: data)) ?? AlertState()
+        if let state = try? JSONDecoder().decode(AlertState.self, from: data) { return state }
+        if !readOnly {
+            let stamp = Int(Date().timeIntervalSince1970)
+            try? FileManager.default.moveItem(at: url, to: url.deletingLastPathComponent()
+                .appendingPathComponent("alerts-damaged-\(stamp)-\(UUID().uuidString.prefix(8)).json.bak"))
+        }
+        return AlertState()
     }
 
     public func save(_ state: AlertState) throws {
@@ -74,11 +97,12 @@ public enum Alerts {
                               body: "低于 30 GB 了。点菜单栏的磁盘瘦身看看能清什么。"))
         }
 
-        // 今天的记录和昨天的比；位置变化超过 10 GB 才提醒，「其他」不算被跟踪的位置
+        // 今天的记录和昨天的比；位置变化超过 10 GB 才提醒。「其他」不是被跟踪的位置；
+        // 废纸篓涨是因为刚把东西移进去，空间没变多少，也不报
         if s.growth, let (new, old) = Usage.latestAndPrevious(Usage.daily(samples, days: 2, now: now)),
            BeijingTime.dayNumber(new.at) == BeijingTime.dayNumber(now),
            BeijingTime.dayNumber(new.at) - BeijingTime.dayNumber(old.at) == 1 {
-            for c in Usage.changes(from: old, to: new) where c.delta >= growthBytes && c.name != Usage.untracked {
+            for c in Usage.changes(from: old, to: new) where c.delta > growthBytes && c.name != Usage.untracked && c.name != Usage.trash {
                 let key = "growth|" + c.name
                 if state.sent[key] == today { continue }
                 list.append(Alert(key: key, day: today, title: "\(c.name) 一天涨了 \(formatBytes(c.delta))",
@@ -106,6 +130,6 @@ public enum Alerts {
 
     /// 自动清理只动「看不见的」里安全、默认勾选的项（缓存、可再生的构建产物）；下载文件夹里的用户文件一律不动
     public static func autoCleanPicks(_ findings: [Finding]) -> [Finding] {
-        findings.filter { $0.area == .hidden && $0.risk == .safe && $0.suggested && $0.cleanup != .none }
+        findings.filter { $0.area == .hidden && $0.risk == .safe && $0.suggested && $0.cleanup.runnable }
     }
 }

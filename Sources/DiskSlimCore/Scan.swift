@@ -23,7 +23,7 @@ public struct Scan {
             DownloadsScanner(root: home.appendingPathComponent("Downloads"), now: now, meta: meta).scan()
             + WorktreeScanner(workRoot: workRoot, now: now, runner: runner).scan()
             + applyHistory(KnownPlacesScanner(home: home).scan(), history: OperationLog.standard(home: home).load(), now: now),
-            DecisionLog.standard(home: home).load())
+            DecisionLog.standard(home: home).load(readOnly: true))
         let downloads = home.appendingPathComponent("Downloads")
         return ScanReport(scannedAt: now, seconds: Date().timeIntervalSince(start),
                           disk: diskStatus(of: home), findings: findings,

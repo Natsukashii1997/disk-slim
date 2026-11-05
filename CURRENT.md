@@ -1,6 +1,22 @@
 # 当前状态
 
-更新：2026-11-05。第 4 批「涨幅追踪」已完成（开机自启挪到第 6 批），在分支 `feat/growth`（基于 `feat/menubar-ui`），未合并、未推送。唯一下一步：等用户试用菜单栏里的曲线和涨幅页、确认第 4 批，再开第 5 批（提醒与每周卡片）。
+更新：2026-11-05。第 5 批「提醒与每周卡片」已完成，在分支 `feat/alerts`（基于 `feat/growth`），未合并、未推送。唯一下一步：用户在「系统设置 › 通知 › DiskSlim」打开通知权限后，用 `--test-notify` 发示例通知确认收到；用户确认第 5 批后再开第 6 批（打包上线）。
+
+## 第 5 批：提醒与每周卡片 + 审查修复（2026-11-05，Claude，用户确认计划「按推荐开工」；已提交到 `feat/alerts`、未发布）
+
+- 时间：开工 `2026-11-05 12:53`（`date '+%F %H:%M'` 记录）。来由：PRD 第 7 节第 5 批；用户按推荐答案确认：卡片=下载每个分组一张 +「要你决定的」每项一张；自动清理做、默认关、只在可用 <60 GB 时每天一次、只清缓存和可再生构建产物、下载文件不自动动。
+- 改了哪些文件：
+  - 核心：新建 `Alerts.swift`（`AlertSettings` 4 个开关、`AlertState` 发过的记录、`AlertStore` 存 `alerts.json`、`Alerts.due` 三种提醒、`shouldAutoClean`、`autoCleanPicks`）、`Weekly.swift`（`WeeklyCard`、`Decisions` 按项记「保留」「下周再问」、`DecisionLog` 存 `decisions.json`、`applyDecisions`、周五 18:00 北京时间计算、`Lenient`、`Cleanup.runnable`）；`Scan.swift` 扫描时套用「保留」；`Usage.swift` 加 `Usage.trash`。
+  - 应用：新建 `Notifier.swift`（系统通知，只在打包版；`--test-notify` 示例通知）；`Store.swift`（提醒检查接进 30 分钟循环和扫描完成；自动清理；卡片决定；只在打包版跑提醒；首次运行不补发旧周报）；`Views.swift`（首页「本周待决定」一行和「提醒设置」入口；本周待决定页一次一件三个按钮；提醒设置页 4 个自绘开关、没通知权限时红字提示）；`DiskSlimApp.swift`（`--test-notify` 放到启动后后台线程，Store 只读）；`Snapshot.swift`（加两页截图）。
+  - 测试：新建 `AlertsTests.swift`（12 项）；并入对抗测试员的 `AlertsAdversarialTests.swift`（93 项，按「按项记」改写了 9 处）。
+  - 文档：`docs/PRD.md`（3.3、4.3 写明卡片、保留、下周再问、自动清理范围）、`AGENTS.md`（结构、`--test-notify`）、`docs/LESSONS.md`（L-08）。
+- 测试：`scripts/test.sh` 原样结果 `✔ Test run with 207 tests in 27 suites passed`；`node --test tests/*.test.mjs` 原样结果「ℹ pass 4 ℹ fail 0」；`node scripts/check-rules.mjs` 输出「通用规则检查通过」。
+- 验证：① 离屏截图（`evidence/2026-11-05-alerts-shots/`、`…-after-review/`）看过本周待决定（浅）、提醒设置（深）、首页（浅）：真实扫描出 8 件待决定、共 12.6 GB；② 首次运行写出 `alerts.json`，周报记成 10/30 已处理（不补发）；③ 打包版 `--test-notify` 第一次 60 秒在等授权被我停掉，第二次 4 条都返回「Notifications are not allowed for this application」、权限「已拒绝」（`evidence/2026-11-05-test-notify.txt`），**用户还没收到过任何通知**；④ 13:16 重新打包并重启，新进程 43365 在运行。新版面板没在屏幕上看过，卡片上的按钮和开关都没点过，自动清理没在真机上跑过（默认关）。
+- 独立审查与对抗测试（L-06）：审查员报 10 条 + 3 条待核实，对抗测试员 93 项里 11 项失败。核实后修了：周五 18:00 前点「下周再问」当天又出现；把东西移进废纸篓第二天误报「废纸篓一天涨了」；调试版运行会用掉真实的「已发」记录和触发自动清理（改为只在打包版）；周报关掉再打开立刻补发；「保留」按路径永久记（改为按项记，涨超 1 GB 再问）；自动清理覆盖可撤销提示、在确认框打开时插队；什么都没清也发「腾出了 0 KB」；下载文件夹没读到时把本周周报记成已处理；`alerts.json`、`decisions.json` 坏了直接覆盖（改为先留底）；缺一个键整份读不出来（L-08）；空命令被当成能清；「超过 10 GB」改为严格大于；`--test-notify` 在主线程等授权；忙时点「确认清理」没反应（改为提示）。
+- 截图：见上面证据目录。
+- 发布与回读：未发布。
+- 与授权不一致之处、遗留问题、范围外发现：① 我说过自动清理「清完可以撤销」，实际做不到：缓存走官方命令、构建产物直接删，都不能撤销，设置页和 PRD 已照实写；② 没修、待用户定：自动清理用的扫描结果最长 1 小时前，worktree 构建产物执行时只复核「24 小时内编译过」，npm / pnpm / uv / pip 没有「正在运行就不清」的判断（手动清理有人把关，无人值守时可能撞上正在跑的 `npm install`），自动清理默认关；③ 没有「取消保留」的入口；④ 通知被拒绝时提醒仍记成已发（不会每 30 分钟重试），提醒设置页会红字提示；⑤ 可用空间 12:31 是 67.6 GB、12:58 降到 58.6 GB，「备份、虚拟机、在用的构建产物」从 59.4 GB 涨到 65.3 GB，多半是 postpane 的 worktree 在编译；⑥ 对抗测试员的 worktree（`.claude/worktrees/agent-abadd0feb190ef9b2`，分支 `worktree-agent-abadd0feb190ef9b2`）被会话锁着，没删，测试文件已并入；⑦ L-03、L-04、L-07、L-08 提议提升为全局 G-xx，等用户批准。
+- 本轮新坑：L-08。
 
 ## 第 4 批：涨幅追踪接进应用和命令行 + 审查修复（2026-11-05，Claude，用户确认分批计划「按计划开工」；已提交到 `feat/growth`、未发布）
 

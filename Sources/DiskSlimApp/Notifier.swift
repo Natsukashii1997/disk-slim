@@ -30,6 +30,14 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    /// 现在能不能发通知：nil 表示不是打包版或还没问过
+    func allowed(_ done: @escaping (Bool?) -> Void) {
+        guard let center else { done(nil); return }
+        center.getNotificationSettings { s in
+            done(s.authorizationStatus == .notDetermined ? nil : s.authorizationStatus == .authorized || s.authorizationStatus == .provisional)
+        }
+    }
+
     /// 应用在前台时也显示横幅
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
