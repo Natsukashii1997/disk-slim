@@ -138,7 +138,7 @@ import Testing
         t.setModified(work.appendingPathComponent("p/.claude/worktrees/wt/target"), daysAgo(3))
         let found = WorktreeScanner(workRoot: work, now: now, runner: healthyRunner(), sizeOf: { _ in 1 }).scan()
         #expect(found.first?.suggested == false, "10 分钟前刚编译过的 target 被建议删除")
-        #expect(found.first?.detail == "24 小时内编译过")
+        #expect(found.first?.detail == "2 小时内编译过")
     }
 
     // MARK: - 下载区边界

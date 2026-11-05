@@ -126,12 +126,21 @@ final class Store: ObservableObject {
 
     /// 应用开着时每 30 分钟看一次：今天（北京时间）还没有记录、或者周报 / 自动清理到点了而扫描结果超过一小时，
     /// 就在后台扫描一次（扫描完成会写记录、查提醒、按需自动清理）；否则直接查提醒
+    /// 第 7 批：每 5 分钟读一次可用空间（很便宜）；比上次扫描时掉了 8 GB 以上就马上扫描，否则每 30 分钟按原来的规则看一次
     func dailyLoop() async {
         guard !readOnly else { return }
+        var tick = 0
         while !Task.isCancelled {
             refreshDisk()
-            if needsScan(now: Date()) { scan() } else { checkAlerts(); autoCleanIfDue() }
-            try? await Task.sleep(nanoseconds: 1_800_000_000_000)
+            let now = Date()
+            if Alerts.shouldRescanForDrop(free: disk?.availableBytes, freeAtScan: report?.disk?.availableBytes,
+                                          scannedAt: report?.scannedAt, now: now) {
+                scan()
+            } else if tick % 6 == 0 {
+                if needsScan(now: now) { scan() } else { checkAlerts(); autoCleanIfDue() }
+            }
+            tick += 1
+            try? await Task.sleep(nanoseconds: 300_000_000_000)
         }
     }
 
@@ -240,7 +249,7 @@ final class Store: ObservableObject {
         guard alertsActive, !busy, confirming == nil, toast?.canUndo != true, let r = report,
               Alerts.shouldAutoClean(now: Date(), free: disk?.availableBytes, state: alertState) else { return }
         var state = alertState
-        state.autoCleanDay = BeijingTime.dayKey(Date())
+        state.autoCleanAt = Date()
         saveAlerts(state)
         let picks = Alerts.autoCleanPicks(r.findings)
         guard !picks.isEmpty else { return }

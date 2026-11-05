@@ -110,11 +110,11 @@ private func writeJSON(_ text: String, name: String, in dir: TempDir) -> URL {
         #expect(alerts.map(\.day) == ["2026-11-06"])
     }
 
-    @Test func 洛杉矶时区下_自动清理按北京日期判断今天跑过没有() {
-        // 北京 11-06 01:00 已经是新的一天，记的是 11-05，应该能跑
+    @Test func 洛杉矶时区下_自动清理按间隔判断() {
+        // 第 7 批起按「离上次至少 2 小时」判断，和时区无关：3 小时前跑过，应该能跑
         let s = state { $0.autoClean = true }
         var st = s
-        st.autoCleanDay = "2026-11-05"
+        st.autoCleanAt = bj("2026-11-05T22:00:00")
         let ok = withZone("America/Los_Angeles") { Alerts.shouldAutoClean(now: bj("2026-11-06T01:00:00"), free: 10 * gb, state: st) }
         #expect(ok)
     }
@@ -291,7 +291,7 @@ private func writeJSON(_ text: String, name: String, in dir: TempDir) -> URL {
 
     @Test func 昨天跑过今天还能跑() {
         var s = on
-        s.autoCleanDay = "2026-11-04"
+        s.autoCleanAt = t.addingTimeInterval(-86_400)
         #expect(Alerts.shouldAutoClean(now: t, free: 10 * gb, state: s))
     }
 
@@ -555,7 +555,7 @@ private func writeJSON(_ text: String, name: String, in dir: TempDir) -> URL {
         let store = AlertStore(url: writeJSON(full, name: "alerts.json", in: d))
         var s = store.load()
         #expect(s.sent["lowSpace"] == "2026-11-05" && !s.settings.lowSpace)
-        s.autoCleanDay = "2026-11-05"
+        s.autoCleanAt = Date(timeIntervalSince1970: 1_793_840_000)
         try store.save(s)
         #expect(store.load() == s)
     }

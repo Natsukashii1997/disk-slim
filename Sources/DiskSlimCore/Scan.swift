@@ -39,8 +39,15 @@ public struct Scan {
         if f.area == .downloads, urls.contains(where: { meta.tags($0).contains(DownloadsRules().keepTag) }) {
             return "扫描后标了「保留」，这次不清"
         }
-        if f.cleanup == .remove, urls.contains(where: { $0.path.hasPrefix(workRoot.path + "/") && WorktreeScanner.recentlyBuilt($0, now: now) }) {
-            return "扫描后又编译过，这次不删"
+        // worktree 构建产物：执行前把「正在用」再判一遍（扫描和清理之间可能过了很久）
+        if f.cleanup == .remove {
+            for target in urls where target.path.hasPrefix(workRoot.path + "/") && target.lastPathComponent == "target" {
+                let wt = target.deletingLastPathComponent()
+                let project = wt.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                let reasons = WorktreeScanner.inUse(wt, target: target, locked: WorktreeScanner.lockedWorktrees(project, runner: runner),
+                                                    openPaths: WorktreeScanner.openPaths(runner), processes: "", now: now)
+                if !reasons.isEmpty { return "扫描后情况变了（\(reasons.joined(separator: "、"))），这次不删" }
+            }
         }
         return nil
     }

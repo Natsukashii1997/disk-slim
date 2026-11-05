@@ -123,8 +123,10 @@ import Testing
         #expect(Alerts.shouldAutoClean(now: now, free: 59 * gb, state: state))
         #expect(!Alerts.shouldAutoClean(now: now, free: 61 * gb, state: state))
         #expect(!Alerts.shouldAutoClean(now: now, free: nil, state: state))
-        state.autoCleanDay = "2026-11-05"
+        state.autoCleanAt = now.addingTimeInterval(-3600) // 1 小时前跑过：不到 2 小时不再跑
         #expect(!Alerts.shouldAutoClean(now: now, free: 10 * gb, state: state))
+        state.autoCleanAt = now.addingTimeInterval(-2 * 3600)
+        #expect(Alerts.shouldAutoClean(now: now, free: 10 * gb, state: state))
 
         let picks = Alerts.autoCleanPicks([
             finding(.downloads, "安装包", "/d/a.dmg", gb: 1),
@@ -188,6 +190,14 @@ import Testing
         #expect(!blockedByPrivacy(t.url))
         // 沙盒里没有 Downloads 和 .Trash：扫描结果不该要求授权
         #expect(Scan(home: t.url, workRoot: t.url).run().needsAccess == [])
+    }
+
+    @Test func 掉得快就马上扫描_离上次扫描不到30分钟不扫() {
+        let t0 = bj("2026-11-05T12:00:00")
+        #expect(Alerts.shouldRescanForDrop(free: 50 * gb, freeAtScan: 58 * gb, scannedAt: t0, now: t0.addingTimeInterval(1800)))
+        #expect(!Alerts.shouldRescanForDrop(free: 51 * gb, freeAtScan: 58 * gb, scannedAt: t0, now: t0.addingTimeInterval(1800)))
+        #expect(!Alerts.shouldRescanForDrop(free: 40 * gb, freeAtScan: 58 * gb, scannedAt: t0, now: t0.addingTimeInterval(1700)))
+        #expect(!Alerts.shouldRescanForDrop(free: 40 * gb, freeAtScan: nil, scannedAt: nil, now: t0))
     }
 }
 

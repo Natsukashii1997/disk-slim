@@ -141,8 +141,10 @@ public struct Cleaner {
             return Batch(id: UUID().uuidString, at: now, items: items, undone: false, restored: [],
                          note: "操作记录 \(log.url.lastPathComponent) 在但读不了（权限或读错误），这次没有清理任何东西")
         }
+        clearStaging()
         let processes = runner.run(["ps", "-axo", "command"], cwd: nil).output
-        let items = findings.map { clean($0, processes: processes) }
+        let openPaths = findings.contains { $0.cleanup == .remove } ? WorktreeScanner.openPaths(runner) : []
+        let items = findings.map { clean($0, processes: processes, openPaths: openPaths) }
         var batch = Batch(id: UUID().uuidString, at: now, items: items, undone: false, restored: [], note: nil)
         var notes: [String] = []
         if let backup { notes.append("原来的操作记录读不出来，已另存为 \(backup.lastPathComponent)") }
@@ -160,7 +162,17 @@ public struct Cleaner {
         return batch
     }
 
-    private func clean(_ f: Finding, processes: String) -> ItemResult {
+    /// 直接删除前先改名挪到这里（同一个卷，改名是瞬间的），再慢慢删；上次没删完的下次清理时补删
+    var staging: URL { log.url.deletingLastPathComponent().appendingPathComponent("deleting") }
+
+    func clearStaging() {
+        let fm = FileManager.default
+        for name in (try? fm.contentsOfDirectory(atPath: staging.path)) ?? [] {
+            try? fm.removeItem(at: staging.appendingPathComponent(name))
+        }
+    }
+
+    private func clean(_ f: Finding, processes: String, openPaths: [String]) -> ItemResult {
         func result(_ outcome: Outcome, _ message: String, trashedBytes: Int64 = 0, freedBytes: Int64 = 0,
                     trashed: [String: String] = [:]) -> ItemResult {
             ItemResult(title: f.title, paths: f.paths, cleanup: f.cleanup, outcome: outcome, message: message,
@@ -199,13 +211,22 @@ public struct Cleaner {
             let busy = existing.contains { u in
                 let paths = [u.path, u.resolvingSymlinksInPath().path]
                 return lines.contains { line in paths.contains { line.contains($0) } }
+                    || openPaths.contains { p in paths.contains { p == $0 || p.hasPrefix($0 + "/") } }
             }
             if busy { return result(.skipped, "有程序正在使用，这次先不删") }
             var bytes: Int64 = 0
             for u in existing {
                 let size = sizeOf(u)
+                // 拿住 cargo 的锁再挪走：这期间开始的编译会等一下，不会往里写；拿不到就是正在编译
+                guard let locks = WorktreeScanner.holdCargoLocks(u) else {
+                    return result(.skipped, "正在编译，这次先不删", freedBytes: bytes)
+                }
+                let staged = staging.appendingPathComponent(UUID().uuidString)
+                let moved = (try? fm.createDirectory(at: staging, withIntermediateDirectories: true)) != nil
+                    && (try? fm.moveItem(at: u, to: staged)) != nil
+                WorktreeScanner.release(locks)
                 do {
-                    try fm.removeItem(at: u)
+                    try fm.removeItem(at: moved ? staged : u)
                     bytes += size
                 } catch {
                     return result(.failed, "删除失败：\(u.lastPathComponent)", freedBytes: bytes)

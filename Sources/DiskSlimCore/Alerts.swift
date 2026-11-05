@@ -29,7 +29,8 @@ public struct AlertState: Codable, Equatable {
     /// 提醒的键 → 发过的北京日期（周报记的是那个周五的日期）
     public var sent: [String: String] = [:]
     /// 自动清理上次执行的北京日期
-    public var autoCleanDay: String?
+    /// 自动清理上次执行的时间（第 7 批起：两次之间至少隔 `autoCleanGap`，不再是每天一次）
+    public var autoCleanAt: Date?
 
     public init() {}
 
@@ -38,7 +39,7 @@ public struct AlertState: Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         settings = (try? c.decodeIfPresent(AlertSettings.self, forKey: .settings)) ?? nil ?? AlertSettings()
         sent = (try? c.decodeIfPresent([String: String].self, forKey: .sent)) ?? nil ?? [:]
-        autoCleanDay = (try? c.decodeIfPresent(String.self, forKey: .autoCleanDay)) ?? nil
+        autoCleanAt = (try? c.decodeIfPresent(Date.self, forKey: .autoCleanAt)) ?? nil
     }
 }
 
@@ -86,6 +87,15 @@ public enum Alerts {
     public static let lowSpaceBytes: Int64 = 30 * 1_073_741_824
     public static let growthBytes: Int64 = 10 * 1_073_741_824
     public static let autoCleanBelow: Int64 = 60 * 1_073_741_824
+    /// 每 5 分钟读一次可用空间；比上次扫描时掉了这么多、且离上次扫描至少 30 分钟，就马上扫描（扫描完会按需自动清理）
+    public static let dropRescanBytes: Int64 = 8 * 1_073_741_824
+    public static let dropRescanGap: TimeInterval = 30 * 60
+
+    /// 掉得快就马上扫描，不等每天的检查
+    public static func shouldRescanForDrop(free: Int64?, freeAtScan: Int64?, scannedAt: Date?, now: Date) -> Bool {
+        guard let free, let freeAtScan, let scannedAt else { return false }
+        return freeAtScan - free >= dropRescanBytes && now.timeIntervalSince(scannedAt) >= dropRescanGap
+    }
 
     /// 现在该发哪些提醒。`free` 为 nil（读不到磁盘）时不判断空间；`cards` 为 nil（还没扫描）时不发周报。
     public static func due(now: Date, free: Int64?, samples: [UsageSample], cards: [WeeklyCard]?, state: AlertState) -> [Alert] {
@@ -123,10 +133,14 @@ public enum Alerts {
         return list
     }
 
-    /// 自动清理现在该不该跑：开关打开、可用低于 60 GB、今天还没跑过
+    /// 自动清理两次之间至少隔多久：postpane 这类项目一天能涨 50 GB，每天一次压不住
+    public static let autoCleanGap: TimeInterval = 2 * 3600
+
+    /// 自动清理现在该不该跑：开关打开、可用低于 60 GB、离上次至少 2 小时
     public static func shouldAutoClean(now: Date, free: Int64?, state: AlertState) -> Bool {
         guard state.settings.autoClean, let free, free < autoCleanBelow else { return false }
-        return state.autoCleanDay != BeijingTime.dayKey(now)
+        guard let last = state.autoCleanAt else { return true }
+        return now.timeIntervalSince(last) >= autoCleanGap || last > now
     }
 
     /// 自动清理只动「看不见的」里安全、默认勾选的项（缓存、可再生的构建产物）；下载文件夹里的用户文件一律不动
