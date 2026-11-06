@@ -1,6 +1,26 @@
 # 当前状态
 
-更新：2026-11-06。第 0–8 批都已完成（第 8 批桌面悬浮球真屏实测通过）。第 9 批「挂进驿窗侧栏」的磁盘瘦身这一半已提交到 `feat/postpane-pendant`（接在 `feat/floating-ball` 后面），并已重新装机。分支 main → feat/scan-engine → … → feat/floating-ball → feat/postpane-pendant，都没合并、没推送，GitHub 远端未建。唯一下一步：驿窗那边做挂件（第 2 批，在 postpane 仓库开 worktree 和 PR），做完两边一起真屏验收（第 3 批）。第 6 批的「试用一周」、`disk-space-guard` 要不要停、postpane 的 Cargo 配置，这几件照旧等用户定。
+更新：2026-11-06。第 0–8 批都已完成（第 8 批桌面悬浮球真屏实测通过）。第 9 批「挂进驿窗侧栏」三批都已完成：磁盘瘦身这一半在 `feat/postpane-pendant`（接在 `feat/floating-ball` 后面），驿窗挂件已合并（postpane PR #159），两边真屏验收通过，悬浮球已改为默认关并重新装机。分支 main → feat/scan-engine → … → feat/floating-ball → feat/postpane-pendant，都没合并、没推送，GitHub 远端未建。唯一下一步：等用户定这条分支链怎么合并、要不要建远端。第 6 批的「试用一周」、`disk-space-guard` 要不要停、postpane 的 Cargo 配置，这几件照旧等用户定。
+
+## 第 9 批之一收尾：退出前收起面板、两边真屏验收、悬浮球默认关（2026-11-06，Claude，用户说「按计划开工」「重装时替我关掉」「现在就测」；已提交到 `feat/postpane-pendant`、已重新装机、未发布）
+
+- 时间：开工 `2026-11-06 14:43`（按本会话记录）；本节写于 `2026-11-06 17:10`。来由：第 9 批第 2、3 批，驿窗挂件做完后两边一起真屏验收，再把桌面悬浮球改为默认关。
+- 改了哪些文件：
+  - `Sources/DiskSlimApp/DiskSlimApp.swift`（`36f0aee`）：`applicationShouldTerminate` 放行退出前先 `FloatingBall.shared.closePanel()`，状态文件写回 `panelOpen:false`，免得面板开着就退出时驿窗挂件的光圈亮到 1 小时过期。
+  - `Sources/DiskSlimApp/Store.swift`、`docs/PRD.md` 3.4（`249c663`）：`floatingBallOn` 默认值改为 false；已经拨过开关的电脑按拨过的算。
+- 测试：两次改动后各跑一次 `scripts/test.sh`，原样结果都是 `✔ Test run with 244 tests in 34 suites passed`；`node --test tests/*.test.mjs` 「ℹ pass 4」「ℹ fail 0」。
+- 验证：驿窗装上合并后的挂件，用 CGEvent 发真实点击（L-11），面板窗口用 `CGWindowListCopyWindowInfo` 回读、前台用 `lsappinfo front` 回读：
+  - 点挂件，面板开在挂件左侧；再点挂件、点菜单栏空白处、按 Esc，三种都收起，`panelOpen` 跟着变成 true / false，前台应用始终不变。
+  - 先点挂件收起、再点挂件，没有误判成同一下，防抖在真实点击下也对。
+  - 面板开着时 `kill -TERM` 退出：`panelOpen` 写回 false；重开后只有一个进程。
+  - 悬浮球关着时挂件照样叫开面板。
+  - 驿窗那边的截图、CPU 和挂件动效核对，见 postpane CURRENT.md「磁盘瘦身挂件串挂在随手记猫球下」一节。
+- 截图：`~/Library/Application Support/postpane/evidence/2026-11-06-disk-pendant/screens/`（如 `02-open.png` 面板开在挂件旁、`35-halo-sheet.png`）。
+- 发布与回读：未发布。`scripts/install.sh` 两次退出码都是 0（`evidence/2026-11-06-quit-closes-panel-install.log`、`2026-11-06-ball-default-off-install.log`）。本机原先存过 `floatingBallOn = 1`，按用户要求退出后 `defaults write local.nat.disk-slim floatingBallOn -bool false` 再启动，回读为 0，桌面没有球窗口；`pgrep -fl DiskSlimApp` 只有一个进程。测 CPU 时临时退出磁盘瘦身、把 `status.json` 改成「充足」，测完重开，状态文件已由应用重写回真实读数。
+- 与授权不一致之处、遗留问题、范围外发现：
+  - 每次重装签名都会变，「完全磁盘访问权限」要用户在系统设置里删掉再重新加，面板上已有提示。
+  - 分支链照旧不合并、不推送，等用户定。
+- 本轮新坑：无（驿窗那边记了 postpane L-11：真屏测试中途锁屏或换了显示器，坐标点到别的应用）。
 
 ## 第 9 批之一：给驿窗挂件用的状态文件和链接（2026-11-06，Claude，用户选定挂法「串挂同款」、动效一版、空间提示「丙 号码牌」后说「开工第 1 批」；已提交到 `feat/postpane-pendant`、已重新装机、未发布）
 
