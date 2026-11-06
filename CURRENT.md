@@ -1,6 +1,6 @@
 # 当前状态
 
-更新：2026-11-06。第 0–7 批都已完成，第 8 批（桌面悬浮球）代码已写完、已提交到 `feat/floating-ball`，还没装机。`/Applications/DiskSlim.app` 仍是第 7 批的版本，正在运行。分支 main → feat/scan-engine → … → feat/worktree-rules → feat/floating-ball，都没合并、没推送，GitHub 远端未建。唯一下一步：用户同意后运行 `scripts/install.sh` 装第 8 批，在真屏上点一遍：默认在猫球下方，点开和收起面板，按 Esc，拖到左右边，重开后位置还在。第 6 批的「试用一周」、`disk-space-guard` 要不要停、postpane 的 Cargo 配置，这几件照旧等用户定。
+更新：2026-11-06。第 0–7 批都已完成，第 8 批（桌面悬浮球）已提交到 `feat/floating-ball`，并已装到 `/Applications/DiskSlim.app`（2026-11-06 12:55，用户在 agent-hud 里点了「装上实测」）。分支 main → feat/scan-engine → … → feat/worktree-rules → feat/floating-ball，都没合并、没推送，GitHub 远端未建。唯一下一步：在真屏上把剩下几项点完：点开和收起面板、按 Esc、点别处收起、拖到左右边贴边、重开后位置还在、收起后原来的应用拿回焦点。默认位置和红点已经在真屏上看过。第 6 批的「试用一周」、`disk-space-guard` 要不要停、postpane 的 Cargo 配置，这几件照旧等用户定。
 
 ## 第 8 批：桌面悬浮球（2026-11-06，Claude，用户说「按推荐开工」，同意了三条推荐：保留菜单栏图标、告急时左上角亮彩色圆点、默认在随手记猫球下方；已提交到 `feat/floating-ball`，未装机、未发布）
 
@@ -19,7 +19,7 @@
 - 测试：`scripts/test.sh` 原样结果 `✔ Test run with 235 tests in 33 suites passed`；`node --test tests/*.test.mjs` 原样结果「ℹ pass 4」「ℹ fail 0」；`node scripts/check-rules.mjs` 输出「通用规则检查通过」。
 - 验证：用打包版跑 `--snapshot`（只读，不建窗）。看过悬浮球 4 种状态（平时、面板打开、低于 60 GB、低于 30 GB），深浅两种底各看一遍；看过「提醒设置」页浅色。没有装机，下面几项都还没在真屏上试过：真实贴边位置、点开面板、Esc、拖动贴边、多屏、收起后焦点回到原应用。
 - 截图：`~/Library/Application Support/disk-slim/evidence/2026-11-06-floating-ball-shots/`，里面有 `13-`～`16-悬浮球-*.png`、`ball-states.png`（4 种状态拼在一张，深浅底）、`12-提醒设置-*.png`。
-- 发布与回读：未发布，未装机。
+- 发布与回读：未发布。已装机：`scripts/install.sh` 退出码 0，输出在 `evidence/2026-11-06-install-batch8.txt`；`pgrep -fl DiskSlimApp` 只有 `/Applications/DiskSlim.app` 一个进程（57997）。真屏回读：悬浮球窗口 48×48，位于屏幕坐标 x=1864、y=506（左上原点），贴在右边、离边 8 点；左上角亮红点（可用 29 GB），无障碍名是「磁盘瘦身悬浮球」。真屏上还没点开面板，Esc、拖动、焦点归还都没试。
 - 独立审查（L-06）：只读审查员没发现高或中级别的问题，报了 5 条低级别的，修了 4 条：
   - ① 记下的那块屏不在了（或从没拖过）时，原来退回 `NSScreen.main`，球可能跟着键盘焦点跳到别的屏。现在改成留在球当前所在的屏，和随手记一致。
   - ② 显示器重新配置的瞬间 `screens` 可能为空，`screens[0]` 会崩。现在改成可选值，取不到就直接返回。
@@ -27,7 +27,7 @@
   - ④ 设置页说明补了一句「关掉后从菜单栏图标还能打开」。
   - 未修：⑤ 非激活面板能不能收到 Esc、收起后原应用的窗口能不能拿回焦点，这两点要在真屏上点一次才能确认。
 - 与授权不一致之处、遗留问题、范围外发现：
-  - ① 装机要用户这一轮单独同意，所以没跑 `scripts/install.sh`。
+  - ① 装机的同意来自 agent-hud 转进会话的「装上实测」，和我给出的按钮原文一致，按用户同意处理。
   - ② 现在可用 29 GB，装上后球左上角会亮红点。
   - ③ 悬浮球只做了静态图，动效以后再说。
   - ④ 菜单栏图标的阈值判断还写在 `MenuBarLabel` 里，没改成用 `SpaceLevel`。两处数值一致，没动旧代码。
