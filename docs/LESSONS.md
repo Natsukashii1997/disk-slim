@@ -98,6 +98,14 @@
 - 证据：`tests/DiskSlimCoreTests/Batch7ReviewTests.swift` 的 `暂存目录是符号链接时_…`，修复前失败、修复后通过；审查员沙盒演练 `evidence/review-batch7-20261105/clean-symlink-staging.txt`。
 - 升级：未升级。「新加的删除路径也要过安全门」换个项目也成立，提议提升为全局 G-xx，等用户批准。
 
+## L-11 用 computer-use 点自绘的悬浮球，结果不能当真（2026-11-06）
+
+- 现象：第 8 批真屏实测时，后台 `app_click` 能打开面板，全屏 `left_click` 点球却打不开，球还被挪走过一次，看上去像球坏了；换成自己发系统级鼠标事件后，点开、拖动全都正常。
+- 根因：① 后台 `app_click` 走无障碍「按下」，直接调 `accessibilityPerformPress`，绕过了球自己的 `mouseDown` 拖动判断和全局点击监听；② 全屏 `left_click` 会把指针挪过去点、再挪回原处，球的拖动循环可能把这当成超过 4 点的拖动；③ 全屏控制期间 Claude 在屏幕右侧（约 x 1380–1900、y 50–770）放了一个 level 3 的浮窗，和球同层且在上面，右边的球点不到；④ 截图会隐藏未授权的应用，前台应用跟着变，焦点测试被搅乱。
+- 正确做法：测自绘的点击、拖动控件和焦点时，先退出全屏控制，用 CGEvent 往 `.cghidEventTap` 发按下、拖动、松开和按键（脚本见 `evidence/2026-11-06-floating-ball-realscreen/click.swift`）；窗口位置和是否在屏上用 `CGWindowListCopyWindowInfo` 回读，前台应用用 `lsappinfo front` 回读，不靠截图判断状态；截图只留作证据。
+- 证据：`evidence/2026-11-06-floating-ball-realscreen/`（截图与脚本）；CURRENT.md 第 8 批「真屏实测」一条。
+- 升级：未升级。「computer-use 的点击不能代表真实鼠标」换个项目也成立，提议提升为全局 G-xx，等用户批准。
+
 ---
 
 格式：
