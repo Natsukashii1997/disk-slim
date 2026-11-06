@@ -43,6 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated { Store.main?.toast = Toast(text: "正在清理，清完再退出。", canUndo: false) }
             return .terminateCancel
         }
+        // 面板开着就退出时先收起，状态文件写回 panelOpen false，驿窗挂件的光圈才会熄
+        MainActor.assumeIsolated { FloatingBall.shared.closePanel() }
         return .terminateNow
     }
 
