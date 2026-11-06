@@ -1,6 +1,44 @@
 # 当前状态
 
-更新：2026-11-06。第 0–7 批都已完成，第 8 批（桌面悬浮球）已提交到 `feat/floating-ball`，并已装到 `/Applications/DiskSlim.app`（2026-11-06 12:55，用户在 agent-hud 里点了「装上实测」）。分支 main → feat/scan-engine → … → feat/worktree-rules → feat/floating-ball，都没合并、没推送，GitHub 远端未建。2026-11-06 13:34 真屏实测全部通过，没改代码。唯一下一步：等用户决定第 8 批分支链怎么合并。第 6 批的「试用一周」、`disk-space-guard` 要不要停、postpane 的 Cargo 配置，这几件照旧等用户定。
+更新：2026-11-06。第 0–8 批都已完成（第 8 批桌面悬浮球真屏实测通过）。第 9 批「挂进驿窗侧栏」的磁盘瘦身这一半已提交到 `feat/postpane-pendant`（接在 `feat/floating-ball` 后面），并已重新装机。分支 main → feat/scan-engine → … → feat/floating-ball → feat/postpane-pendant，都没合并、没推送，GitHub 远端未建。唯一下一步：驿窗那边做挂件（第 2 批，在 postpane 仓库开 worktree 和 PR），做完两边一起真屏验收（第 3 批）。第 6 批的「试用一周」、`disk-space-guard` 要不要停、postpane 的 Cargo 配置，这几件照旧等用户定。
+
+## 第 9 批之一：给驿窗挂件用的状态文件和链接（2026-11-06，Claude，用户选定挂法「串挂同款」、动效一版、空间提示「丙 号码牌」后说「开工第 1 批」；已提交到 `feat/postpane-pendant`、已重新装机、未发布）
+
+- 时间：开工 `2026-11-06 14:07`（`date '+%F %H:%M'` 记录）。来由：用户要把磁盘瘦身的扫帚浮游兽挂进驿窗侧栏，挂在随手记猫球下面；三份设计预览（挂法、动效、空间提示）都在同一会话里定稿，见 `docs/PRD.md` 3.5。
+- 改了哪些文件：
+  - 新增 `Sources/DiskSlimCore/Pendant.swift`：`StatusFile`（`status.json` 的字段、ISO 8601 时间、原子写）、`PanelLink`（解析 `diskslim://panel/toggle?x=&y=&w=&h=`，拒绝缺参数、非有限数、宽高不在 0–400 点、坐标绝对值超过 10 万；左上原点换 AppKit 左下原点）、`PanelToggle`（点挂件先被当成点外面收起的防抖：3 秒内、收起那下落在挂件上（容差 6 点）就不再打开；时间用开机秒数）；`SpaceLevel.name`。
+  - `Sources/DiskSlimApp/Store.swift`：`disk` 每次变化都重写状态文件（只读模式不写）。
+  - `Sources/DiskSlimApp/FloatingBall.swift`：`toggle(from:)` 按挂件位置开或收面板；面板可以开在挂件旁（`anchor`），不要求桌面球存在；收起时记下点击位置；冷启动时的链接排到订阅初值之后再处理；关掉悬浮球不再收掉挂件叫开的面板；屏幕变化的监听挪到 `start()`，挂件叫开的面板也跟着重摆。
+  - `Sources/DiskSlimApp/DiskSlimApp.swift`：`application(_:open:)` 收链接，换坐标后交给悬浮球。
+  - `scripts/bundle.sh`：Info.plist 注册 `diskslim` 协议。
+  - 测试：新增 `tests/DiskSlimCoreTests/PendantTests.swift`，9 项。
+  - 文档：`docs/PRD.md` 加 3.5 节和第 9 批验收；`AGENTS.md` 结构说明加 Pendant。
+- 测试：`scripts/test.sh` 原样结果 `✔ Test run with 244 tests in 34 suites passed`；`node --test tests/*.test.mjs` 原样结果「ℹ pass 4」「ℹ fail 0」；`node scripts/check-rules.mjs` 输出「通用规则检查通过」。
+- 验证：装机后用 `open -g` 发链接（输出在 `evidence/2026-11-06-batch9-link.txt`），窗口位置用 `CGWindowListCopyWindowInfo` 回读：
+  - 热启动时，发一次面板开在挂件左边（挂件 x=1413，面板 x=1037=1413−8−368），再发一次收起；宽为 0 的坏链接没反应。
+  - 冷启动时，悬浮球开着、关着各试一次，面板都开出来并一直开着（关着时没有球窗口）；再发一次收起。
+  - 前台应用始终不变；`status.json` 回读为 `{"availableBytes":32463908864,"level":"low",…,"updatedAt":"2026-11-06T06:10:58Z","version":1}`。
+  - 测完把 `floatingBallOn` 恢复为开，只有一个进程（44765）。
+  - 当时屏幕是笔记本屏 1470×956，外接屏已断开，测试坐标按这块屏取。
+  - 没测：真去点驿窗挂件触发的「先收后开」防抖。驿窗挂件还没做，留到第 3 批真屏验收，按 L-11 用 CGEvent 发真实点击。
+- 截图：无。设计预览见同会话发布的三个页面（挂法、动效、空间提示）。
+- 发布与回读：未发布。已重新装机：`scripts/install.sh` 两次退出码都是 0，输出在 `evidence/2026-11-06-install-batch9.txt`、`-2.txt`。
+- 独立审查（L-06）：只读审查员报了高 1、中 2、低 6，处理如下：
+  - 已修：
+    - H1：悬浮球关着时冷启动，面板刚开就被「球关着」收掉；在挂件面板里关球开关，面板也跟着消失。
+    - M1：原先固定 0.8 秒的防抖两头都会误判，改为按收起时的点击位置判断，时间改用开机秒数。
+    - M2：接口约定写进 PRD 3.5。
+    - L1：屏幕变化监听。
+    - L5：墙上时钟。
+    - L6：补了边界、副屏在上方、时区三项测试。
+  - 未改：
+    - L2：屏幕列表为空的瞬间会丢一次链接，可以接受。
+    - L3：外来链接只能开关面板、按需重扫，不能触发清理。
+    - L4：盘满时写状态文件失败；状态文件是原子换文件，驿窗那边要监听目录或者轮询，不能按 inode 监听，已记给第 2 批。
+- 与授权不一致之处、遗留问题、范围外发现：
+  - ① 驿窗那边要按「点、主屏左上原点」发坐标（Tauri 默认给物理像素，要换算），第 2 批照 PRD 3.5 做。
+  - ② 悬浮球改为默认关，等第 3 批验收通过后再做。
+- 本轮新坑：无。
 
 ## 第 8 批：桌面悬浮球（2026-11-06，Claude，用户说「按推荐开工」，同意了三条推荐：保留菜单栏图标、告急时左上角亮彩色圆点、默认在随手记猫球下方；已提交到 `feat/floating-ball`，未装机、未发布）
 

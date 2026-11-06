@@ -46,6 +46,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return .terminateNow
     }
 
+    /// 第 9 批：驿窗挂件被点时发来 diskslim://panel/toggle?x=…（挂件的位置，主屏左上原点）。
+    /// 应用没开着时 LaunchServices 先启动它再转交，悬浮球还没启动就先记下
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let primary = NSScreen.screens.first?.frame.height else { return }
+        for url in urls {
+            guard let anchor = PanelLink.anchor(from: url) else { continue }
+            MainActor.assumeIsolated {
+                FloatingBall.shared.toggle(from: PanelLink.appKitRect(anchor, primaryHeight: primary))
+            }
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 安装脚本用 SIGTERM 请它退出：走正常退出流程（正在清理时会拒绝），不被直接杀掉
         signal(SIGTERM, SIG_IGN)

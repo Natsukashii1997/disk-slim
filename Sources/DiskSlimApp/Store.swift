@@ -30,7 +30,8 @@ struct Toast: Identifiable {
 @MainActor
 final class Store: ObservableObject {
     @Published var report: ScanReport?
-    @Published var disk: DiskStatus?
+    /// 每次读到可用空间都重写一份状态文件，给驿窗侧栏的挂件号码牌用（第 9 批）
+    @Published var disk: DiskStatus? { didSet { writeStatus() } }
     @Published var scanning = false
     @Published var working = false
     @Published var selected: Set<String> = []
@@ -95,6 +96,11 @@ final class Store: ObservableObject {
     // MARK: 扫描
 
     func refreshDisk() { disk = diskStatus(of: home) }
+
+    private func writeStatus() {
+        guard !readOnly, let disk else { return }
+        try? StatusFile(disk: disk, now: Date()).write(to: StatusFile.url(home: home))
+    }
 
     /// 打开面板时调用：没扫过或超过 10 分钟就重扫
     func scanIfStale() {

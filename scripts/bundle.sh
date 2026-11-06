@@ -27,6 +27,14 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
+  <!-- 第 9 批：驿窗侧栏挂件用 diskslim://panel/toggle?x=…&y=…&w=…&h=… 叫开面板 -->
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key><string>local.nat.disk-slim.panel</string>
+      <key>CFBundleURLSchemes</key><array><string>diskslim</string></array>
+    </dict>
+  </array>
   <key>NSHumanReadableCopyright</key><string>常浩自用</string>
 </dict>
 </plist>
