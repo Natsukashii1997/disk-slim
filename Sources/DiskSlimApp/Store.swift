@@ -97,9 +97,14 @@ final class Store: ObservableObject {
 
     func refreshDisk() { disk = diskStatus(of: home) }
 
+    /// 面板（悬浮球或驿窗挂件叫开的）开着没有，写进状态文件给驿窗挂件的光圈用
+    var panelOpen = false {
+        didSet { if panelOpen != oldValue { writeStatus() } }
+    }
+
     private func writeStatus() {
         guard !readOnly, let disk else { return }
-        try? StatusFile(disk: disk, now: Date()).write(to: StatusFile.url(home: home))
+        try? StatusFile(disk: disk, now: Date(), panelOpen: panelOpen).write(to: StatusFile.url(home: home))
     }
 
     /// 打开面板时调用：没扫过或超过 10 分钟就重扫

@@ -17,19 +17,22 @@ extension SpaceLevel {
 }
 
 /// `~/Library/Application Support/disk-slim/status.json`：可用空间、档位、写入时间。
-/// 应用每次读可用空间（打开面板、每 5 分钟、扫描完）都重写一次；驿窗看到超过 1 小时没更新就当作不知道。
+/// 应用每次读可用空间（打开面板、每 5 分钟、扫描完）和面板开、收时都重写一次；驿窗看到超过 1 小时没更新就当作不知道。
 public struct StatusFile: Codable, Equatable, Sendable {
     public var version = 1
     public var availableBytes: Int64
     public var totalBytes: Int64
     public var level: String
     public var updatedAt: Date
+    /// 面板开着没有：驿窗挂件的冰蓝光圈跟着它亮灭（按 Esc、点别处收起时驿窗自己不知道）
+    public var panelOpen: Bool
 
-    public init(disk: DiskStatus, now: Date) {
+    public init(disk: DiskStatus, now: Date, panelOpen: Bool = false) {
         availableBytes = disk.availableBytes
         totalBytes = disk.totalBytes
         level = SpaceLevel(freeBytes: disk.availableBytes).name
         updatedAt = now
+        self.panelOpen = panelOpen
     }
 
     public static func url(home: URL) -> URL {

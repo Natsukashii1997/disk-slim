@@ -154,6 +154,7 @@ final class FloatingBall: NSObject {
         // 球外圈的青光只在面板是从球上点开时亮
         ballView?.expanded = anchor == nil
         installMonitors()
+        store.panelOpen = true
     }
 
     func closePanel(byOutsideClick: Bool = false) {
@@ -161,6 +162,7 @@ final class FloatingBall: NSObject {
         panel?.orderOut(nil)
         ballView?.expanded = false
         removeMonitors()
+        store?.panelOpen = false
         if byOutsideClick {
             lastOutside = .init(point: NSEvent.mouseLocation, uptime: ProcessInfo.processInfo.systemUptime)
         }

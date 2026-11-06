@@ -28,6 +28,12 @@ import Testing
         #expect(text.contains("Z\""))  // 带时区（UTC）
         #expect(text.contains("\"level\":\"low\""))
         #expect(text.contains("\"version\":1"))
+        #expect(text.contains("\"panelOpen\":false"))
+        // 面板开着
+        var open = s
+        open.panelOpen = true
+        try open.write(to: url)
+        #expect(StatusFile.read(from: url)?.panelOpen == true)
     }
 
     @Test func 坏的状态文件读出来是空() throws {
