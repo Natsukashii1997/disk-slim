@@ -651,6 +651,10 @@ struct AlertsPage: View {
                 toggle(\.weekly, s.weekly, "每周五 18:00 发周报", "有待决定的事才发；那时没开着应用，之后打开会补发")
                 toggle(\.autoClean, s.autoClean, "自动清理缓存和构建产物",
                        "默认关。打开后只在可用低于 60 GB 时、每天最多一次，只清「缓存与构建产物」里默认勾选的项，下载文件夹不动。运行清理命令和直接删除的不能撤销。")
+                switchRow(store.floatingBallOn, "显示桌面悬浮球",
+                          "贴在屏幕边上，点一下打开这个面板；拖到左边或右边会自动贴边。可用低于 60 GB 时左上角亮橙点，低于 30 GB 亮红点。关掉后从菜单栏图标还能打开") {
+                    store.floatingBallOn.toggle()
+                }
                 switchRow(store.loginItemOn, "开机自动打开",
                           store.loginItemError ?? (store.installedInApplications ? "登录后自动出现在菜单栏" : "装进「应用程序」后才能打开（运行 scripts/install.sh）"),
                           enabled: store.installedInApplications) { store.setLoginItem(!store.loginItemOn) }

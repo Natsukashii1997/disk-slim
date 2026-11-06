@@ -52,6 +52,31 @@ enum Snapshot {
                 print(file.path)
             }
         }
+        ball(to: dir)
+    }
+
+    /// 第 8 批：桌面悬浮球各状态（2 倍图）。要用打包版跑才有图标，调试版画的是缺图时的圆
+    static func ball(to dir: URL) {
+        let gb: Int64 = 1_073_741_824
+        let states: [(String, Int64?, Bool)] = [
+            ("13-悬浮球-平时", 120 * gb, false),
+            ("14-悬浮球-面板打开", 120 * gb, true),
+            ("15-悬浮球-低于60GB", 45 * gb, false),
+            ("16-悬浮球-低于30GB", 20 * gb, false),
+        ]
+        for (name, free, expanded) in states {
+            let v = BallView(frame: NSRect(x: 0, y: 0, width: FloatGeometry.size, height: FloatGeometry.size))
+            v.update(free: free)
+            v.expanded = expanded
+            guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 96, pixelsHigh: 96, bitsPerSample: 8,
+                                             samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                             colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { continue }
+            rep.size = v.bounds.size
+            v.cacheDisplay(in: v.bounds, to: rep)
+            let file = dir.appendingPathComponent("\(name).png")
+            try? rep.representation(using: .png, properties: [:])?.write(to: file)
+            print(file.path)
+        }
     }
 
     /// 示例记录：以这次真实扫描为今天，往前编 6 天（可用空间逐天变少，postpane 构建产物和「其他」在涨）

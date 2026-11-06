@@ -10,6 +10,8 @@ APP=dist/DiskSlim.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/DiskSlimApp "$APP/Contents/MacOS/DiskSlimApp"
+# 桌面悬浮球的图标（定稿图见 design/fuyou-icon/）
+cp assets/floating-ball.png "$APP/Contents/Resources/ball.png"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>

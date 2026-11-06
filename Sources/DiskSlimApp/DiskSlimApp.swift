@@ -24,7 +24,11 @@ struct DiskSlimApp: App {
                 .onAppear { store.page = .home; store.confirming = nil; store.scanIfStale() }
         } label: {
             MenuBarLabel(disk: store.disk)
-                .task { await store.dailyLoop() }
+                .task {
+                    // 桌面悬浮球（第 8 批）：示例通知自测时不出现
+                    if !isTestNotify { FloatingBall.shared.start(store: store) }
+                    await store.dailyLoop()
+                }
         }
         .menuBarExtraStyle(.window)
     }

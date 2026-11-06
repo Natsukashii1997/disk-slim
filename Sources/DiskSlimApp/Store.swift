@@ -48,6 +48,10 @@ final class Store: ObservableObject {
     @Published var notificationsAllowed: Bool?
     /// 操作记录里还有能放回的：首页常驻「撤销上一次」（不只清完后那 10 秒的提示）
     @Published var canUndo = false
+    /// 第 8 批：桌面悬浮球开关，记在 UserDefaults，默认开
+    @Published var floatingBallOn = UserDefaults.standard.object(forKey: "floatingBallOn") as? Bool ?? true {
+        didSet { if !readOnly { UserDefaults.standard.set(floatingBallOn, forKey: "floatingBallOn") } }
+    }
     /// 已经交给系统、还没回音的提醒：防止回音前又发一次
     private var pendingAlerts: Set<String> = []
 
