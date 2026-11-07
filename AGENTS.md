@@ -26,7 +26,23 @@ node --test tests/*.test.mjs     # 交接格式 + 通用规则（含自测）
 node scripts/check-rules.mjs     # 只跑通用规则检查
 ```
 
-Swift 代码（第 1 批起）的编译、测试、打包命令届时补在这里。
+```sh
+scripts/test.sh                              # 单元测试（Swift Testing）；不要直接用 swift test，原因见 L-04
+swift build -c release                       # 编译
+.build/release/diskslim scan                 # 只读扫描真实磁盘，按区域和分组列出；不删任何东西
+.build/release/diskslim scan --json          # 同上，输出 JSON
+.build/release/diskslim clean                # 预览默认勾选的项会怎么处理，不执行
+.build/release/diskslim clean --yes          # 真正执行；只有用户在本轮明确同意清理真实磁盘时才能跑
+.build/release/diskslim undo                 # 撤销最近一次：把移到废纸篓的放回原处
+.build/release/diskslim growth               # 最近 7 天可用空间和谁涨了多少；只读每日记录 usage.json，不扫描
+# 自测一律用沙盒：加 --home <沙盒>/home --work <沙盒>/home/work，沙盒放在证据目录下
+scripts/bundle.sh                            # 打包菜单栏应用到 dist/DiskSlim.app（本机签名，不安装、不启动）
+scripts/install.sh                           # 打包并装到 /Applications/DiskSlim.app 后启动；先复制后替换、失败回滚；应用正在清理时不替换
+.build/debug/DiskSlimApp --snapshot <目录>    # 用真实扫描离屏渲染各页面 PNG（浅色 / 深色），只读，不清理
+dist/DiskSlim.app/Contents/MacOS/DiskSlimApp --test-notify   # 用示例数据把每种提醒各发一条系统通知，标题带「示例」；只发通知，不扫描、不清理
+```
+
+本机只有命令行工具、没有完整 Xcode；`swift build` 会打几行 `ld: warning: search path ... not found`，不影响结果。
 
 ## 结构
 
@@ -34,6 +50,16 @@ Swift 代码（第 1 批起）的编译、测试、打包命令届时补在这�
 AGENTS.md            入口（本文件）
 CURRENT.md           当前状态与唯一下一步；每轮交接写在顶部
 docs/PRD.md          需求（含调研结论、规则、分批计划）
+Package.swift        SwiftPM：DiskSlimCore（规则与模型）、diskslim（命令行）、DiskSlimApp（菜单栏应用）、DiskSlimCoreTests
+Sources/
+  DiskSlimCore/      Model（Finding、风险等级、清理方式）、System（元数据、大小、命令、格式）、
+                     DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、History（按上次实际释放校正清理命令）、Usage（每日记录、7 天曲线、谁涨了多少）、Alerts（提醒开关与规则、自动清理挑项）、Weekly（每周卡片、保留 / 下周再问）、Scan（总入口、执行前复核）、
+                     SafetyGuard（执行前重新核对路径和命令的白名单）、Cleaner（执行、操作记录、撤销）、FloatGeometry（悬浮球与面板位置、空间三档）、Pendant（给驿窗挂件的状态文件、diskslim:// 链接解析、点挂件防抖）
+  DiskSlimCLI/       命令行 `diskslim`（scan / clean / undo）
+  DiskSlimApp/       菜单栏应用：Store（扫描、勾选、清理、撤销、提醒、自动清理）、Views（首页 + 下钻、涨幅页、本周待决定、提醒设置、确认、提示）、Notifier（系统通知，只在打包版）、Snapshot（离屏截图）、FloatingBall（桌面悬浮球：贴边小窗、点开面板、拖动贴边）
+tests/DiskSlimCoreTests/  各条规则的单元测试（Swift；和 Node 测试同在 tests/）
+assets/floating-ball.png  悬浮球图标（打包时复制成 Contents/Resources/ball.png）
+design/fuyou-icon/   悬浮球定稿图与生图需求（中间稿和参考图只留本机，不进仓库）
 docs/
   design/ui-v1.html  三版菜单栏界面预览（A 容量仪表 / B 涨幅雷达 / C 待清理收件箱）
   agents/            Matt Pocock 技能读的约定：issue 看板、分流标签、领域文档
@@ -41,6 +67,9 @@ docs/
   OPERATIONS.md      操作手册：交接写法、报告与验收
   templates/handoff.md  交接一节的骨架
 scripts/
+  bundle.sh          打包 dist/DiskSlim.app
+  install.sh         装到「应用程序」并启动（只替换我们自己的那份）
+  test.sh            跑 Swift 单元测试（补上测试宏插件路径，L-04）
   check-rules.mjs    通用规则检查（只查机器能判定的）
 tests/               node:test 测试
 ```
@@ -67,6 +96,8 @@ single-context：根目录 `GLOSSARY.md` 与 `docs/adr/`，用到时再建。见
 
 - 验证用的备份、日志等证据放 `~/Library/Application Support/disk-slim/evidence/`，不放 `/tmp`（全局坑 G-01）；私人数据与完整日志不进仓库。
 - 新增 Swift 包依赖，先在交接里说明理由，经用户同意再加。
+- 目录名、SwiftPM 目标名、可执行文件名之间不能只差大小写（macOS 不区分大小写，会悄悄合并，L-03）。
+- 引入外部清理命令前，先读它的源码或用 `--dry-run` 看清副作用；每批做完让独立 agent 做一次只读审查和对抗测试（L-06）。
 - 安全底线（[docs/PRD.md](docs/PRD.md) 第 5 节）：用户文件只移到废纸篓，不直接删除、不自动清空废纸篓；「只展示」的项任何路径都删不了；清理前可预览、留日志、可撤销；不用 `sudo`。
 - 界面上的时间经统一的格式化函数按北京时间显示，不直接截取 ISO 字符串（全局坑 G-02）。
 

@@ -1,0 +1,520 @@
+<title>磁盘瘦身 融合版三版</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* 布局：顶部切换条 → 左「桌面舞台」放菜单栏面板 / 右方案说明；窄屏上下堆叠。三版共用一份真实扫描数据 */
+:root{
+  --bg:#eef0f3; --fg:#1b1f27; --muted:#5d6573; --line:#d5d9e0; --card:#fff; --accent:#2f5bd3;
+  --sans:"IBM Plex Sans",-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  /* 面板（1、2 版跟随系统明暗） */
+  --p-bg:rgba(246,247,249,.96); --p-fg:#1c1f24; --p-muted:#6b7280; --p-line:rgba(0,0,0,.09); --p-hover:rgba(0,0,0,.045); --p-raise:#fff;
+  --p-accent:#0a64d8; --c-dl:#2aa198; --c-cache:#8a63d2; --c-proj:#e0773a; --c-sys:#9aa3b2; --c-free:rgba(0,0,0,.08);
+  --ok:#1f9d55; --warn:#c77c12; --bad:#d64545;
+  /* 第 3 版：石墨色固定深色 */
+  --g-bg:#1b1e23; --g-rail:#15171b; --g-fg:#e8eaee; --g-muted:#8d95a3; --g-line:#2c3038; --g-hover:rgba(255,255,255,.05); --g-accent:#6ea8ff; --g-amber:#f0b44c;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#14171c; --fg:#e6e9ee; --muted:#98a1ae; --line:#2b313a; --card:#1c2027; --accent:#7d9bff;
+  --p-bg:rgba(40,42,48,.96); --p-fg:#eceef2; --p-muted:#9aa2ae; --p-line:rgba(255,255,255,.09); --p-hover:rgba(255,255,255,.06); --p-raise:#33363d;
+  --p-accent:#3b8cff; --c-free:rgba(255,255,255,.1); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#14171c; --fg:#e6e9ee; --muted:#98a1ae; --line:#2b313a; --card:#1c2027; --accent:#7d9bff;
+  --p-bg:rgba(40,42,48,.96); --p-fg:#eceef2; --p-muted:#9aa2ae; --p-line:rgba(255,255,255,.09); --p-hover:rgba(255,255,255,.06); --p-raise:#33363d;
+  --p-accent:#3b8cff; --c-free:rgba(255,255,255,.1); color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.5}
+button{font:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1240px;margin:0 auto;padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:22px}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px}
+header.top h1{margin:0;font-size:26px;font-weight:700;letter-spacing:-.01em;text-wrap:balance}
+header.top p{margin:4px 0 0;color:var(--muted);max-width:64ch}
+.seg{display:flex;gap:4px;padding:4px;border:1px solid var(--line);border-radius:10px;background:var(--card);flex-wrap:wrap}
+.seg button{border:0;background:transparent;color:var(--muted);padding:7px 14px;border-radius:7px;display:flex;gap:8px;align-items:baseline}
+.seg button b{font-family:var(--mono);font-weight:600;font-size:12px}
+.seg button[aria-selected="true"]{background:var(--fg);color:var(--bg)}
+.view{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:22px;align-items:start}
+@media (max-width:980px){.view{grid-template-columns:minmax(0,1fr)}}
+.note{display:grid;gap:14px;align-content:start}
+.note h2{margin:0;font-size:20px}
+.note p{margin:0}
+.note dl{margin:0;display:grid;gap:10px}
+.note dt{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.note dd{margin:2px 0 0}
+.note .fine{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+.stage{position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:radial-gradient(120% 90% at 20% 0%,#a7b9d4 0%,#6f86aa 50%,#43577a 100%);padding-bottom:28px}
+.menubar{height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:13px;background:rgba(255,255,255,.55);color:#111}
+.menubar .l,.menubar .r{display:flex;gap:16px;align-items:center;white-space:nowrap;overflow:hidden}
+.menubar .l b{font-weight:600}
+.mb{display:flex;align-items:center;gap:4px;padding:1px 7px;border-radius:5px;font-family:var(--mono);font-size:12px;font-weight:600;background:rgba(0,0,0,.14)}
+.mb i{font-style:normal;background:var(--p-accent);color:#fff;border-radius:7px;font-size:10px;padding:0 5px;line-height:14px}
+.dock{display:flex;justify-content:flex-end;padding:8px clamp(8px,6%,72px) 0}
+@media (max-width:560px){.dock{padding:8px 8px 0}.menubar .l span{display:none}}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ===== 共用：面板（1、2 版） ===== */
+.panel{position:relative;width:min(404px,100%);background:var(--p-bg);color:var(--p-fg);border-radius:14px;overflow:hidden;backdrop-filter:blur(30px);box-shadow:0 18px 50px rgba(0,0,0,.35),0 0 0 .5px rgba(0,0,0,.25);font-size:13px}
+.panel .muted{color:var(--p-muted)}
+.cap{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:1.5px}
+.cap i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:3px 12px;font-size:11px;color:var(--p-muted)}
+.legend span{display:flex;align-items:center;gap:5px}
+.legend span::before{content:"";width:7px;height:7px;border-radius:2px;background:var(--c)}
+.pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.pill.ok{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.tabs{display:flex;gap:2px;padding:2px;border-radius:8px;background:var(--p-hover)}
+.tabs button{flex:1;font-size:12px;border:0;background:transparent;color:var(--p-fg);padding:5px 2px;border-radius:6px;white-space:nowrap}
+.tabs button small{color:var(--p-muted);font-family:var(--mono);font-size:10.5px;margin-left:3px}
+.tabs button[aria-selected="true"]{background:var(--p-raise);box-shadow:0 1px 2px rgba(0,0,0,.18);font-weight:600}
+.scroll{max-height:318px;overflow:auto;padding:4px 8px}
+.grp{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 8px 4px;font-size:11.5px;color:var(--p-muted)}
+.grp b{color:var(--p-fg);font-weight:600}
+.grp button{border:0;background:transparent;color:var(--p-accent);font-size:11.5px;padding:0}
+.row{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 8px;border-radius:7px}
+.row:hover{background:var(--p-hover)}
+.row input{margin:0;accent-color:var(--p-accent)}
+.row .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .nm small{display:block;color:var(--p-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis}
+.row .sz{font-family:var(--mono);font-size:11.5px;color:var(--p-muted)}
+.row.more{color:var(--p-muted);font-size:12px}
+.chip{font-size:10px;padding:1px 5px;border-radius:4px;font-weight:600;margin-left:5px;vertical-align:1px}
+.chip.safe{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.chip.confirm{background:color-mix(in srgb,var(--warn) 17%,transparent);color:var(--warn)}
+.chip.ro,.chip.none{background:var(--p-hover);color:var(--p-muted)}
+.foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px 12px;border-top:1px solid var(--p-line)}
+.foot small{color:var(--p-muted);font-size:11.5px;line-height:1.35}
+.btn{font-size:12.5px;font-weight:600;border:0;border-radius:7px;padding:6px 12px;background:var(--p-accent);color:#fff;white-space:nowrap}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.ghost{background:transparent;color:var(--p-accent);border:1px solid var(--p-line)}
+.toast{position:absolute;left:10px;right:10px;bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#1f2329;color:#fff;border-radius:10px;padding:9px 12px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.toast button{border:0;background:transparent;color:#8fc0ff;font-weight:600;font-size:12px;padding:0}
+/* 每周卡片（共用） */
+.wk{padding:10px 12px 12px;display:grid;gap:10px}
+.wk .card{border:1px solid var(--p-line);border-radius:12px;padding:14px;display:grid;gap:8px;background:var(--p-raise)}
+.wk .tag{justify-self:start;font-size:11px;font-weight:600;padding:2px 8px;border-radius:5px;background:color-mix(in srgb,var(--p-accent) 13%,transparent);color:var(--p-accent)}
+.wk .tag.confirm{background:color-mix(in srgb,var(--warn) 15%,transparent);color:var(--warn)}
+.wk h3{margin:0;font-size:15px;line-height:1.35;text-wrap:balance}
+.wk .big{font-family:var(--mono);font-size:24px;font-weight:600;letter-spacing:-.02em}
+.wk .big small{font-size:12px;color:var(--p-muted);font-weight:400;font-family:var(--sans);margin-left:6px}
+.wk p{margin:0;color:var(--p-muted);font-size:12px}
+.wk ul{margin:0;padding:0;list-style:none;display:grid;gap:2px;font-size:11.5px;max-height:84px;overflow:auto}
+.wk li{display:flex;justify-content:space-between;gap:10px}
+.wk li span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wk li span:last-child{font-family:var(--mono);color:var(--p-muted);flex:none}
+.wk .acts{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:6px}
+.wk .acts button{font-size:12px;font-weight:600;border:1px solid var(--p-line);background:var(--p-raise);color:var(--p-fg);border-radius:8px;padding:7px 4px}
+.wk .acts button.pri{background:var(--p-accent);border-color:var(--p-accent);color:#fff}
+.wk .dots{display:flex;gap:4px}
+.wk .dots i{width:7px;height:7px;border-radius:50%;background:var(--p-line)}
+.wk .dots i.on{background:var(--p-accent)}
+.wk .done{text-align:center;padding:24px 8px;display:grid;gap:4px}
+.wk .done b{font-size:15px}
+.rule{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px;border-radius:7px}
+.rule small{display:block;color:var(--p-muted);font-size:11px}
+.sw{width:30px;height:18px;border-radius:9px;background:var(--p-accent);position:relative;flex:none;border:0;padding:0}
+.sw::after{content:"";position:absolute;top:2px;right:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:all .15s}
+.sw[aria-checked="false"]{background:var(--c-free)}
+.sw[aria-checked="false"]::after{right:14px}
+.culprit{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;padding:8px;border-radius:8px}
+.culprit:hover{background:var(--p-hover)}
+.culprit .t small{display:block;color:var(--p-muted);font-size:11px}
+.culprit .d{font-family:var(--mono);font-weight:600;font-size:12.5px;text-align:right}
+.culprit .bar{grid-column:1/-1;height:4px;border-radius:2px;background:var(--p-hover);overflow:hidden}
+.culprit .bar i{display:block;height:100%;background:var(--c-proj)}
+svg text{font-family:var(--mono)}
+
+/* ===== 第 1 版：标签式 ===== */
+#v1 .hd{padding:14px 16px 10px;display:grid;gap:8px}
+#v1 .r1{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+#v1 .r1 .big{font-size:22px;font-weight:600}
+#v1 .r1 .big small{font-size:12px;color:var(--p-muted);font-weight:400}
+#v1 .banner{margin:0 12px 8px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:9px;background:color-mix(in srgb,var(--p-accent) 11%,transparent);font-size:12px}
+#v1 .banner b{color:var(--p-accent)}
+#v1 .tabs{margin:0 12px}
+
+/* ===== 第 2 版：首页 + 下钻 ===== */
+#v2 .panel{width:min(368px,100%)}
+#v2 .home{padding:16px;display:grid;gap:12px}
+#v2 .hero{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+#v2 .hero .big{font-family:var(--mono);font-size:34px;font-weight:600;letter-spacing:-.03em;line-height:1}
+#v2 .hero .big small{font-size:13px;font-family:var(--sans);font-weight:400;color:var(--p-muted);letter-spacing:0}
+#v2 .delta{font-size:12px;color:var(--p-muted)}
+#v2 .delta b{color:var(--bad)}
+#v2 .spark{border:0;background:transparent;padding:0;width:100%;text-align:left;color:inherit}
+#v2 .sum{display:grid;gap:2px;margin:0 -6px}
+#v2 .sum button{display:grid;grid-template-columns:10px minmax(0,1fr) auto 12px;gap:10px;align-items:center;border:0;background:transparent;color:var(--p-fg);padding:9px 6px;border-radius:8px;text-align:left}
+#v2 .sum button:hover{background:var(--p-hover)}
+#v2 .sum .dot{width:8px;height:8px;border-radius:50%}
+#v2 .sum small{display:block;color:var(--p-muted);font-size:11px}
+#v2 .sum .v{font-family:var(--mono);font-weight:600;font-size:12.5px}
+#v2 .sum .chev{color:var(--p-muted)}
+#v2 .sumh{font-size:11px;letter-spacing:.06em;color:var(--p-muted);font-weight:600;padding:0 6px}
+#v2 .cta{width:100%;padding:9px;font-size:13px}
+#v2 .nav{display:flex;align-items:center;gap:8px;padding:12px 12px 6px}
+#v2 .nav button{border:0;background:transparent;color:var(--p-accent);font-size:13px;padding:2px 4px}
+#v2 .nav b{flex:1;text-align:center;margin-right:44px}
+#v2 .gear{border:0;background:transparent;color:var(--p-muted);font-size:15px;padding:0 2px}
+
+/* ===== 第 3 版：双栏（石墨深色） ===== */
+#v3 .wide{position:relative;width:min(660px,100%);display:grid;grid-template-columns:184px minmax(0,1fr);background:var(--g-bg);color:var(--g-fg);border-radius:14px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5),0 0 0 1px var(--g-line);font-size:13px;min-height:470px}
+@media (max-width:640px){#v3 .wide{grid-template-columns:minmax(0,1fr)}#v3 .rail{border-right:0;border-bottom:1px solid var(--g-line)}#v3 .gauge{display:none}}
+#v3 .rail{background:var(--g-rail);border-right:1px solid var(--g-line);padding:14px 10px;display:grid;align-content:start;gap:14px}
+#v3 .gauge{display:grid;gap:6px;padding:0 6px}
+#v3 .gauge .big{font-family:var(--mono);font-size:26px;font-weight:600;letter-spacing:-.02em;line-height:1}
+#v3 .gauge small{color:var(--g-muted);font-size:11px}
+#v3 .vbar{height:6px;border-radius:3px;background:var(--g-line);overflow:hidden}
+#v3 .vbar i{display:block;height:100%;width:17.5%;background:var(--g-accent)}
+#v3 .navl{display:grid;gap:1px}
+#v3 .navl button{display:flex;justify-content:space-between;align-items:center;gap:6px;border:0;background:transparent;color:var(--g-fg);padding:7px 8px;border-radius:7px;text-align:left;font-size:12.5px}
+#v3 .navl button:hover{background:var(--g-hover)}
+#v3 .navl button[aria-current="true"]{background:rgba(110,168,255,.15);color:#fff}
+#v3 .navl small{font-family:var(--mono);font-size:10.5px;color:var(--g-muted)}
+#v3 .navl .badge{background:var(--g-amber);color:#211a08;border-radius:8px;padding:0 6px;font-weight:700}
+#v3 .navl hr{border:0;border-top:1px solid var(--g-line);margin:6px 4px}
+#v3 .main{display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-width:0}
+#v3 .mh{padding:14px 16px 6px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+#v3 .mh b{font-size:15px}
+#v3 .mh small{color:var(--g-muted);font-size:11.5px}
+#v3 .scroll{max-height:360px}
+/* 第 3 版复用共用列表，但换成石墨色 */
+#v3 .grp{color:var(--g-muted)} #v3 .grp b{color:var(--g-fg)} #v3 .grp button{color:var(--g-accent)}
+#v3 .row:hover,#v3 .culprit:hover{background:var(--g-hover)}
+#v3 .row input{accent-color:var(--g-accent)}
+#v3 .row .nm small,#v3 .row .sz,#v3 .row.more,#v3 .culprit .t small{color:var(--g-muted)}
+#v3 .chip.ro,#v3 .chip.none{background:var(--g-hover);color:var(--g-muted)}
+#v3 .foot{border-top-color:var(--g-line)} #v3 .foot small{color:var(--g-muted)}
+#v3 .btn{background:var(--g-accent);color:#0b1526}
+#v3 .culprit .bar{background:var(--g-line)} #v3 .culprit .bar i{background:var(--g-amber)}
+#v3 .rule small{color:var(--g-muted)}
+#v3 .sw{background:var(--g-accent)} #v3 .sw[aria-checked="false"]{background:var(--g-line)}
+#v3 .wk .card{background:#23272e;border-color:var(--g-line)}
+#v3 .wk p,#v3 .wk li span:last-child,#v3 .wk .big small{color:var(--g-muted)}
+#v3 .wk .tag{background:rgba(110,168,255,.15);color:var(--g-accent)}
+#v3 .wk .acts button{background:#23272e;border-color:var(--g-line);color:var(--g-fg)}
+#v3 .wk .acts button.pri{background:var(--g-accent);border-color:var(--g-accent);color:#0b1526}
+#v3 .wk .dots i{background:var(--g-line)} #v3 .wk .dots i.on{background:var(--g-accent)}
+#v3 .hist{display:grid;gap:2px;padding:4px 8px}
+#v3 .hist .h{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:9px 8px;border-radius:8px;border-bottom:1px solid var(--g-line)}
+#v3 .hist .h small{color:var(--g-muted);font-size:11px}
+#v3 .hist button{border:1px solid var(--g-line);background:transparent;color:var(--g-accent);border-radius:6px;font-size:11.5px;padding:3px 8px;align-self:center}
+#v3 .hist button:disabled{color:var(--g-muted)}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>磁盘瘦身 · 融合版三版</h1>
+      <p>都以「容量仪表」为主，把「涨幅」做成一块、把「每周卡片」接进来。文件和大小取自 11 月 5 日 11:30 的真实扫描（可用 80.6 GB）；7 天曲线里 11 月 5 日以前的数、涨幅数字、操作记录的时间是示意（工具还没开始每天记录）。勾选、标签、清理、撤销、卡片都能点；清理只是演示，不会动你的文件。</p>
+    </div>
+    <div class="seg" role="tablist" aria-label="切换方案">
+      <button role="tab" aria-selected="true" data-v="1"><b>1</b>四个标签</button>
+      <button role="tab" aria-selected="false" data-v="2"><b>2</b>首页 + 下钻</button>
+      <button role="tab" aria-selected="false" data-v="3"><b>3</b>双栏工作台</button>
+    </div>
+  </header>
+
+  <section class="view" id="v1">
+    <div class="stage">
+      <div class="menubar"><div class="l"><b>访达</b><span>文件</span><span>编辑</span><span>显示</span></div><div class="r"><span class="mb">◔ 80G</span><span>周四 11:40</span></div></div>
+      <div class="dock"><div class="panel" id="p1"></div></div>
+    </div>
+    <aside class="note">
+      <h2>1 · 四个标签</h2>
+      <p>就是上一轮的 A，多了「涨幅」标签；每周卡片做成顶部的一条横幅，点开在面板里逐张处理。</p>
+      <dl>
+        <div><dt>第一眼</dt><dd>还剩多少、构成色条、本周待决定横幅。</dd></div>
+        <div><dt>怎么清</dt><dd>每个标签底部一个按钮：下载「移到废纸篓」、看不见的「清理」。</dd></div>
+        <div><dt>好处</dt><dd>最直接，四块各占一个标签，切换一次就到。</dd></div>
+        <div><dt>代价</dt><dd>面板窄，「看不见的」要往下滚；涨幅要专门点过去才看到。</dd></div>
+      </dl>
+      <p class="fine">跟随系统浅色 / 深色。宽约 400 点。</p>
+    </aside>
+  </section>
+
+  <section class="view" id="v2" hidden>
+    <div class="stage">
+      <div class="menubar"><div class="l"><b>访达</b><span>文件</span><span>编辑</span><span>显示</span></div><div class="r"><span class="mb">◔ 80G <i>5</i></span><span>周四 11:40</span></div></div>
+      <div class="dock"><div class="panel" id="p2"></div></div>
+    </div>
+    <aside class="note">
+      <h2>2 · 首页 + 下钻</h2>
+      <p>首页只回答三个问题：还剩多少、最近谁在涨、能清多少。细节点进去再看，像 iPhone 的设置。</p>
+      <dl>
+        <div><dt>第一眼</dt><dd>大数字、7 天曲线、今天掉了多少以及原因，下面四行汇总。</dd></div>
+        <div><dt>怎么清</dt><dd>首页一个「清理建议项」大按钮；想挑着清就点进某一行。</dd></div>
+        <div><dt>好处</dt><dd>最省脑子；涨幅直接在首页，「看不见的地方」一打开就知道。</dd></div>
+        <div><dt>代价</dt><dd>多一层点击；同时看两类东西要来回返回。</dd></div>
+      </dl>
+      <p class="fine">跟随系统浅色 / 深色。菜单栏图标带待决定数量角标。宽约 370 点。</p>
+    </aside>
+  </section>
+
+  <section class="view" id="v3" hidden>
+    <div class="stage">
+      <div class="menubar"><div class="l"><b>访达</b><span>文件</span><span>编辑</span><span>显示</span></div><div class="r"><span class="mb">◔ 80G</span><span>周四 11:40</span></div></div>
+      <div class="dock"><div class="wide" id="p3"></div></div>
+    </div>
+    <aside class="note">
+      <h2>3 · 双栏工作台</h2>
+      <p>宽面板，左边导航常驻，右边内容。多一页「操作记录」，以前每次清了什么、能不能撤销一目了然。</p>
+      <dl>
+        <div><dt>第一眼</dt><dd>左上剩余空间，左侧六个入口和数量，右边默认是下载。</dd></div>
+        <div><dt>怎么清</dt><dd>和 1 一样按页勾选；清完的记录都在「操作记录」里能撤销。</dd></div>
+        <div><dt>好处</dt><dd>信息最全，一屏看得多；适合每周坐下来认真清一次。</dd></div>
+        <div><dt>代价</dt><dd>660 点宽，弹出来占地方，不像菜单栏小工具那么轻。</dd></div>
+      </dl>
+      <p class="fine">固定石墨深色。窄屏时左栏折到上面。</p>
+    </aside>
+  </section>
+</div>
+
+<script>
+(function(){
+/* ---------- 共用数据（11 月 5 日真实扫描） ---------- */
+var MB=1,GB=1024;
+function it(id,name,sub,mb,how,risk,checked){return{id:id,name:name,sub:sub,mb:mb,how:how,risk:risk||'safe',checked:!!checked}}
+function DL(){return[
+  {name:'安装包',hint:'装完就用不上',items:[
+    it('d1','KanKan-Shoucang_0.2.5_arm64.dmg','10 月 18 日下载',42.7,'trash','safe',1),
+    it('d2','Luzi_0.1.10_aarch64.dmg','9 月 14 日下载',41.7,'trash','safe',1),
+    it('d3','MacShot.dmg','10 月 19 日下载',7.3,'trash','safe',1),
+    it('d4','Hermes-Setup.dmg','10 月 16 日下载',6.4,'trash','safe',1),
+    it('d5','Rectangle2.0.3.dmg','10 月 19 日下载',4.5,'trash','safe',1)]},
+  {name:'已解压的压缩包',hint:'旁边有同名文件夹',items:[
+    it('z1','codenotch-main.zip','旁边已有「codenotch-main」',24,'trash','safe',1),
+    it('z2','早鸟倒计时.zip','旁边已有「早鸟倒计时」',8.8,'trash','safe',1),
+    it('z3','iloveimg-compressed.zip','旁边已有同名文件夹',2.9,'trash','safe',1),
+    it('z4','CarvoMOTO-项目规划.zip','旁边已有同名文件夹',0.7,'trash','safe',1),
+    it('z5','skills-main.zip 等 3 个','旁边都有同名文件夹',0.4,'trash','safe',1)]},
+  {name:'最近下载的大文件',hint:'只提示，不勾',items:[
+    it('b1','双11大学辅导物料.zip','11 月 2 日下载 · 还没解压',763.6,'trash')]},
+  {name:'30 天没打开',hint:'155 项 · 默认不勾',fold:true,more:'还有 149 项 · 399 MB',items:[
+    it('s1','学期卡亮点海报','上次打开 9 月 9 日',54.7,'trash'),
+    it('s2','社群营销与运营.pdf','9 月 28 日下载，没打开过',49.3,'trash'),
+    it('s3','管培生阶段反馈-工作流和九月任务.m4a','9 月 10 日下载，没打开过',38.4,'trash'),
+    it('s4','9月国课课时卡','8 月 26 日下载，没打开过',31.3,'trash'),
+    it('s5','codenotch-main','9 月 24 日下载，没打开过',30,'trash'),
+    it('s6','品牌物料更新（26.09.01）','上次打开 9 月 3 日',26.1,'trash')]}
+]}
+function HID(){return[
+  {name:'包管理器缓存',hint:'可再生，运行官方清理命令',items:[
+    it('c1','pnpm 存储','只删没有项目引用的包',469.3,'cmd','safe',1),
+    it('c2','Homebrew 缓存','旧版本安装包和下载缓存',283,'cmd','safe',1),
+    it('c3','npm 缓存','下次安装时会重新下载',144.2,'cmd','safe',1)]},
+  {name:'需要你确认',hint:'不默认勾选',items:[
+    it('k1','Codex 备份 · 9 月 16 日','你自己做的 session-guard 备份',4283.9,'trash','confirm'),
+    it('k2','Codex 备份 · 9 月 7 日','可以只留最新一份',2863.1,'trash','confirm'),
+    it('k3','Codex 备份 · 9 月 1 日','可以只留最新一份',2275.4,'trash','confirm'),
+    it('k4','Codex 备份 · 8 月 27 日','可以只留最新一份',1607.8,'trash','confirm'),
+    it('k5','npx 运行过的工具','先关掉 Claude、Codex 再清',1033.1,'remove','confirm'),
+    it('k6','Colima 虚拟机','终端运行 colima delete multica',4457.4,'none','confirm'),
+    it('k7','Cowork 虚拟机','在 Claude 设置 › 存储里处理',10535.3,'none','confirm')]},
+  {name:'暂时不能清的构建产物',hint:'postpane',items:[
+    it('w1','postpane · 48-approval-list','24 小时内编译过',8515,'none'),
+    it('w2','postpane · 50-strip-tokens','PR 还没合并；24 小时内编译过',7467.3,'none'),
+    it('w3','postpane · 52-agent-panel','PR 还没合并；24 小时内编译过',7293.6,'none')]},
+  {name:'只展示',hint:'工具不会删',items:[
+    it('r1','Codex 对话记录','删了就找不回',32274.4,'none','ro'),
+    it('r2','Claude 对话记录','删了就找不回',4516.2,'none','ro')]}
+]}
+var SERIES=[{d:'10/30',v:61},{d:'10/31',v:49},{d:'11/1',v:37},{d:'11/2',v:25},{d:'11/3',v:14},{d:'11/4',v:6.7},{d:'11/5',v:80.6}];
+var CULPRITS=[
+  {t:'postpane · worktree 构建产物',s:'今天新开 50、52 两个 worktree，各编译一次约 7 GB',d:22.7},
+  {t:'下载文件夹',s:'双11大学辅导物料.zip 等 3 个',d:0.9},
+  {t:'Codex 对话记录',s:'只展示',d:0.4}];
+function CARDS(){return[
+  {tag:'安装包',h:'5 个安装包，下载都超过 7 天了',why:'装好之后安装包就没用了，要重装再去官网下。',mb:102.6,how:'trash',files:[['KanKan-Shoucang_0.2.5_arm64.dmg','43 MB'],['Luzi_0.1.10_aarch64.dmg','42 MB'],['MacShot.dmg','7 MB'],['Hermes-Setup.dmg','6 MB'],['Rectangle2.0.3.dmg','5 MB']]},
+  {tag:'压缩包',h:'7 个压缩包，旁边都有解压好的文件夹',why:'内容和文件夹里一样，留着只是多占一份。',mb:36.8,how:'trash',files:[['codenotch-main.zip','24 MB'],['早鸟倒计时.zip','9 MB'],['iloveimg-compressed.zip','3 MB'],['其他 4 个','1 MB']]},
+  {tag:'缓存',h:'pnpm、Homebrew、npm 的缓存',why:'下次安装时会自动重新下载，只是第一次慢一点。',mb:896.5,how:'cmd',files:[['pnpm 存储','469 MB'],['Homebrew 缓存','283 MB'],['npm 缓存','144 MB']]},
+  {tag:'需确认',confirm:true,h:'npx 运行过的工具',why:'有些 MCP 服务靠它运行。清之前先关掉 Claude 和 Codex。',mb:1033.1,how:'remove',files:[['~/.npm/_npx','1.0 GB']]},
+  {tag:'需确认',confirm:true,h:'3 份较早的 Codex 备份（8 月 27 日 – 9 月 7 日）',why:'最新一份（9 月 16 日）会留着。Codex 现在用着正常就可以清。',mb:6746.3,how:'trash',files:[['session-guard-20260907','2.8 GB'],['session-guard-20260901','2.2 GB'],['session-guard-20260827','1.6 GB']]}
+]}
+var RULES=[['可用低于 60 GB 时图标变橙','现在 80.6 GB',1],['可用低于 30 GB 时发通知','',1],['某个目录一天涨超过 10 GB 时提醒','比如今天 postpane 新开 2 个 worktree',1],['每周五 18:00 推送待决定卡片','',1],['可用低于 60 GB 时自动清「安全」项','默认关闭',0]];
+
+/* ---------- 共用工具 ---------- */
+function fmt(mb){if(mb>=GB)return(mb/GB).toFixed(1)+' GB';if(mb>=1)return Math.round(mb)+' MB';return Math.max(1,Math.round(mb*1024))+' KB'}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+var CHIP={safe:['safe','安全'],confirm:['confirm','需确认'],ro:['ro','只展示']};
+function groupsHTML(groups,state,pre){
+  return groups.map(function(g,gi){
+    var total=g.items.reduce(function(a,i){return a+i.mb},0);
+    var open=!g.fold||state.open[gi];
+    var h='<div class="grp"><span><b>'+esc(g.name)+'</b> · '+esc(g.hint)+'</span>'+(g.fold?'<button data-fold="'+gi+'">'+(open?'收起':'展开')+'</button>':'<span class="num">'+fmt(total)+'</span>')+'</div>';
+    if(!open)return h;
+    h+=g.items.filter(function(i){return !state.gone[i.id]}).map(function(i){
+      var can=i.how!=='none'&&i.risk!=='ro';
+      var chip=i.how==='none'&&i.risk!=='ro'?'<span class="chip none">不能清</span>':(i.risk!=='safe'?'<span class="chip '+CHIP[i.risk][0]+'">'+CHIP[i.risk][1]+'</span>':'');
+      return '<label class="row">'+(can?'<input type="checkbox" id="'+pre+i.id+'" data-id="'+i.id+'"'+(state.sel[i.id]?' checked':'')+'>':'<span></span>')+
+        '<span class="nm">'+esc(i.name)+chip+'<small>'+esc(i.sub)+'</small></span><span class="sz">'+fmt(i.mb)+'</span></label>';
+    }).join('');
+    if(g.more)h+='<div class="row more"><span></span><span>'+g.more+'</span><span></span></div>';
+    return h;
+  }).join('');
+}
+function newState(groups){var s={sel:{},gone:{},open:{}};groups.forEach(function(g){g.items.forEach(function(i){if(i.checked)s.sel[i.id]=1})});return s}
+function picked(groups,state){var out=[];groups.forEach(function(g){g.items.forEach(function(i){if(state.sel[i.id]&&!state.gone[i.id])out.push(i)})});return out}
+function sum(list){return list.reduce(function(a,i){return a+i.mb},0)}
+function resultText(list){
+  var t=sum(list.filter(function(i){return i.how==='trash'})),f=sum(list.filter(function(i){return i.how!=='trash'}));
+  var parts=[];if(t)parts.push('移到废纸篓 '+fmt(t)+'（清空后才释放）');if(f)parts.push('已释放 '+fmt(f));return parts.join('，');
+}
+function spark(w,h,opts){
+  var vmax=90,pad=opts.pad||0,n=SERIES.length,x=function(i){return pad+i*(w-2*pad)/(n-1)},y=function(v){return h-14-(v/vmax)*(h-24)};
+  var pts=SERIES.map(function(s,i){return x(i).toFixed(1)+','+y(s.v).toFixed(1)}).join(' ');
+  var area='M'+x(0)+' '+(h-14)+' L'+pts.replace(/ /g,' L')+' L'+x(n-1)+' '+(h-14)+' Z';
+  var line60=y(60);
+  var s='<svg viewBox="0 0 '+w+' '+h+'" width="100%" role="img" aria-label="最近 7 天可用空间：从 61 GB 降到 6.7 GB，11 月 5 日清理后回到 80.6 GB">';
+  s+='<line x1="'+pad+'" x2="'+(w-pad)+'" y1="'+line60+'" y2="'+line60+'" stroke="'+opts.warn+'" stroke-dasharray="3 3" stroke-width="1"/>';
+  s+='<text x="'+(w-pad)+'" y="'+(line60-3)+'" text-anchor="end" font-size="9" fill="'+opts.warn+'">60G</text>';
+  s+='<path d="'+area+'" fill="'+opts.line+'" opacity=".13"/><polyline points="'+pts+'" fill="none" stroke="'+opts.line+'" stroke-width="2"/>';
+  s+='<circle cx="'+x(5)+'" cy="'+y(6.7)+'" r="3.5" fill="var(--bad)"/><circle cx="'+x(6)+'" cy="'+y(80.6)+'" r="3.5" fill="'+opts.line+'"/>';
+  s+='<text x="'+x(5)+'" y="'+(y(6.7)-7)+'" text-anchor="middle" font-size="9.5" font-weight="600" fill="var(--bad)">6.7</text>';
+  s+='<text x="'+(x(6)-6)+'" y="'+(y(80.6)+3)+'" text-anchor="end" font-size="9.5" font-weight="600" fill="'+opts.line+'">80.6</text>';
+  if(opts.dates)SERIES.forEach(function(p,i){s+='<text x="'+x(i)+'" y="'+(h-2)+'" text-anchor="middle" font-size="9" fill="'+opts.muted+'">'+p.d+'</text>'});
+  return s+'</svg>';
+}
+function culpritsHTML(){var max=CULPRITS[0].d;return CULPRITS.map(function(c){return '<div class="culprit"><div class="t">'+esc(c.t)+'<small>'+esc(c.s)+'</small></div><div class="d">+'+c.d+' GB</div><div class="bar"><i style="width:'+Math.max(1.5,c.d/max*100)+'%"></i></div></div>'}).join('')}
+function rulesHTML(st){return RULES.map(function(r,i){return '<div class="rule"><span>'+r[0]+(r[1]?'<small>'+r[1]+'</small>':'')+'</span><button class="sw" role="switch" aria-label="'+r[0]+'" aria-checked="'+(st[i]?'true':'false')+'" data-sw="'+i+'"></button></div>'}).join('')}
+function weekly(root,ws,onExit){
+  var cards=ws.cards,i=ws.i;
+  var dots='<div class="dots">'+cards.map(function(_,k){return '<i class="'+(k<=i?'on':'')+'"></i>'}).join('')+'</div>';
+  if(i>=cards.length){
+    root.innerHTML='<div class="wk"><div class="done"><b>本周都处理完了</b><span class="num" style="font-size:24px;font-weight:600">'+fmt(ws.freed)+'</span><span class="muted" style="font-size:12px">'+(ws.trashed?'其中 '+fmt(ws.trashed)+' 在废纸篓里，清空后才释放。':'')+'下周五再见。</span></div>'+(onExit?'<button class="btn ghost" data-wk="exit">返回</button>':'')+'</div>';
+  }else{
+    var c=cards[i];
+    root.innerHTML='<div class="wk"><div style="display:flex;justify-content:space-between;align-items:center"><span class="muted" style="font-size:12px">第 '+(i+1)+' / '+cards.length+' 件</span>'+dots+'</div><div class="card"><span class="tag'+(c.confirm?' confirm':'')+'">'+c.tag+'</span><h3>'+esc(c.h)+'</h3><div class="big">'+fmt(c.mb)+'<small>可腾出</small></div><p>'+esc(c.why)+'</p><ul>'+c.files.map(function(f){return '<li><span>'+esc(f[0])+'</span><span>'+f[1]+'</span></li>'}).join('')+'</ul></div><div class="acts"><button class="pri" data-wk="yes">'+(c.how==='trash'?'移到废纸篓':'清理')+'</button><button data-wk="keep">保留</button><button data-wk="later">下周再问</button></div>'+(onExit?'<button class="btn ghost" data-wk="exit" style="justify-self:start">返回</button>':'')+'</div>';
+  }
+  root.querySelectorAll('[data-wk]').forEach(function(b){b.addEventListener('click',function(){
+    var a=b.dataset.wk;
+    if(a==='exit'){onExit();return}
+    if(a==='yes'){var c=cards[ws.i];ws.freed+=c.mb;if(c.how==='trash')ws.trashed+=c.mb}
+    ws.i++;weekly(root,ws,onExit);if(ws.onChange)ws.onChange();
+  })});
+}
+function toast(panel,text,undo){
+  var old=panel.querySelector('.toast');if(old)old.remove();
+  var t=document.createElement('div');t.className='toast';t.innerHTML='<span>'+text+'</span>'+(undo?'<button>撤销</button>':'');
+  panel.appendChild(t);
+  if(undo)t.querySelector('button').addEventListener('click',function(){undo();t.remove()});
+  setTimeout(function(){if(t.parentNode)t.remove()},6000);
+}
+function bindRows(root,state,rerender){
+  root.querySelectorAll('input[data-id]').forEach(function(c){c.addEventListener('change',function(){if(c.checked)state.sel[c.dataset.id]=1;else delete state.sel[c.dataset.id];rerender()})});
+  root.querySelectorAll('[data-fold]').forEach(function(b){b.addEventListener('click',function(e){e.preventDefault();var k=b.dataset.fold;state.open[k]=!state.open[k];rerender()})});
+}
+function doClean(panel,groups,state,rerender){
+  var list=picked(groups,state);if(!list.length)return;
+  list.forEach(function(i){state.gone[i.id]=1});rerender();
+  toast(panel,resultText(list),function(){list.forEach(function(i){delete state.gone[i.id]});rerender()});
+}
+function bindSwitches(root,st){root.querySelectorAll('[data-sw]').forEach(function(b){b.addEventListener('click',function(){var k=+b.dataset.sw;st[k]=st[k]?0:1;b.setAttribute('aria-checked',st[k]?'true':'false')})})}
+var capHTML='<div class="cap" aria-label="磁盘构成"><i style="width:22%;background:var(--c-sys)"></i><i style="width:33%;background:var(--c-proj)"></i><i style="width:19%;background:var(--c-cache)"></i><i style="width:8.5%;background:var(--c-dl)"></i><i style="width:17.5%;background:var(--c-free)"></i></div><div class="legend"><span style="--c:var(--c-sys)">系统与应用</span><span style="--c:var(--c-proj)">项目</span><span style="--c:var(--c-cache)">缓存与对话</span><span style="--c:var(--c-dl)">文稿与下载</span><span style="--c:var(--c-free)">可用</span></div>';
+
+/* ---------- 第 1 版：四个标签 ---------- */
+(function(){
+  var p=document.getElementById('p1'),dl=DL(),hid=HID(),sd=newState(dl),sh=newState(hid),tab='dl',sw=RULES.map(function(r){return r[2]});
+  var ws={cards:CARDS(),i:0,freed:0,trashed:0,onChange:null},inWeek=false;
+  function render(){
+    if(inWeek){p.innerHTML='<div class="hd"><div class="r1"><div class="big">本周瘦身</div><span class="muted">'+Math.max(0,ws.cards.length-ws.i)+' 件待决定</span></div></div><div id="w1"></div>';weekly(p.querySelector('#w1'),ws,function(){inWeek=false;render()});return}
+    var left=ws.cards.length-ws.i;
+    var h='<div class="hd"><div class="r1"><div class="big num">80.6 GB <small>可用 / 460 GB</small></div><span class="pill ok">健康</span></div>'+capHTML+'</div>';
+    if(left>0)h+='<div class="banner"><span>本周瘦身：<b>'+left+' 件事</b>等你决定</span><button class="btn" id="b1">逐个处理</button></div>';
+    var pd=picked(dl,sd),ph=picked(hid,sh);
+    h+='<div class="tabs" role="tablist">'+[['dl','下载',fmt(sum(pd))],['hid','看不见的',fmt(sum(ph))],['grow','涨幅',''],['rule','提醒','']].map(function(t){return '<button role="tab" data-t="'+t[0]+'" aria-selected="'+(tab===t[0])+'">'+t[1]+(t[2]?'<small>'+t[2]+'</small>':'')+'</button>'}).join('')+'</div>';
+    if(tab==='dl')h+='<div class="scroll">'+groupsHTML(dl,sd,'a')+'</div><div class="foot"><small>已选 '+pd.length+' 项 · '+fmt(sum(pd))+'<br>移到废纸篓，可以撤销</small><button class="btn" id="go1"'+(pd.length?'':' disabled')+'>移到废纸篓</button></div>';
+    if(tab==='hid')h+='<div class="scroll">'+groupsHTML(hid,sh,'b')+'</div><div class="foot"><small>已选 '+ph.length+' 项 · '+fmt(sum(ph))+'<br>缓存用官方命令清，不能撤销</small><button class="btn" id="go1"'+(ph.length?'':' disabled')+'>清理</button></div>';
+    if(tab==='grow')h+='<div class="scroll"><div style="padding:8px 8px 0"><div class="muted" style="font-size:11.5px">最近 7 天可用空间</div>'+spark(360,110,{line:'var(--p-accent)',warn:'var(--warn)',muted:'var(--p-muted)',dates:1,pad:16})+'</div><div class="grp"><b>今天谁涨的</b><span>增量</span></div>'+culpritsHTML()+'</div><div class="foot"><small>每天 10:00 记一次各目录大小</small><span></span></div>';
+    if(tab==='rule')h+='<div class="scroll">'+rulesHTML(sw)+'</div><div class="foot"><small>改动立即生效</small><span></span></div>';
+    p.innerHTML=h;
+    p.querySelectorAll('[data-t]').forEach(function(b){b.addEventListener('click',function(){tab=b.dataset.t;render()})});
+    var b1=p.querySelector('#b1');if(b1)b1.addEventListener('click',function(){inWeek=true;render()});
+    bindRows(p,tab==='dl'?sd:sh,render);bindSwitches(p,sw);
+    var go=p.querySelector('#go1');if(go)go.addEventListener('click',function(){tab==='dl'?doClean(p,dl,sd,render):doClean(p,hid,sh,render)});
+  }
+  render();
+})();
+
+/* ---------- 第 2 版：首页 + 下钻 ---------- */
+(function(){
+  var p=document.getElementById('p2'),dl=DL(),hid=HID(),sd=newState(dl),sh=newState(hid),page='home',sw=RULES.map(function(r){return r[2]});
+  var ws={cards:CARDS(),i:0,freed:0,trashed:0};
+  var confirmGroups=[hid[1]],roGroups=[hid[2],hid[3]];
+  function nav(title,right){return '<div class="nav"><button data-go="home">‹ 返回</button><b>'+title+'</b></div>'}
+  function render(){
+    var pd=picked(dl,sd),ph=picked([hid[0]],sh),left=ws.cards.length-ws.i,h='';
+    if(page==='home'){
+      h='<div class="home"><div class="hero"><div><div class="big">80.6<small> GB 可用</small></div><div class="delta">上午清理后又少了 <b>10.4 GB</b>：postpane 新开了 2 个 worktree</div></div><button class="gear" data-go="rule" aria-label="提醒设置">⚙︎</button></div>';
+      h+='<button class="spark" data-go="grow" aria-label="查看涨幅">'+spark(336,70,{line:'var(--p-accent)',warn:'var(--warn)',muted:'var(--p-muted)',pad:6})+'</button>';
+      h+='<div class="sum"><div class="sumh">可以清</div>';
+      h+='<button data-go="dl"><span class="dot" style="background:var(--c-dl)"></span><span>下载文件夹<small>建议 '+pd.length+' 项 · 另有 156 项可以看看</small></span><span class="v">'+fmt(sum(pd))+'</span><span class="chev">›</span></button>';
+      h+='<button data-go="cache"><span class="dot" style="background:var(--c-cache)"></span><span>缓存<small>'+ph.length+' 项，官方命令清</small></span><span class="v">'+fmt(sum(ph))+'</span><span class="chev">›</span></button>';
+      h+='<div class="sumh" style="margin-top:6px">要你决定</div>';
+      h+='<button data-go="week"><span class="dot" style="background:var(--warn)"></span><span>本周待决定<small>'+(left>0?left+' 件，逐个点完':'都处理完了')+'</small></span><span class="v">'+(left>0?fmt(sum(ws.cards.slice(ws.i))):'✓')+'</span><span class="chev">›</span></button>';
+      h+='<button data-go="confirm"><span class="dot" style="background:var(--c-proj)"></span><span>备份、虚拟机、在用的构建产物<small>默认不勾，逐项看</small></span><span class="v">48.6 GB</span><span class="chev">›</span></button>';
+      h+='<button data-go="ro"><span class="dot" style="background:var(--c-sys)"></span><span>对话记录<small>只展示，不会删</small></span><span class="v">35.9 GB</span><span class="chev">›</span></button></div>';
+      var all=pd.concat(ph);
+      h+='<button class="btn cta" id="all2"'+(all.length?'':' disabled')+'>清理建议项 · '+fmt(sum(all))+'</button></div>';
+    }
+    if(page==='dl')h=nav('下载文件夹')+'<div class="scroll">'+groupsHTML(dl,sd,'c')+'</div><div class="foot"><small>已选 '+pd.length+' 项 · '+fmt(sum(pd))+'</small><button class="btn" id="go2"'+(pd.length?'':' disabled')+'>移到废纸篓</button></div>';
+    if(page==='cache')h=nav('缓存')+'<div class="scroll">'+groupsHTML([hid[0]],sh,'d')+'</div><div class="foot"><small>已选 '+ph.length+' 项 · '+fmt(sum(ph))+'</small><button class="btn" id="go2"'+(ph.length?'':' disabled')+'>清理</button></div>';
+    if(page==='confirm'){var pc=picked(confirmGroups,sh);h=nav('要你决定的')+'<div class="scroll">'+groupsHTML(confirmGroups.concat([hid[2]]),sh,'e')+'</div><div class="foot"><small>已选 '+pc.length+' 项 · '+fmt(sum(pc))+'</small><button class="btn" id="go2"'+(pc.length?'':' disabled')+'>处理所选</button></div>'}
+    if(page==='ro')h=nav('对话记录')+'<div class="scroll">'+groupsHTML([hid[3]],sh,'f')+'<p class="muted" style="font-size:12px;padding:8px">要清 Codex 对话请在 Codex 里操作；Claude 对话在 Claude 设置 › 存储里看。</p></div>';
+    if(page==='grow')h=nav('涨幅')+'<div class="scroll"><div style="padding:4px 8px 0">'+spark(340,120,{line:'var(--p-accent)',warn:'var(--warn)',muted:'var(--p-muted)',dates:1,pad:16})+'</div><div class="grp"><b>今天谁涨的</b><span>增量</span></div>'+culpritsHTML()+'</div>';
+    if(page==='rule')h=nav('提醒')+'<div class="scroll">'+rulesHTML(sw)+'</div>';
+    if(page==='week'){h=nav('本周待决定')+'<div id="w2"></div>'}
+    p.innerHTML=h;
+    if(page==='week')weekly(p.querySelector('#w2'),ws,null);
+    p.querySelectorAll('[data-go]').forEach(function(b){b.addEventListener('click',function(){page=b.dataset.go;render()})});
+    bindRows(p,page==='dl'?sd:sh,render);bindSwitches(p,sw);
+    var go=p.querySelector('#go2');if(go)go.addEventListener('click',function(){if(page==='dl')doClean(p,dl,sd,render);else if(page==='cache')doClean(p,[hid[0]],sh,render);else doClean(p,confirmGroups,sh,render)});
+    var all=p.querySelector('#all2');if(all)all.addEventListener('click',function(){
+      var a=picked(dl,sd),b=picked([hid[0]],sh),list=a.concat(b);list.forEach(function(i){(a.indexOf(i)>-1?sd:sh).gone[i.id]=1});render();
+      toast(p,resultText(list),function(){list.forEach(function(i){delete sd.gone[i.id];delete sh.gone[i.id]});render()});
+    });
+  }
+  render();
+})();
+
+/* ---------- 第 3 版：双栏工作台 ---------- */
+(function(){
+  var p=document.getElementById('p3'),dl=DL(),hid=HID(),sd=newState(dl),sh=newState(hid),page='dl',sw=RULES.map(function(r){return r[2]});
+  var ws={cards:CARDS(),i:0,freed:0,trashed:0};
+  var hist=[{t:'今天 09:58 · 手动清理',s:'14 个已合并 worktree 的构建产物、npm / uv / pnpm / brew / pip 缓存、测试用浏览器',v:'已释放 84 GB',undo:false},
+            {t:'今天 09:40 · 移到废纸篓',s:'claude-code.backup-20260609（旧版 Claude Code 备份）',v:'209 MB',undo:true}];
+  function render(){
+    var pd=picked(dl,sd),ph=picked(hid,sh),left=ws.cards.length-ws.i;
+    var navs=[['dl','下载',fmt(sum(pd))],['hid','看不见的',fmt(sum(ph))],['grow','涨幅','+22.7G'],['week','本周待决定',left>0?'<span class="badge">'+left+'</span>':'✓'],null,['hist','操作记录',String(hist.length)],['rule','提醒','']];
+    var h='<div class="rail"><div class="gauge"><small>可用</small><div class="big">80.6<small> GB</small></div><div class="vbar"><i></i></div><small>共 460 GB · 健康</small></div><div class="navl">'+navs.map(function(n){return n?'<button data-p="'+n[0]+'" aria-current="'+(page===n[0])+'"><span>'+n[1]+'</span><small>'+n[2]+'</small></button>':'<hr>'}).join('')+'</div></div>';
+    var title={dl:['下载文件夹','按类别分组，默认只勾建议项'],hid:['看不见的','缓存、备份、虚拟机、构建产物'],grow:['涨幅','最近 7 天可用空间与今天谁涨的'],week:['本周待决定','一次一件，三个按钮'],hist:['操作记录','移到废纸篓的都能撤销'],rule:['提醒','改动立即生效']}[page];
+    h+='<div class="main"><div class="mh"><b>'+title[0]+'</b><small>'+title[1]+'</small></div>';
+    if(page==='dl')h+='<div class="scroll">'+groupsHTML(dl,sd,'g')+'</div><div class="foot"><small>已选 '+pd.length+' 项 · '+fmt(sum(pd))+' · 可撤销</small><button class="btn" id="go3"'+(pd.length?'':' disabled')+'>移到废纸篓</button></div>';
+    if(page==='hid')h+='<div class="scroll">'+groupsHTML(hid,sh,'h')+'</div><div class="foot"><small>已选 '+ph.length+' 项 · '+fmt(sum(ph))+'</small><button class="btn" id="go3"'+(ph.length?'':' disabled')+'>清理</button></div>';
+    if(page==='grow')h+='<div class="scroll"><div style="padding:4px 8px 0">'+spark(420,130,{line:'var(--g-accent)',warn:'var(--g-amber)',muted:'var(--g-muted)',dates:1,pad:18})+'</div><div class="grp"><b>今天谁涨的</b><span>增量</span></div>'+culpritsHTML()+'</div><div class="foot"><small>每天 10:00 记一次</small><span></span></div>';
+    if(page==='week')h+='<div class="scroll" id="w3"></div><div class="foot"><small>每周五 18:00 推送</small><span></span></div>';
+    if(page==='hist')h+='<div class="scroll"><div class="hist">'+hist.map(function(x,k){return '<div class="h"><span>'+esc(x.t)+'<small style="display:block">'+esc(x.s)+'</small></span><span style="display:grid;gap:4px;justify-items:end"><span class="num" style="font-size:12px">'+x.v+'</span>'+(x.undo?'<button data-undo="'+k+'">撤销</button>':'<button disabled>不能撤销</button>')+'</span></div>'}).join('')+'</div></div><div class="foot"><small>记录保存在本机，最多 200 次</small><span></span></div>';
+    if(page==='rule')h+='<div class="scroll">'+rulesHTML(sw)+'</div><div class="foot"><small></small><span></span></div>';
+    h+='</div>';
+    p.innerHTML=h;
+    if(page==='week'){ws.onChange=function(){render()};weekly(p.querySelector('#w3'),ws,null)}
+    p.querySelectorAll('[data-p]').forEach(function(b){b.addEventListener('click',function(){page=b.dataset.p;render()})});
+    p.querySelectorAll('[data-undo]').forEach(function(b){b.addEventListener('click',function(){var x=hist[+b.dataset.undo];x.undo=false;x.v='已放回原处';render()})});
+    bindRows(p,page==='dl'?sd:sh,render);bindSwitches(p,sw);
+    var go=p.querySelector('#go3');if(go)go.addEventListener('click',function(){
+      var g=page==='dl'?dl:hid,s=page==='dl'?sd:sh,list=picked(g,s);if(!list.length)return;
+      list.forEach(function(i){s.gone[i.id]=1});
+      hist.unshift({t:'刚刚 · '+(page==='dl'?'移到废纸篓':'清理'),s:list.map(function(i){return i.name}).slice(0,3).join('、')+(list.length>3?' 等 '+list.length+' 项':''),v:resultText(list),undo:page==='dl'});
+      render();toast(p,resultText(list),function(){list.forEach(function(i){delete s.gone[i.id]});hist.shift();render()});
+    });
+  }
+  render();
+})();
+
+/* ---------- 方案切换 ---------- */
+var tabs=document.querySelectorAll('.seg button');
+function show(v){tabs.forEach(function(b){b.setAttribute('aria-selected',String(b.dataset.v===v))});['1','2','3'].forEach(function(k){document.getElementById('v'+k).hidden=(k!==v)})}
+tabs.forEach(function(b){b.addEventListener('click',function(){show(b.dataset.v);try{history.replaceState(null,'','#v'+b.dataset.v)}catch(e){}})});
+function fromHash(){var m=/^#v([123])$/.exec(location.hash||'');if(m)show(m[1])}
+fromHash();window.addEventListener('hashchange',fromHash);
+})();
+</script>

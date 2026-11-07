@@ -3,3 +3,8 @@
 dist/
 *.app/
 .DS_Store
+.claude/
+# 悬浮球图标的中间稿和参考图只留本机；定稿图和生图需求进仓库
+design/fuyou-icon/*
+!design/fuyou-icon/定稿-扫帚浮游兽-*.png
+!design/fuyou-icon/生图需求.md
