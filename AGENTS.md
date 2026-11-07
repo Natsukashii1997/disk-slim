@@ -101,6 +101,17 @@ single-context：根目录 `GLOSSARY.md` 与 `docs/adr/`，用到时再建。见
 - 安全底线（[docs/PRD.md](docs/PRD.md) 第 5 节）：用户文件只移到废纸篓，不直接删除、不自动清空废纸篓；「只展示」的项任何路径都删不了；清理前可预览、留日志、可撤销；不用 `sudo`。
 - 界面上的时间经统一的格式化函数按北京时间显示，不直接截取 ISO 字符串（全局坑 G-02）。
 
+## AI 接入
+
+本应用当前不调用 AI：扫描、分级、清理、提醒都由本机规则完成，没有任何内容由 AI 替本应用产出（2026-11-07 核实）。会启动的外部程序只有已知位置表里的缓存清理命令（`npm`、`uv`、`pnpm`、`pip3`）和查 PR 是否已合并的 `gh pr list`。
+
+- 数据对象（来源是本机目录，只统计占用空间、按风险分级，不读内容，不算执行方；定义在 `KnownPlaces.swift`、`WorktreeScanner.swift`）：
+  - 只展示，任何路径都删不了：Claude 对话记录 `~/.claude/projects`；Codex 对话记录 `~/.codex/sessions`、`~/.codex/archived_sessions`。
+  - 需确认：Codex 备份 `~/.codex/recovery`（勾选后逐份移到废纸篓）；Cowork 虚拟机 `~/Library/Application Support/Claude/vm_bundles`（本应用不清，只提示去 Claude 设置 › 存储里处理）。
+  - 可清理：各项目 `.claude/worktrees/*/target`（Claude 会话 worktree 里的 Rust 构建产物）。
+- 对外开放：无 AI 接口（没有 MCP）。`~/Library/Application Support/disk-slim/status.json` 和 `diskslim://panel/toggle` 链接只给驿窗挂件读状态、开面板，不是给 AI 的接口。
+- 第一次加 AI 功能时，按全局规则 P-13（`~/.claude/CLAUDE.md` 第 14 节「应用里的 AI 接入写进设置」）补设置栏，并改写本节。
+
 ## 交接格式
 
 每轮完成后，在 CURRENT.md 顶部新增一节（旧节保留在下面，过长时归档到 `docs/history/`），骨架照抄 [docs/templates/handoff.md](docs/templates/handoff.md)；`tests/handoff-format.test.mjs` 会检查顶部一节有没有日期、「时间：开工」「测试：」「本轮新坑：」三行，新坑编号在 LESSONS 里要存在。每一行怎么写、报告与验收的防伪造五条见 [OPERATIONS](docs/OPERATIONS.md)「交接写法」「报告与验收」；没做就写「未做」。
