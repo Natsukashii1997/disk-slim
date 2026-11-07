@@ -1,6 +1,6 @@
 # Issue 看板：GitHub
 
-本仓库的需求、规格和任务都放在 GitHub Issues（`Natsukashii1997/disk-slim（远端还没建）`），一律用本机已登录的 `gh`，在仓库目录里运行时 `gh` 会自己认出仓库。
+本仓库的需求、规格和任务都放在 GitHub Issues（`Natsukashii1997/disk-slim`，私有，2026-11-07 建），一律用本机已登录的 `gh`，在仓库目录里运行时 `gh` 会自己认出仓库。
 
 ## 操作
 
