@@ -1,5 +1,7 @@
 # 当前状态
 
+当前阶段目标：第 6 批试用一周收尾，定下 disk-space-guard 去留，之后转常态维护。（2026-11-08 常浩确认，digital-twin#114）
+
 更新：2026-11-06。第 0–8 批都已完成（第 8 批桌面悬浮球真屏实测通过）。第 9 批「挂进驿窗侧栏」三批都已完成：磁盘瘦身这一半在 `feat/postpane-pendant`（接在 `feat/floating-ball` 后面），驿窗挂件已合并（postpane PR #159），两边真屏验收通过，悬浮球已改为默认关并重新装机。分支 main → feat/scan-engine → … → feat/floating-ball → feat/postpane-pendant，都没合并、没推送，GitHub 远端未建。唯一下一步：等用户定这条分支链怎么合并、要不要建远端。第 6 批的「试用一周」、`disk-space-guard` 要不要停、postpane 的 Cargo 配置，这几件照旧等用户定。
 
 ## AGENTS 补「AI 接入」一节（2026-11-07，Claude，常浩定全局规则 P-13 后母会话派来，常浩看过计划说「按计划开工」；已提交到 `claude/2-ai-access`、PR 待合并、无需发布）
