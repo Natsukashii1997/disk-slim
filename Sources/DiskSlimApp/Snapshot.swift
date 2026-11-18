@@ -31,6 +31,15 @@ enum Snapshot {
             // 顶卡数字和色带可用那段同色：60 GB 以上绿、30 GB 以下红（真实磁盘碰不到时用示例数字看）
             ("18-首页-示例-可用72GB", { freeGB($0, 72) }),
             ("19-首页-示例-可用22GB", { freeGB($0, 22) }),
+            // 第 11 批内存页：真实读数（曲线要应用常驻攒），和照 11 月 18 日 13:50 实测编的示例
+            ("30-内存-真实", { realMemory($0) }),
+            ("31-内存-真实-先不动", { realMemory($0); $0.memDrawer = .keep }),
+            ("32-内存-示例", { exampleMemory($0) }),
+            ("33-内存-示例-要你说一句", { exampleMemory($0); $0.memDrawer = .ask }),
+            ("34-内存-示例-先不动", { exampleMemory($0); $0.memDrawer = .keep }),
+            ("35-强制退出-真实", { realMemory($0); $0.page = .forceQuit }),
+            ("36-强制退出-示例-点了一下", { exampleMemory($0); $0.page = .forceQuit; $0.forceArmed = "com.google.Chrome@1" }),
+            ("37-内存-示例-退出后提示", { exampleMemory($0); $0.toast = Toast(text: "已退出 预览，腾出约 1.2 GB。要用时照常打开", canUndo: false) }),
         ]
         for (name, setup) in shots {
             let store = Store(readOnly: true)
@@ -58,6 +67,48 @@ enum Snapshot {
             print(file.path)
         }
         ball(to: dir)
+    }
+
+    static func realMemory(_ store: Store) {
+        store.tab = .memory
+        store.applyMemory(status: readMemoryStatus(), usage: MemoryAttribution.usage(listProcesses(), apps: RunningApps.current()))
+    }
+
+    /// 示例：照 11 月 18 日 13:50 实测的数字编（20 个会话半天没动、Chrome 8 GB、开机 3 天）；
+    /// ChatGPT 里会跑 Codex 任务，不挑（审查高 2），一键退出的示例换成两天没用的「预览」
+    static func exampleMemory(_ store: Store) {
+        let gb = 1_073_741_824.0, now = Date()
+        func app(_ pid: Int32, _ name: String, _ id: String, _ path: String) -> RunningApp {
+            RunningApp(pid: pid, name: name, bundleID: id, bundlePath: path, launchedAt: now.addingTimeInterval(-3 * 86_400))
+        }
+        let apps: [(RunningApp, Double)] = [
+            (app(1, "Google Chrome", "com.google.Chrome", "/Applications/Google Chrome.app"), 8.0),
+            (app(2, "Claude", "com.anthropic.claudefordesktop", "/Applications/Claude.app"), 3.7),
+            (app(3, "飞书", "com.bytedance.macos.feishu", "/Applications/飞书.app"), 3.1),
+            (app(4, "ChatGPT", "com.openai.codex", "/Applications/ChatGPT.app"), 1.8),
+            (app(5, "微信", "com.tencent.xinWeChat", "/Applications/微信.app"), 1.7),
+            (app(6, "预览", "com.apple.Preview", "/System/Applications/Preview.app"), 1.2),
+        ]
+        var sessions: [SessionMemory] = []
+        var record = MemoryRecord(trackingSince: now.addingTimeInterval(-2 * 86_400))
+        for i in 0..<43 {
+            let s = SessionMemory(pid: Int32(100 + i), startedAt: 1, bytes: Int64((i < 20 ? 11.7 / 20 : 6.8 / 23) * gb), cpuNanos: 0)
+            sessions.append(s)
+            record.sessions[s.key] = SessionTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(i < 20 ? -20 * 3600 : -600))
+        }
+        for (a, _) in apps where a.bundleID != "com.apple.Preview" {
+            record.activated(a.bundleID, at: now.addingTimeInterval(a.bundleID == "com.google.Chrome" ? -2 * 3600 : -300))
+        }
+        record.activated("com.apple.Preview", at: now.addingTimeInterval(-2 * 86_400 - 3600))
+        record.apps["com.apple.Preview@6"] = SessionTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-2 * 86_400))
+        let curve = [38, 40, 36, 42, 48, 55, 52, 58, 61, 57, 63, 66, 70, 64, 68, 72, 75, 71, 74, 78, 76, 79, 77, 78]
+        record.pressure = curve.enumerated().map { PressurePoint(at: now.addingTimeInterval(Double($0.offset - 23) * 3600), usedPercent: $0.element, level: .tight) }
+        store.memRecord = record
+        store.tab = .memory
+        let status = MemoryStatus(totalBytes: Int64(24 * gb), level: .tight, usedPercent: 78, swapUsedBytes: Int64(29.6 * gb),
+                                  swapTotalBytes: Int64(30 * gb), bootedAt: now.addingTimeInterval(-(3 * 86_400 + 17 * 3600)))
+        store.applyMemory(status: status, usage: MemoryUsage(apps: apps.map { AppMemory(app: $0.0, bytes: Int64($0.1 * gb)) },
+                                                             sessions: sessions, vmBytes: Int64(2.5 * gb)))
     }
 
     /// 把可用空间换成示例数字，总容量不变

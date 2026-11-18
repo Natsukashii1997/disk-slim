@@ -18,6 +18,7 @@ final class FloatingBall: NSObject {
     private var clickMonitors: [Any] = []
     private var screenObserver: Any?
     private var sizeObservation: NSKeyValueObservation?
+    private var resizeObserver: Any?
     private var saved = Saved.load()
     /// 第 9 批：面板是驿窗挂件叫开的时候，开在这颗挂件旁边（AppKit 屏幕坐标）；nil 表示开在桌面悬浮球旁边
     private var anchor: CGRect?
@@ -149,7 +150,10 @@ final class FloatingBall: NSObject {
         store.page = .home
         store.drawer = nil
         store.confirming = nil
+        store.tab = .disk
+        store.memDrawer = nil
         store.scanIfStale()
+        store.refreshMemory()
         placePanel()
         panel?.makeKeyAndOrderFront(nil)
         // 球外圈的青光只在面板是从球上点开时亮
@@ -206,6 +210,13 @@ final class FloatingBall: NSObject {
         sizeObservation = hc.observe(\.preferredContentSize, options: [.new]) { [weak self] _, _ in
             DispatchQueue.main.async { MainActor.assumeIsolated { if self?.panelOpen == true { self?.placePanel() } } }
         }
+        // 上面那条有时不来：窗口被 SwiftUI 内容直接撑高，顶边不动往下长，底边会出屏幕
+        // （2026-11-18 真屏：挂件在右上时切到内存页，691→754 点，页脚「强制退出…」被切掉一半）。尺寸一变就按同样规则把位置收回屏内
+        resizeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification, object: p, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { if self?.panelOpen == true { self?.keepPanelInside() } }
+        }
         panel = p
         host = hc
     }
@@ -218,6 +229,13 @@ final class FloatingBall: NSObject {
         let frame = FloatGeometry.panel(size: CGSize(width: panelWidth, height: max(size.height, 120)),
                                         ball: target, screen: screen.visibleFrame)
         p.setFrame(frame, display: true)
+    }
+
+    /// 只挪位置不改大小：按 placePanel 同样的规则（顶边对齐挂件或球、四周留 12 点）算出该在哪，不在就挪过去
+    private func keepPanelInside() {
+        guard let p = panel, let target = anchor ?? ballWindow?.frame, let screen = screen(containing: target) else { return }
+        let want = FloatGeometry.panel(size: p.frame.size, ball: target, screen: screen.visibleFrame).origin
+        if want != p.frame.origin { p.setFrameOrigin(want) }
     }
 
     /// 挂件或球所在的那块屏

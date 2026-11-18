@@ -2,7 +2,35 @@
 
 当前阶段目标：第 6 批试用一周收尾，定下 disk-space-guard 去留，之后转常态维护。（2026-11-08 常浩确认，digital-twin#114）
 
-更新：2026-11-18。第 0–10 批都已合回 main（PR #1、#5）。本轮在分支 `claude/minimize-button` 给面板首页顶栏加了缩小键（常浩选甲「同款线条」），已装机、真屏验证通过，PR 待常浩说「合并」。唯一下一步：常浩在「完全磁盘访问权限」里删掉旧条目再加回（本轮重装过），然后合并缩小键 PR。第 6 批的「试用一周」、`disk-space-guard` 要不要停，照旧等用户定。
+更新：2026-11-18。第 0–10 批和缩小键都已合回 main（PR #1、#5、#6）。本轮在分支 `claude/memory` 做第 11 批「内存」：「磁盘 | 内存」切换、内存页（定稿一二结合）、一键退出、要你说一句（Claude 会话 / 浏览器 / 重启）、强制退出页，已装机。11-18 19:12 交接会话补做了真屏验收：内存页、强制退出页「退出」和「强制退出」点两下都通过；验收中发现面板切到内存页会长出屏幕底边，已修（`FloatingBall.swift`）并重装复验。常浩看过截图说「开 PR」，已推送并开 PR #7（https://github.com/Natsukashii1997/disk-slim/pull/7）。唯一下一步：常浩说「合并」后合回 main。第 6 批的「试用一周」、`disk-space-guard` 要不要停，照旧等用户定。
+
+## 第 11 批：内存（2026-11-18，Claude，常浩提出「一键优化内存、直接替我判断，不行就一键打开强制退出窗口」，两轮预览后选「甲」、再发图定「一二结合」，看过分批计划说「按计划开工」；已提交到 `claude/memory`、PR #7 待合并、已装机、未发布）
+
+- 时间：开工 `2026-11-18 14:10`（`date '+%F %H:%M'` 记录）。★ 来由：常浩电脑 24 GB 内存，交换文件用到 29.6 / 30 GB，最大头是 43 个 Claude Code 会话；想要应用替他判断该关什么、一键处理，并且不用再记 ⌥⌘Esc。预览 `docs/design/ui-v8-memory.html`（https://claude.ai/artifact/XxVjd2mDXeJDiQAM8DnTcR，三版位置，选甲）、`docs/design/ui-v9-memory-polish.html`（https://claude.ai/artifact/54kvgJmwZH4iEmXzBcAv3h，常浩发图定「一二结合」）。
+- 改了哪些文件：
+  - 规则（DiskSlimCore）：新增 `Memory.swift`（读内存压力 / 交换 / 开机时间，列本用户进程的 phys_footprint 和 CPU 时间含已退出子进程，按父进程链和路径算回应用，Claude Code 会话连同插件合成一项，虚拟机单列）、`MemoryPlan.swift`（`MemoryRecord` 记曲线、最后使用、应用和会话忙闲、几个「别问」，`memory.json` 读写；三段规则；`MemoryGuard` 动手前核对）、`RunningApps.swift`。
+  - 应用（DiskSlimApp）：新增 `MemoryStore.swift`（每 5 分钟采样、记切到前台、一键退出、浏览器退出、强制退出两下、收会话前隔 3 秒复查再发 SIGTERM、今晚 22:00 重启提醒）、`MemoryViews.swift`（切换条、内存页、强制退出页、图标转 sRGB 位图）；`Store.swift`（内存状态、启动时重置开始记录时间）、`Views.swift`（首页接切换条、顶栏内存页写「HH:mm 看过」、`Spark` 可铺满、`ChipButton` 加红色、截图里不挂取窗口的视图）、`DiskSlimApp.swift` 和 `FloatingBall.swift`（打开面板回磁盘页、读一次内存；真屏验收后又补：面板尺寸一变就收回屏内）、`Snapshot.swift`（30～37 号内存截图）。
+  - 命令行：`diskslim memory`（只读）。
+  - 测试：新增 `MemoryTests.swift`、`MemoryReviewTests.swift`（审查对抗测试，按修好后的规则断言）。
+  - 文档：`docs/PRD.md`（3.6、4.4、第 5 节内存底线、第 7 节第 11 批）、`AGENTS.md`（简介、命令、结构、AI 接入里加 Claude Code 会话进程这个数据对象）、`docs/LESSONS.md`（L-13）、两份设计预览、本文件。
+- 测试：`scripts/test.sh` 原样结果 `✔ Test run with 289 tests in 37 suites passed`；`node --test tests/*.test.mjs` 原样结果 `ℹ pass 4` / `ℹ fail 0`；`node scripts/check-rules.mjs` 输出「通用规则检查通过」。
+- 验证：
+  - 「收掉会话」实测（之二）：开测试会话「磁盘瘦身内存测试会话（可归档）」，回复后对它的进程（pid 2006，只有它是新开的 Haiku 进程，工作目录是本项目）发 SIGTERM，约 6 秒退出；再发消息，桌面版自动 `Resuming session`、载入原记录，回答里记得第 1 条（`evidence/2026-11-18-memory/kill-test*.txt`）。结束那一刻桌面版记了一条 error（退出码 143），对话记录里没有报错，界面上当时有没有红字没看到。
+  - `diskslim memory` 只读跑真实机器，分段合理（`cli-memory-1.txt`）；刚开始记录时都写「刚开始记」，不会误挑。
+  - 离屏截图两轮对照预览：`snap4`、`snap5`（真实与示例的内存页、展开态、强制退出点一下、退出后提示）。中途发现图标让整张截图发灰，改成重画 sRGB 位图（L-13）。
+  - 真屏验收（11-18 19:12，交接会话；证据 `evidence/2026-11-18-memory/real/`，`notes.txt` 记了每一步）：每次点之前先截图确认是面板，再用新写的 `topat` 查点击位置最上层的窗口确实是磁盘瘦身；点完用 `pidwins` 和 `pgrep -x Calculator` 回读。① 挂件链接叫开，默认停在磁盘页，「内存」旁亮橙点（`01-open.png`）；② 切到内存页，和定稿「一二结合」一致（`04-memory-left.png`）；③ 页脚「强制退出…」打开列表（`05-forcequit.png`）；对自己后台打开的计算器点「退出」，`pgrep` 回读已退出，约 3 秒后列表刷新、计算器从列表消失（`08-after-quit-3s.png`）；④ 重开计算器，点「强制退出」第一下只变红色「确认强制退出」，计算器还在（`11-armed.png`），第二下后计算器退出（`12-after-force.png`）。全程只退出过自己开的计算器。
+  - 验收中发现并修复：挂件在屏幕右上（链接 y=220）时，面板切到内存页从 691 点长到 754 点，顶边不动、往下长，底边到 974，超出 956 点高的屏幕，页脚「强制退出…」被切掉一半（`02-memory.png`）。原因：内容变高时窗口被 SwiftUI 直接撑高，没走 `placePanel` 里的收回屏内（推断：`preferredContentSize` 的 KVO 这时没触发，没加日志核实）。修法：`FloatingBall.swift` 监听面板 `NSWindow.didResizeNotification`，尺寸一变就按 `FloatGeometry.panel` 同一规则只挪位置（`keepPanelInside`）。重装后同样步骤复验：顶边收到 190，底边停在 944，页脚完整（`13-fixed-right.png`）。修后 `scripts/test.sh` `✔ Test run with 289 tests in 37 suites passed`（`test-5.log`），Node `ℹ pass 4` / `ℹ fail 0`，规则检查通过，`scripts/install.sh` 退出码 0（`install-2.log`）。
+  - 真屏时的意外：屏幕右侧有 PostPane（`/Applications/PostPane.app`）的一个透明窗口（层级 26，x=413～1353，整屏高）盖在面板上面。第一下点「内存」生效了，之后两下点「磁盘」(1221,279) 没反应，推断落进了 PostPane 的窗口，点到了什么未查。发现后改为把面板开在屏幕左侧、每次点前查最上层窗口。
+  - 装机后应用常驻、写出 `memory.json`（第一份：1 个曲线点、6 个会话、11 个应用）；用挂件链接开、关面板正常。**真屏点击没做**：前台是常浩的 WPS 文档，截面板区域截到的是文档，再按坐标点会点进文档里，停了；截到的那张图已删。没有退出过常浩的任何程序（只开过、关过自己开的计算器）。
+- 截图：`~/Library/Application Support/disk-slim/evidence/2026-11-18-memory/snap5/`（30～37 号是内存页）。
+- 发布与回读：未发布。`scripts/install.sh` 退出码 0（`install-1.log`），只有一个进程。签名变了，「完全磁盘访问权限」要删旧条目再加。
+- 独立审查（L-06）：只读审查员报高 2、中 5、低 5。已修：高 1（收会话前复查忙闲）、高 2（ChatGPT 桌面版的 bundle id 就是 `com.openai.codex`，里面跑 Codex 任务，改为不挑；应用也按进程树记忙闲，4 小时内在后台忙过的不挑）、中 3（每次启动重新看满 4 小时）、中 4、中 5（采样间隔过长或 CPU 合计变小当忙过，CPU 含已退出子进程）、中 7（Docker、OrbStack、UTM、OBS、JetBrains 等归「可能有任务在跑」）、低 8～11。中 6 改的是 PRD 文字：强制退出页和系统 ⌥⌘Esc 一样列系统自带应用，一键退出照旧不挑它们。没改：低 12（切到别的应用就写一次 `memory.json`，文件只有几 KB）。审查员中途误覆盖并删掉了已提交的 `ReviewAdversarialTests.swift`，已从 HEAD 恢复，`git status` 核对过。
+- 与授权不一致之处、遗留问题、范围外发现：
+  - 计划里写「默认停磁盘页」，照做；替你挑好的要等应用常驻满 4 小时、且记到程序 4 小时没在后台忙，第一次装好后这段时间里内存页「替你挑好的」是空的，属预期。
+  - 内存页没有「留着」按钮（磁盘页有），计划没写，没做。
+  - 测试会话「磁盘瘦身内存测试会话（可归档）」还在侧栏，等常浩同意后归档。
+  - 挂件链接在应用刚重启后第一次发不出面板、连发时会「再开一次」，缩小键那批就记过，没查。
+- 本轮新坑：L-13。
 
 ## 面板顶栏加缩小键（2026-11-18，Claude，常浩在驿窗会话里提出要缩小键，三版预览选甲「同款线条」后说「选甲，按计划开工」，之后说「你现在就查」；已提交到 `claude/minimize-button`、PR 待合并、已装机、未发布）
 
