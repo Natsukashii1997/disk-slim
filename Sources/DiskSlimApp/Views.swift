@@ -68,6 +68,7 @@ struct PanelView: View {
                 case .records: ListPage(page: .records, title: "对话记录", action: nil)
                 case .growth: GrowthPage()
                 case .alerts: AlertsPage()
+                case .forceQuit: ForceQuitPage()
                 }
             }
             .disabled(store.confirming != nil)
@@ -134,13 +135,16 @@ struct BigButton: ButtonStyle {
 /// 「要你说一句」里的小按钮：第一个实心，其余描边
 struct ChipButton: ButtonStyle {
     var primary = false
+    /// 强制退出用：字或底换成红色
+    var danger = false
     func makeBody(configuration: Configuration) -> some View {
         let t = Tone()
+        let ink = danger ? t.red : Color.primary
         configuration.label
             .font(.system(size: 12, weight: primary ? .semibold : .regular))
-            .foregroundStyle(primary ? t.card : Color.primary)
+            .foregroundStyle(primary ? t.card : ink)
             .padding(.horizontal, 11).padding(.vertical, 5)
-            .background(Capsule().fill(primary ? Color.primary : .clear))
+            .background(Capsule().fill(primary ? ink : .clear))
             .overlay(Capsule().stroke(primary ? .clear : t.hair))
             .opacity(configuration.isPressed ? 0.7 : 1)
             .fixedSize()
@@ -210,10 +214,15 @@ struct HomeView: View {
         let t = Tone()
         VStack(spacing: 12) {
             meta
-            if !store.unreadable.isEmpty { accessHint(t) }
-            HeroCard(t: t)
-            decideCard(t)
-            footer
+            PanelTabs()
+            if store.tab == .memory {
+                MemoryHome()
+            } else {
+                if !store.unreadable.isEmpty { accessHint(t) }
+                HeroCard(t: t)
+                decideCard(t)
+                footer
+            }
         }
         .padding(14)
     }
@@ -222,21 +231,25 @@ struct HomeView: View {
         HStack {
             Text(statusLine)
             Spacer()
-            Button { store.scan() } label: { Image(systemName: "arrow.clockwise") }
-                .buttonStyle(.plain).help("重新扫描")
+            Button { if store.tab == .memory { store.refreshMemory() } else { store.scan() } } label: { Image(systemName: "arrow.clockwise") }
+                .buttonStyle(.plain).help(store.tab == .memory ? "重新看一遍" : "重新扫描")
             // 缩小键（2026-11-18 常浩选甲「同款线条」，预览 docs/design/ui-v7-minimize.html）：收回挂件、悬浮球或菜单栏图标
             Button { FloatingBall.shared.collapse(host.window) { dismiss() } } label: {
                 // 横线只有一两个像素高：给一块 18×18 的点击区，不然差一个像素就点不中
                 Image(systemName: "minus").frame(width: 18, height: 18).contentShape(Rectangle())
             }
                 .buttonStyle(.plain).help("缩小")
-                .background(WindowReader(box: host))
+                .background { if !isSnapshot { WindowReader(box: host) } }
         }
         .font(.system(size: 11.5)).foregroundStyle(.secondary)
         .padding(.horizontal, 4)
     }
 
     private var statusLine: String {
+        if store.tab == .memory {
+            guard let at = store.memAt else { return "正在看内存…" }
+            return "\(BeijingTime.hourMinute(at)) 看过"
+        }
         if store.scanning { return "正在扫描…" }
         let total = store.disk.map { "共 \(formatBytes($0.totalBytes))" } ?? ""
         guard let r = store.report else { return total.isEmpty ? "还没扫描" : "\(total) · 还没扫描" }
@@ -624,13 +637,17 @@ struct ConfettiView: View {
 struct Spark: View {
     let values: [Double]
     let color: Color
+    /// 按最高、最低值铺满高度（内存压力曲线用：变化只有几个百分点，从 0 画起就是一条平线）
+    var fit = false
 
     var body: some View {
         GeometryReader { g in
-            let top = max(60, (values.max() ?? 0) * 1.1)
+            let top = fit ? (values.max() ?? 1) : max(60, (values.max() ?? 0) * 1.1)
+            let bottom = fit ? (values.min() ?? 0) : 0
+            let span = max(top - bottom, fit ? 1 : 0.0001)
             let pts = values.enumerated().map { i, v in
                 CGPoint(x: values.count > 1 ? g.size.width * CGFloat(i) / CGFloat(values.count - 1) : 0,
-                        y: 3 + (g.size.height - 6) * (1 - CGFloat(min(v, top) / top)))
+                        y: 3 + (g.size.height - 6) * (1 - CGFloat((min(v, top) - bottom) / span)))
             }
             let line = Path { p in p.addLines(pts) }
             ZStack {

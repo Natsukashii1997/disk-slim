@@ -149,7 +149,10 @@ final class FloatingBall: NSObject {
         store.page = .home
         store.drawer = nil
         store.confirming = nil
+        store.tab = .disk
+        store.memDrawer = nil
         store.scanIfStale()
+        store.refreshMemory()
         placePanel()
         panel?.makeKeyAndOrderFront(nil)
         // 球外圈的青光只在面板是从球上点开时亮

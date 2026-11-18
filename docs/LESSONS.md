@@ -114,6 +114,14 @@
 - 证据：`evidence/2026-11-18-minimize/`（`final-realscreen.txt`、`diag-log.txt` 诊断日志、截图与脚本）；CURRENT.md「面板顶栏加缩小键」一节。
 - 升级：未升级。「细线图标按钮要放大点击区」「MenuBarExtra 用 dismiss 收起」换个 SwiftUI 项目也成立，提议提升为全局 G-xx，等用户批准。
 
+## L-13 内存页离屏截图整张发灰；读进程环境变量会看到登录凭据；闲着的 Claude 会话也一直用 CPU（2026-11-18）
+
+- 现象：① 第 11 批内存页的离屏截图（`--snapshot`）整张像蒙了一层灰，橙字变土黄，磁盘页同一次截图正常。② 想把 Claude Code 会话进程对上桌面版会话，用 `ps eww` 看环境变量，输出里有 `CLAUDE_CODE_OAUTH_TOKEN` 明文。③ 想按「CPU 时间不涨」判断会话闲着，实测 73 秒里闲了几天的会话也用了 1.3～1.9 秒 CPU，和刚用过的差不多。
+- 根因：① 系统给的应用图标（`NSWorkspace.icon(forFile:)`）不论直接交给 `Image(nsImage:)` 还是先 `cgImage(forProposedRect:)` 再画，`ImageRenderer` 出来的整张图都变灰；关掉图标对照（`DS_NOICON`）就正常，推断是图标位图的色彩空间带歪了整张渲染（未查到文档）。② 桌面版把登录令牌放在子进程环境变量里。③ 会话进程空闲时也有固定的后台开销（约 2%）。
+- 正确做法：① 图标先画进自己建的 sRGB 位图（`CGContext` + `NSGraphicsContext`）再用，见 `MemoryViews.swift` 的 `AppIcon.bitmap`。② 不读别的进程的环境变量；要对应会话只用命令行参数或桌面版自己的会话记录，而且这两样也对不准（一半会话命令行里没有编号，有编号的常指向父会话），本应用最终不做对应。③ 忙闲按整棵进程树每 5 分钟采样、CPU 用到 5% 以上才算忙，12 小时没忙算闲（`MemoryRecord.sample`）。
+- 证据：`evidence/2026-11-18-memory/`（`snap1`～`snap3`、`snap-noicon` 对照截图；`cc-cpu-1.txt`、`cc-cpu-2.txt` 两次 CPU 时间）。
+- 升级：未升级。① 换个 SwiftUI 项目也成立，提议提升为全局 G-xx，等用户批准。
+
 ---
 
 格式：

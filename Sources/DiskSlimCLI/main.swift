@@ -8,6 +8,7 @@ let usage = """
   diskslim clean --yes          执行：移到废纸篓 / 删除可再生目录 / 运行清理命令，并记操作记录
   diskslim undo                 撤销最近一次：把移到废纸篓的东西放回原处
   diskslim growth               最近 7 天可用空间和谁涨了多少（只读每日记录，不扫描）
+  diskslim memory               内存压力、谁占着、替你判断的三段（只读，不退出任何程序）
 通用选项：
   --home <目录>  --work <目录>   换一个主目录 / 项目目录（自测用的沙盒）
 """
@@ -127,6 +128,34 @@ case "growth":
         ranking(Usage.changes(from: first, to: last))
     }
     print("\n本命令只读记录，不扫描、不删除。")
+
+case "memory":
+    // 「最后使用」只有菜单栏应用常驻时才记得到；这里只读 memory.json，不写
+    let record = MemoryLog.standard(home: home).load(now: Date(), readOnly: true)
+    let status = readMemoryStatus()
+    let usage = MemoryAttribution.usage(listProcesses(), apps: RunningApps.current())
+    let plan = MemoryPlan.make(usage: usage, status: status, record: record, now: Date())
+    if let s = status {
+        print("内存压力：\(s.level.label)（已用约 \(s.usedPercent)%），共 \(formatBytes(s.totalBytes))，交换文件 \(formatBytes(s.swapUsedBytes)) / \(formatBytes(s.swapTotalBytes))")
+    }
+    print("\n谁占着：")
+    for t in plan.top { print("  \(formatBytes(t.bytes).padding(toLength: 9, withPad: " ", startingAt: 0)) \(t.name)") }
+    print("\n替你挑好的（一键退出）：\(plan.picked.isEmpty ? "没有" : "")")
+    for a in plan.picked {
+        let h = Int(Date().timeIntervalSince(record.lastUsed(a.app)) / 3600)
+        print("  \(formatBytes(a.bytes).padding(toLength: 9, withPad: " ", startingAt: 0)) \(a.app.name)（\(h) 小时没用）")
+    }
+    print("\n要你说一句：\(plan.asks.isEmpty ? "没有" : "")")
+    for a in plan.asks {
+        switch a {
+        case .sessions(let keys, let bytes): print("  \(keys.count) 个 Claude 会话半天以上没动 · \(formatBytes(bytes))")
+        case .browser(let b): print("  \(b.app.name) · \(formatBytes(b.bytes))")
+        case .restart(let days, let swap): print("  \(days) 天没重启，交换文件 \(formatBytes(swap))")
+        }
+    }
+    print("\n先不动：\(plan.keep.isEmpty ? "没有" : "")")
+    for k in plan.keep { print("  \(formatBytes(k.bytes).padding(toLength: 9, withPad: " ", startingAt: 0)) \(k.name) · \(k.reason.rawValue)") }
+    print("\n本命令只读，不退出任何程序。记录从 \(BeijingTime.monthDay(record.trackingSince)) \(BeijingTime.hourMinute(record.trackingSince)) 开始。")
 
 default:
     print(usage)

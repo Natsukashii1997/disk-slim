@@ -5,8 +5,11 @@ import SwiftUI
 
 /// 面板里的页面：首页 + 下钻页（2026-11-18 改版「替你判断」，issue #4）。
 enum Page: Hashable {
-    case home, picked, downloads, keep, records, growth, alerts
+    case home, picked, downloads, keep, records, growth, alerts, forceQuit
 }
+
+/// 首页顶上的「磁盘 | 内存」切换（第 11 批，预览 docs/design/ui-v9-memory-polish.html「定稿 · 一二结合」）
+enum PanelTab { case disk, memory }
 
 /// 首页白卡里展开的那一段
 enum HomeDrawer { case ask, keep }
@@ -73,12 +76,32 @@ final class Store: ObservableObject {
     /// 已经交给系统、还没回音的提醒：防止回音前又发一次
     private var pendingAlerts: Set<String> = []
 
+    // MARK: 内存（第 11 批）
+    /// 打开面板默认停在磁盘页；内存偏紧时切换条上的「内存」亮橙点，不自动跳页（2026-11-18 常浩同意计划）
+    @Published var tab: PanelTab = .disk
+    @Published var memDrawer: HomeDrawer?
+    @Published var memStatus: MemoryStatus?
+    /// 最近一次读内存的时间（内存页顶栏「HH:mm 看过」）
+    @Published var memAt: Date?
+    @Published var memUsage: MemoryUsage?
+    @Published var memPlan: MemoryPlan?
+    /// memory.json：曲线、每个应用最后一次被用的时间、会话忙闲、几个「别问」
+    @Published var memRecord: MemoryRecord
+    /// 强制退出页里点了一次「强制退出」、等第二下确认的那个应用（bundle id@pid，同一应用开两份也分得开）
+    @Published var forceArmed: String?
+    /// 每次读内存加一；回来的结果代次不对就丢掉，免得旧读数盖掉新读数（审查低 10）
+    var memGeneration = 0
+    /// 正在读内存或刚退出了程序、等它真的退出
+    @Published var memWorking = false
+    let memoryLog: MemoryLog
+    var activationObserver: NSObjectProtocol?
+
     let home: URL
     private let usageLog: UsageLog
     private let decisionLog: DecisionLog
     private let alertStore: AlertStore
     /// 离屏截图、示例通知用：只读，不写任何记录，不发通知，不自动清理
-    private let readOnly: Bool
+    let readOnly: Bool
     /// 提醒和自动清理只在打包版里跑：调试版发不了通知，也不该把真实的「已发」记录和自动清理用掉
     private var alertsActive: Bool { !readOnly && Notifier.shared.available }
     /// 每次扫描加一；扫描结果回来时代次不对就丢掉（清理后的新扫描要盖过清理前发起的旧扫描）
@@ -96,10 +119,14 @@ final class Store: ObservableObject {
         usageLog = UsageLog.standard(home: home)
         decisionLog = DecisionLog.standard(home: home)
         alertStore = AlertStore.standard(home: home)
+        memoryLog = MemoryLog.standard(home: home)
+        memRecord = memoryLog.load(now: Date(), readOnly: readOnly)
         disk = diskStatus(of: home)
         samples = usageLog.load(readOnly: readOnly)
         decisions = decisionLog.load(readOnly: readOnly)
         alertState = alertStore.load(readOnly: readOnly)
+        // 停机这段时间里谁用过记不到：从这次启动重新看满 4 小时再挑（审查中 3）
+        if !readOnly { memRecord.restarted(at: Date()) }
         if !readOnly { Store.main = self }
         // 第一次运行：从下一个周五开始发周报，不补发装上之前那个周五的
         if !readOnly, Notifier.shared.available, alertState.sent["weekly"] == nil {
@@ -161,9 +188,11 @@ final class Store: ObservableObject {
     /// 第 7 批：每 5 分钟读一次可用空间（很便宜）；比上次扫描时掉了 8 GB 以上就马上扫描，否则每 30 分钟按原来的规则看一次
     func dailyLoop() async {
         guard !readOnly else { return }
+        startMemoryTracking()
         var tick = 0
         while !Task.isCancelled {
             refreshDisk()
+            sampleMemory()
             let now = Date()
             if Alerts.shouldRescanForDrop(free: disk?.availableBytes, freeAtScan: report?.disk?.availableBytes,
                                           scannedAt: report?.scannedAt, now: now) {

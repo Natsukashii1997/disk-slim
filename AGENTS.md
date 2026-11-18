@@ -1,6 +1,6 @@
 # 磁盘瘦身（disk-slim） 协作约定（Codex / Claude 必读）
 
-macOS 菜单栏小工具，帮常浩批量清理下载文件夹和看不见的缓存、构建产物，并在空间变少或突然暴涨时提醒。进入顺序：本文件 → [CURRENT.md](CURRENT.md)（当前状态与唯一下一步）。需求以 [docs/PRD.md](docs/PRD.md) 为准。所有面向用户的文字用简体中文。本文件只放怎么开始和做什么事之前读哪份；操作细节在 [docs/OPERATIONS.md](docs/OPERATIONS.md)，按需读对应一节。
+macOS 菜单栏小工具，帮常浩批量清理下载文件夹和看不见的缓存、构建产物，并在空间变少或突然暴涨时提醒；第 11 批起也看内存，替他挑出闲着又占内存的程序一键退出。进入顺序：本文件 → [CURRENT.md](CURRENT.md)（当前状态与唯一下一步）。需求以 [docs/PRD.md](docs/PRD.md) 为准。所有面向用户的文字用简体中文。本文件只放怎么开始和做什么事之前读哪份；操作细节在 [docs/OPERATIONS.md](docs/OPERATIONS.md)，按需读对应一节。
 
 ## 做什么事之前读哪份
 
@@ -35,6 +35,7 @@ swift build -c release                       # 编译
 .build/release/diskslim clean --yes          # 真正执行；只有用户在本轮明确同意清理真实磁盘时才能跑
 .build/release/diskslim undo                 # 撤销最近一次：把移到废纸篓的放回原处
 .build/release/diskslim growth               # 最近 7 天可用空间和谁涨了多少；只读每日记录 usage.json，不扫描
+.build/release/diskslim memory               # 内存压力、谁占着、替你判断的三段；只读，不退出任何程序
 # 自测一律用沙盒：加 --home <沙盒>/home --work <沙盒>/home/work，沙盒放在证据目录下
 scripts/bundle.sh                            # 打包菜单栏应用到 dist/DiskSlim.app（本机签名，不安装、不启动）
 scripts/install.sh                           # 打包并装到 /Applications/DiskSlim.app 后启动；先复制后替换、失败回滚；应用正在清理时不替换
@@ -54,15 +55,18 @@ Package.swift        SwiftPM：DiskSlimCore（规则与模型）、diskslim（�
 Sources/
   DiskSlimCore/      Model（Finding、风险等级、清理方式）、System（元数据、大小、命令、格式）、
                      DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、History（按上次实际释放校正清理命令）、Usage（每日记录、7 天曲线、谁涨了多少）、Alerts（提醒开关与规则、自动清理挑项）、Weekly（每周卡片只问「要你说一句」、保留 / 下周再问）、Scan（总入口、执行前复核）、
-                     SafetyGuard（执行前重新核对路径和命令的白名单）、Cleaner（执行、操作记录、撤销）、FloatGeometry（悬浮球与面板位置、空间三档）、Pendant（给驿窗挂件的状态文件、diskslim:// 链接解析、点挂件防抖）
+                     SafetyGuard（执行前重新核对路径和命令的白名单）、Cleaner（执行、操作记录、撤销）、FloatGeometry（悬浮球与面板位置、空间三档）、Pendant（给驿窗挂件的状态文件、diskslim:// 链接解析、点挂件防抖）、
+                     Memory（读内存压力、交换、进程，按应用和 Claude Code 会话合计）、MemoryPlan（内存三段规则、memory.json、动手前核对）、RunningApps（读运行中的普通应用）
   DiskSlimCLI/       命令行 `diskslim`（scan / clean / undo）
-  DiskSlimApp/       菜单栏应用：Store（扫描、勾选、清理、撤销、提醒、自动清理）、Views（首页「替你判断」：雾光顶卡 + 替你挑好的 / 要你说一句 / 先不动；下钻页、涨幅页、提醒设置、确认、提示）、Notifier（系统通知，只在打包版）、Snapshot（离屏截图）、FloatingBall（桌面悬浮球：贴边小窗、点开面板、拖动贴边）
+  DiskSlimApp/       菜单栏应用：Store（扫描、勾选、清理、撤销、提醒、自动清理）、Views（首页「替你判断」：雾光顶卡 + 替你挑好的 / 要你说一句 / 先不动；下钻页、涨幅页、提醒设置、确认、提示）、Notifier（系统通知，只在打包版）、Snapshot（离屏截图）、FloatingBall（桌面悬浮球：贴边小窗、点开面板、拖动贴边）、
+                     MemoryStore（内存读数、采样、一键退出、收会话、强制退出、重启提醒）、MemoryViews（「磁盘 | 内存」切换、内存页、强制退出页）
 tests/DiskSlimCoreTests/  各条规则的单元测试（Swift；和 Node 测试同在 tests/）
 assets/floating-ball.png  悬浮球图标（打包时复制成 Contents/Resources/ball.png）
 design/fuyou-icon/   悬浮球定稿图与生图需求（中间稿和参考图只留本机，不进仓库）
 docs/
   design/ui-v1.html  三版菜单栏界面预览（A 容量仪表 / B 涨幅雷达 / C 待清理收件箱）
   design/ui-v2～v5-*.html  第 10 批「替你判断」的逻辑、排版、收紧、顶卡配色预览（定稿 v5「雾光」）
+  design/ui-v8-memory.html、ui-v9-memory-polish.html  第 11 批内存页预览（定稿 v9「一二结合」）
   agents/            Matt Pocock 技能读的约定：issue 看板、分流标签、领域文档
   LESSONS.md         本项目的坑（排障、改脚本前先搜）
   OPERATIONS.md      操作手册：交接写法、报告与验收
@@ -104,12 +108,13 @@ single-context：根目录 `GLOSSARY.md` 与 `docs/adr/`，用到时再建。见
 
 ## AI 接入
 
-本应用当前不调用 AI：扫描、分级、清理、提醒都由本机规则完成，没有任何内容由 AI 替本应用产出（2026-11-07 核实）。会启动的外部程序只有已知位置表里的缓存清理命令（`npm`、`uv`、`pnpm`、`pip3`）和查 PR 是否已合并的 `gh pr list`。
+本应用当前不调用 AI：扫描、分级、清理、提醒、内存判断都由本机规则完成，没有任何内容由 AI 替本应用产出（2026-11-07 核实，2026-11-18 第 11 批复核）。会启动的外部程序只有已知位置表里的缓存清理命令（`npm`、`uv`、`pnpm`、`pip3`）和查 PR 是否已合并的 `gh pr list`。
 
 - 数据对象（来源是本机目录，只统计占用空间、按风险分级，不读内容，不算执行方；定义在 `KnownPlaces.swift`、`WorktreeScanner.swift`）：
   - 只展示，任何路径都删不了：Claude 对话记录 `~/.claude/projects`；Codex 对话记录 `~/.codex/sessions`、`~/.codex/archived_sessions`。
   - 需确认：Codex 备份 `~/.codex/recovery`（勾选后逐份移到废纸篓）；Cowork 虚拟机 `~/Library/Application Support/Claude/vm_bundles`（本应用不清，只提示去 Claude 设置 › 存储里处理）。
   - 可清理：各项目 `.claude/worktrees/*/target`（Claude 会话 worktree 里的 Rust 构建产物）。
+  - 内存（第 11 批，定义在 `Memory.swift`、`MemoryPlan.swift`）：Claude 桌面版的 Claude Code 会话进程（`…/claude-code/…/MacOS/claude`）连同插件进程，只统计内存和 CPU 时间，不读对话内容、命令行参数和环境变量；用户在「要你说一句」点「收掉」时给闲着 12 小时以上的会话进程发 SIGTERM，下次发消息桌面版自动续上。
 - 对外开放：无 AI 接口（没有 MCP）。`~/Library/Application Support/disk-slim/status.json` 和 `diskslim://panel/toggle` 链接只给驿窗挂件读状态、开面板，不是给 AI 的接口。
 - 第一次加 AI 功能时，按全局规则 P-13（`~/.claude/CLAUDE.md` 第 14 节「应用里的 AI 接入写进设置」）补设置栏，并改写本节。
 
