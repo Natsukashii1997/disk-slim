@@ -1,14 +1,22 @@
 import Foundation
 
-/// 每周卡片（docs/PRD.md 3.3）：一张卡是一件要用户决定的事。
-/// 下载文件夹里能清的每个分组一张；「要你决定的」（备份、虚拟机等需确认、能清的项）每项一张。
-/// 对话记录（只展示）、缓存（首页一键清）不进卡片。
+/// 每周卡片（docs/PRD.md 3.3）：一张卡是一件要用户决定的事，只问首页「要你说一句」里能执行的那些
+/// （2026-11-18 起，issue #4）：下载文件夹里每个分组一张，其余每项一张。
+/// 替你挑好的（首页一键清）、先不动的、对话记录都不进卡片。
 public struct WeeklyCard: Identifiable {
     public let id: String
     public let tag: String
     public let title: String
     public let why: String
     public let findings: [Finding]
+
+    public init(id: String, tag: String, title: String, why: String, findings: [Finding]) {
+        self.id = id
+        self.tag = tag
+        self.title = title
+        self.why = why
+        self.findings = findings
+    }
 
     public var bytes: Int64 { findings.reduce(0) { $0 + $1.bytes } }
     public var paths: [String] { findings.flatMap(\.paths) }
@@ -107,7 +115,7 @@ public func applyDecisions(_ findings: [Finding], _ decisions: Decisions) -> [Fi
     findings.map { f in
         guard f.suggested, decisions.isKept(f) else { return f }
         return Finding(area: f.area, category: f.category, title: f.title, detail: "你选过保留 · " + f.detail,
-                       paths: f.paths, bytes: f.bytes, risk: f.risk, suggested: false, cleanup: f.cleanup)
+                       paths: f.paths, bytes: f.bytes, risk: f.risk, suggested: false, cleanup: f.cleanup, lastUsed: f.lastUsed)
     }
 }
 
@@ -126,9 +134,10 @@ public enum Weekly {
     ]
 
     /// 这次扫描里还要问的卡片，大的在前
-    public static func cards(_ findings: [Finding], decisions: Decisions, now: Date) -> [WeeklyCard] {
+    /// `includeSnoozed` 为 true 时连「下周再问」的也算（首页「要你说一句」一直列着，只是周报不催）
+    public static func cards(_ findings: [Finding], decisions: Decisions, now: Date, includeSnoozed: Bool = false) -> [WeeklyCard] {
         let open = findings.filter { f in
-            f.risk != .readOnly && f.cleanup.runnable && !decisions.isKept(f) && !decisions.isSnoozed(f, now: now)
+            f.cleanup.runnable && f.bucket(now: now, kept: decisions.isKept(f)) == .ask && (includeSnoozed || !decisions.isSnoozed(f, now: now))
         }
         var cards: [WeeklyCard] = []
         let downloads = open.filter { $0.area == .downloads }
@@ -138,7 +147,7 @@ public enum Weekly {
                                     title: "下载文件夹里 \(items.count) 个\(category == "久未打开" ? "很久没打开的文件" : category)",
                                     why: downloadsWhy[category] ?? items[0].detail, findings: items))
         }
-        for f in open where f.area == .hidden && f.risk == .confirm {
+        for f in open where f.area == .hidden {
             cards.append(WeeklyCard(id: f.id, tag: f.category, title: f.title, why: f.detail, findings: [f]))
         }
         return cards.sorted { $0.bytes > $1.bytes }

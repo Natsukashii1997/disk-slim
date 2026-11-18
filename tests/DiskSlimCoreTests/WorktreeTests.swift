@@ -31,7 +31,7 @@ import Testing
         return (t, run)
     }
 
-    @Test func 四个条件全满足才建议删() {
+    @Test func 已落地且干净的进自动清理_没合并或有改动的也勾上但不进自动清理_在用的不清() {
         let (t, run) = setup()
         let found = WorktreeScanner(workRoot: t.url, now: now, runner: run).scan()
         let r = Dictionary(uniqueKeysWithValues: found.map { ($0.title, $0) })
@@ -41,26 +41,35 @@ import Testing
         #expect(r["proj · ok"]?.cleanup == .remove)
         #expect(r["proj · ok"]?.category == "已合并 worktree 的构建产物")
 
-        #expect(r["proj · open"]?.detail == "PR 还没合并")
-        #expect(r["proj · dirty"]?.detail == "有未提交的改动")
+        // 2026-11-18 起（issue #4）：没合并、有没提交的改动的，只要没在用也默认勾选（只删 target/），但标成需确认、不进自动清理
+        #expect(r["proj · open"]?.detail.hasPrefix("PR 还没合并；最后编译") == true)
+        #expect(r["proj · dirty"]?.detail.hasPrefix("有没提交的改动（只删编译文件，代码不动）") == true)
+        for name in ["open", "dirty"] {
+            #expect(r["proj · \(name)"]?.category == "还在做的 worktree 构建产物")
+            #expect(r["proj · \(name)"]?.suggested == true && r["proj · \(name)"]?.risk == .confirm)
+            #expect(r["proj · \(name)"]?.cleanup == .remove)
+        }
+        #expect(Alerts.autoCleanPicks(found).map(\.title) == ["proj · ok"])
         #expect(r["proj · hot"]?.detail == "2 小时内编译过")
         #expect(r["proj · busy"]?.detail == "有程序在里面运行")
-        for name in ["open", "dirty", "hot", "busy"] {
+        for name in ["hot", "busy"] {
             #expect(r["proj · \(name)"]?.suggested == false)
             #expect(r["proj · \(name)"]?.cleanup == Cleanup.none)
         }
         #expect(!found.contains { $0.paths.contains(t.url.appendingPathComponent("proj/target").path) })
     }
 
-    @Test func 查不到PR状态时一律不建议删() {
+    @Test func 查不到PR状态时_没在用的照样勾上_但都不进自动清理() {
         let (t, run) = setup()
         run.replies.removeFirst() // 去掉 gh 的回复，模拟 gh 出错
         let found = WorktreeScanner(workRoot: t.url, now: now, runner: run).scan()
-        #expect(found.allSatisfy { !$0.suggested })
-        #expect(found.first { $0.title == "proj · ok" }?.detail == "查不到 PR 状态")
+        #expect(Alerts.autoCleanPicks(found).isEmpty)
+        let ok = found.first { $0.title == "proj · ok" }
+        #expect(ok?.detail.hasPrefix("查不到 PR 状态") == true)
+        #expect(ok?.suggested == true && ok?.risk == .confirm)
     }
 
-    @Test func 不是Rust构建目录_没被git忽略_分支复用都不建议删() {
+    @Test func 不是Rust构建目录_没被git忽略的不碰_分支复用的当没合并() {
         let t = TempDir()
         for name in ["norust", "tracked", "reused"] {
             t.file("p/.claude/worktrees/\(name)/target/a", modified: daysAgo(1))
@@ -76,8 +85,10 @@ import Testing
         let r = Dictionary(uniqueKeysWithValues: WorktreeScanner(workRoot: t.url, now: now, runner: run, sizeOf: { _ in 1 }).scan().map { ($0.title, $0) })
         #expect(r["p · norust"]?.detail == "不是 Rust 项目")
         #expect(r["p · tracked"]?.detail == "target 没被 git 忽略")
-        #expect(r["p · reused"]?.detail == "PR 还没合并")
-        #expect(r.values.allSatisfy { !$0.suggested })
+        #expect(r["p · reused"]?.detail.hasPrefix("PR 还没合并") == true)
+        #expect(r["p · reused"]?.risk == .confirm)
+        #expect(r["p · norust"]?.suggested == false && r["p · norust"]?.cleanup == Cleanup.none)
+        #expect(r["p · tracked"]?.suggested == false && r["p · tracked"]?.cleanup == Cleanup.none)
     }
 
     // MARK: 第 7 批
@@ -117,15 +128,16 @@ import Testing
         }
     }
 
-    @Test func 没合并但闲置3天_列成要你决定_不默认勾选() {
+    @Test func 没合并也没在用_默认勾选但不进自动清理() {
         let t = TempDir()
         _ = single(t, built: daysAgo(4))
         let run = FakeRunner()
         run.on(0, "") { a, _ in a.first == "gh" } // 有 gh，但没有这个分支的已合并 PR
         healthyRunner(run)
         let f = scan(t, run)
-        #expect(f?.category == "闲置的 worktree 构建产物")
-        #expect(f?.risk == .confirm && f?.suggested == false && f?.cleanup == .remove)
+        #expect(f?.category == "还在做的 worktree 构建产物")
+        #expect(f?.risk == .confirm && f?.suggested == true && f?.cleanup == .remove)
+        #expect(f?.bucket(now: now) == .picked)
         #expect(Alerts.autoCleanPicks([f!]).isEmpty) // 不进自动清理
     }
 

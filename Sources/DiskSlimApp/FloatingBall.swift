@@ -147,6 +147,7 @@ final class FloatingBall: NSObject {
         if panel == nil { makePanel(store) }
         // 和菜单栏面板打开时一样：回首页、收起确认框、结果旧了就重扫
         store.page = .home
+        store.drawer = nil
         store.confirming = nil
         store.scanIfStale()
         placePanel()
@@ -178,6 +179,8 @@ final class FloatingBall: NSObject {
         p.hidesOnDeactivate = false
         p.isReleasedWhenClosed = false
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        // 只有浅色一种外观（2026-11-18 常浩定）：系统切深色也不跟
+        p.appearance = NSAppearance(named: .aqua)
         p.onCancel = { [weak self] in self?.closePanel() }
         // 和菜单栏弹出面板一样的半透明底、圆角
         let fx = NSVisualEffectView(frame: p.contentLayoutRect)

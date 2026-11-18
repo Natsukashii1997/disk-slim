@@ -41,9 +41,11 @@ public struct Finding: Codable, Identifiable {
     /// 是否默认勾选
     public let suggested: Bool
     public let cleanup: Cleanup
+    /// 最近一次用过的时间（虚拟机这类按「还用不用」判断的才有）
+    public var lastUsed: Date?
 
     public init(area: Area, category: String, title: String, detail: String,
-                paths: [String], bytes: Int64, risk: Risk, suggested: Bool, cleanup: Cleanup) {
+                paths: [String], bytes: Int64, risk: Risk, suggested: Bool, cleanup: Cleanup, lastUsed: Date? = nil) {
         self.id = category + "|" + paths.joined(separator: "|")
         self.area = area
         self.category = category
@@ -55,12 +57,45 @@ public struct Finding: Codable, Identifiable {
         // 安全底线：只展示的项不可能被勾选，也没有清理方式
         self.suggested = risk == .readOnly ? false : suggested
         self.cleanup = risk == .readOnly ? .none : cleanup
+        self.lastUsed = lastUsed
+    }
+}
+
+/// 首页三段（docs/PRD.md 3.2）：替用户判断好，用户只回答「还用不用」。
+public enum Bucket: Equatable {
+    /// 替你挑好的：默认勾选、能执行，一键清
+    case picked
+    /// 要你说一句：只有用户知道还要不要（下载里久没打开的文件、一个月没用的虚拟机）
+    case ask
+    /// 先不动：在用、留着保底、清了也没用，写明原因
+    case keep
+    /// 对话记录等只展示的
+    case records
+}
+
+extension Finding {
+    /// 虚拟机多久没用才问用户
+    public static let unusedDays = 30
+
+    /// 归到哪一段。`kept` 是用户在卡片上选过「保留」的，一律先不动
+    public func bucket(now: Date, kept: Bool = false) -> Bucket {
+        if risk == .readOnly { return .records }
+        if kept { return .keep }
+        if suggested && cleanup.runnable { return .picked }
+        if area == .downloads && cleanup.runnable { return .ask }
+        if let used = lastUsed, now.timeIntervalSince(used) > Double(Self.unusedDays) * 86_400 { return .ask }
+        return .keep
     }
 }
 
 public struct DiskStatus: Codable {
     public let totalBytes: Int64
     public let availableBytes: Int64
+
+    public init(totalBytes: Int64, availableBytes: Int64) {
+        self.totalBytes = totalBytes
+        self.availableBytes = availableBytes
+    }
 }
 
 public struct ScanReport: Codable {

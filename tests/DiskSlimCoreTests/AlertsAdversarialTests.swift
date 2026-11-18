@@ -14,9 +14,19 @@ private func usage(_ at: Date, free: Double, _ parts: [String: Double] = [:]) ->
 }
 
 private func item(_ area: Area, _ category: String, _ paths: [String], bytes: Int64 = gb, risk: Risk = .safe,
-                  suggested: Bool = true, cleanup: Cleanup = .trash) -> Finding {
+                  suggested: Bool = true, cleanup: Cleanup = .trash, lastUsed: Date? = nil) -> Finding {
     Finding(area: area, category: category, title: paths.first.map { ($0 as NSString).lastPathComponent } ?? "无路径",
-            detail: "说明", paths: paths, bytes: bytes, risk: risk, suggested: suggested, cleanup: cleanup)
+            detail: "说明", paths: paths, bytes: bytes, risk: risk, suggested: suggested, cleanup: cleanup, lastUsed: lastUsed)
+}
+
+/// 「要你说一句」里的看不见的项（2026-11-18 起周报只问这一段）：需确认、没默认勾选、一个多月没用过
+private func ask(_ category: String, _ paths: [String], bytes: Int64 = gb) -> Finding {
+    item(.hidden, category, paths, bytes: bytes, risk: .confirm, suggested: false, lastUsed: bj("2026-08-01T00:00:00"))
+}
+
+/// 「要你说一句」里的下载项：久没打开、没默认勾选
+private func old(_ paths: [String], bytes: Int64 = gb) -> Finding {
+    item(.downloads, "久未打开", paths, bytes: bytes, suggested: false)
 }
 
 private func card(_ fs: [Finding]) -> WeeklyCard {
@@ -346,7 +356,7 @@ private func writeJSON(_ text: String, name: String, in dir: TempDir) -> URL {
     }
 
     @Test func 需确认但没有清理方式的不进卡片() {
-        #expect(Weekly.cards([item(.hidden, "备份", ["/h/b"], risk: .confirm, cleanup: .none)], decisions: Decisions(), now: t).isEmpty)
+        #expect(Weekly.cards([item(.hidden, "虚拟机", ["/h/b"], risk: .confirm, suggested: false, cleanup: .none, lastUsed: bj("2026-08-01T00:00:00"))], decisions: Decisions(), now: t).isEmpty)
     }
 
     @Test func 只展示的下载项不进卡片() {
@@ -359,38 +369,38 @@ private func writeJSON(_ text: String, name: String, in dir: TempDir) -> URL {
     }
 
     @Test func 需确认的看不见的每项一张() {
-        let cards = Weekly.cards([item(.hidden, "备份", ["/h/b1"], risk: .confirm), item(.hidden, "备份", ["/h/b2"], risk: .confirm)],
+        let cards = Weekly.cards([ask("备份", ["/h/b1"]), ask("备份", ["/h/b2"])],
                                  decisions: Decisions(), now: t)
         #expect(cards.count == 2)
     }
 
     @Test func 分组部分保留_新来的项单独成卡() {
         var d = Decisions()
-        let a = item(.downloads, "安装包", ["/d/a.dmg"]), b = item(.downloads, "安装包", ["/d/b.dmg"])
+        let a = old(["/d/a.dmg"]), b = old(["/d/b.dmg"])
         d.keep(Weekly.cards([a, b], decisions: d, now: t)[0], now: t)
-        let c = item(.downloads, "安装包", ["/d/c.dmg"], bytes: 3 * gb)
+        let c = old(["/d/c.dmg"], bytes: 3 * gb)
         let cards = Weekly.cards([a, b, c], decisions: d, now: t)
         #expect(cards.map(\.paths) == [["/d/c.dmg"]])
     }
 
     @Test func 多路径的项_保留记录对不上这一项时仍然要问() {
         // 第 5 批审查后改为按项（分组 + 路径）记；只保留过其中一个路径的旧记录不算这一项
-        let f = item(.hidden, "备份", ["/h/p1", "/h/p2"], risk: .confirm)
+        let f = ask("备份", ["/h/p1", "/h/p2"])
         let d = Decisions(kept: ["备份|/h/p1": Kept(at: t, bytes: f.bytes)])
         #expect(Weekly.cards([f], decisions: d, now: t).count == 1)
     }
 
     @Test func 同一路径在两张卡_保留一张另一张也不再问() {
         // 全面审查后改为按路径记（B7）：同一个文件换了分组仍算保留过
-        let x = item(.hidden, "备份", ["/h/x"], risk: .confirm)
-        let y = item(.hidden, "虚拟机", ["/h/x"], risk: .confirm)
+        let x = ask("备份", ["/h/x"])
+        let y = ask("虚拟机", ["/h/x"])
         var d = Decisions()
         d.keep(card([x]), now: t)
         #expect(Weekly.cards([x, y], decisions: d, now: t).isEmpty)
     }
 
     @Test func 先下周再问再保留_保留生效() {
-        let x = item(.hidden, "备份", ["/h/x"], risk: .confirm)
+        let x = ask("备份", ["/h/x"])
         var d = Decisions()
         d.snooze(card([x]), now: t)
         d.keep(card([x]), now: t)
@@ -398,32 +408,32 @@ private func writeJSON(_ text: String, name: String, in dir: TempDir) -> URL {
     }
 
     @Test func 先保留再在另一张卡下周再问_仍是保留() {
-        let x = item(.hidden, "备份", ["/h/x"], risk: .confirm)
+        let x = ask("备份", ["/h/x"])
         var d = Decisions()
         d.keep(card([x]), now: t)
-        d.snooze(card([item(.hidden, "虚拟机", ["/h/x"], risk: .confirm)]), now: t)
+        d.snooze(card([ask("虚拟机", ["/h/x"])]), now: t)
         // 下周五过后也不再问
         #expect(Weekly.cards([x], decisions: d, now: bj("2026-11-20T18:00:00")).isEmpty)
     }
 
     @Test func 空路径的项点保留后不再出现() {
         // 保留=以后不问；空路径的项要么不进卡片，要么点了保留就消失，不能每周都问
-        let f = item(.hidden, "备份", [], risk: .confirm)
+        let f = ask("备份", [])
         var d = Decisions()
         for c in Weekly.cards([f], decisions: d, now: t) { d.keep(c, now: t) }
         #expect(Weekly.cards([f], decisions: d, now: t).isEmpty)
     }
 
     @Test func 空路径的项点下周再问后本周不再出现() {
-        let f = item(.hidden, "备份", [], risk: .confirm)
+        let f = ask("备份", [])
         var d = Decisions()
         for c in Weekly.cards([f], decisions: d, now: t) { d.snooze(c, now: t) }
         #expect(Weekly.cards([f], decisions: d, now: t.addingTimeInterval(60)).isEmpty)
     }
 
     @Test func 卡片按大小从大到小() {
-        let cards = Weekly.cards([item(.downloads, "安装包", ["/d/a.dmg"], bytes: 1 * gb),
-                                  item(.hidden, "备份", ["/h/b"], bytes: 5 * gb, risk: .confirm)], decisions: Decisions(), now: t)
+        let cards = Weekly.cards([old(["/d/a.dmg"], bytes: 1 * gb),
+                                  ask("备份", ["/h/b"], bytes: 5 * gb)], decisions: Decisions(), now: t)
         #expect(cards.map(\.bytes) == [5 * gb, 1 * gb])
     }
 }
@@ -431,7 +441,7 @@ private func writeJSON(_ text: String, name: String, in dir: TempDir) -> URL {
 // MARK: - 保留 / 下周再问
 
 @Suite struct 决定对抗 {
-    let x = item(.hidden, "备份", ["/h/x"], risk: .confirm)
+    let x = ask("备份", ["/h/x"])
 
     func cards(after snoozeAt: Date, at: Date) -> Int {
         var d = Decisions()
@@ -483,7 +493,7 @@ private func writeJSON(_ text: String, name: String, in dir: TempDir) -> URL {
     }
 
     @Test func 保留后id不变() {
-        let f = item(.downloads, "安装包", ["/d/a.dmg"])
+        let f = old(["/d/a.dmg"])
         #expect(applyDecisions([f], Decisions(kept: [f.id: Kept(at: bj("2026-11-01T00:00:00"), bytes: f.bytes)]))[0].id == f.id)
     }
 }
@@ -615,30 +625,33 @@ private func writeJSON(_ text: String, name: String, in dir: TempDir) -> URL {
 // MARK: - 接进扫描
 
 @Suite struct 扫描接入决定对抗 {
-    @Test func 卡片上点保留后_下次扫描该安装包不再默认勾选() throws {
+    @Test func 卡片上点保留后_下次扫描它归到先不动() throws {
         let box = TempDir()
         let home = box.dir("home")
-        box.file("home/Downloads/old.dmg", bytes: 4096)
+        box.file("home/Downloads/old.pdf", bytes: 4096)
         let t = bj("2026-11-06T18:00:00")
-        let meta = FakeMetadata(added: ["old.dmg": t.addingTimeInterval(-30 * 86_400)])
+        let meta = FakeMetadata(added: ["old.pdf": t.addingTimeInterval(-60 * 86_400)])
         let scan = Scan(home: home, workRoot: home.appendingPathComponent("work"), meta: meta, runner: FakeRunner())
         let first = scan.run(now: t)
-        #expect(first.findings.first { $0.category == "安装包" }?.suggested == true)
+        let f = try #require(first.findings.first { $0.category == "久未打开" })
+        #expect(f.bucket(now: t) == .ask)
         var d = DecisionLog.standard(home: home).load()
         for c in Weekly.cards(first.findings, decisions: d, now: t) { d.keep(c, now: t) }
         try DecisionLog.standard(home: home).save(d)
-        let second = scan.run(now: t)
-        #expect(second.findings.first { $0.category == "安装包" }?.suggested == false)
+        let d2 = DecisionLog.standard(home: home).load()
+        let again = try #require(scan.run(now: t).findings.first { $0.category == "久未打开" })
+        #expect(again.bucket(now: t, kept: d2.isKept(again)) == .keep)
     }
 
     @Test func 卡片上点保留后_下次扫描的卡片里没有它() throws {
         let box = TempDir()
         let home = box.dir("home")
-        box.file("home/Downloads/old.dmg", bytes: 4096)
+        box.file("home/Downloads/old.pdf", bytes: 4096)
         let t = bj("2026-11-06T18:00:00")
-        let meta = FakeMetadata(added: ["old.dmg": t.addingTimeInterval(-30 * 86_400)])
+        let meta = FakeMetadata(added: ["old.pdf": t.addingTimeInterval(-60 * 86_400)])
         let scan = Scan(home: home, workRoot: home.appendingPathComponent("work"), meta: meta, runner: FakeRunner())
         var d = Decisions()
+        #expect(!Weekly.cards(scan.run(now: t).findings, decisions: d, now: t).isEmpty)
         for c in Weekly.cards(scan.run(now: t).findings, decisions: d, now: t) { d.keep(c, now: t) }
         try DecisionLog.standard(home: home).save(d)
         let again = scan.run(now: t)

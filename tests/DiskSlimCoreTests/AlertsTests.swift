@@ -12,9 +12,9 @@ import Testing
     }
 
     func finding(_ area: Area, _ category: String, _ path: String, gb size: Double, risk: Risk = .safe,
-                 suggested: Bool = true, cleanup: Cleanup = .trash) -> Finding {
+                 suggested: Bool = true, cleanup: Cleanup = .trash, lastUsed: Date? = nil) -> Finding {
         Finding(area: area, category: category, title: (path as NSString).lastPathComponent, detail: "说明",
-                paths: [path], bytes: Int64(size * Double(gb)), risk: risk, suggested: suggested, cleanup: cleanup)
+                paths: [path], bytes: Int64(size * Double(gb)), risk: risk, suggested: suggested, cleanup: cleanup, lastUsed: lastUsed)
     }
 
     // MARK: 周报时间
@@ -30,35 +30,51 @@ import Testing
 
     // MARK: 卡片
 
-    @Test func 卡片_下载按分组一张_要你决定的每项一张_缓存和只展示不进() {
+    /// 2026-11-18 起（issue #4）：周报只问首页「要你说一句」里能执行的；替你挑好的、先不动的、只展示的都不进
+    @Test func 卡片只问要你说一句的_下载按分组一张_其余每项一张() {
+        let now = bj("2026-11-06T18:00:00")
         let fs = [
             finding(.downloads, "安装包", "/d/a.dmg", gb: 1),
-            finding(.downloads, "安装包", "/d/b.dmg", gb: 2),
+            finding(.downloads, "久未打开", "/d/old1.pdf", gb: 1, suggested: false),
+            finding(.downloads, "久未打开", "/d/old2.pdf", gb: 2, suggested: false),
             finding(.downloads, "最近下载的大文件", "/d/big.mov", gb: 5, suggested: false, cleanup: .none),
             finding(.hidden, "备份", "/h/backup", gb: 20, risk: .confirm, suggested: false),
+            finding(.hidden, "虚拟机", "/h/vm-old", gb: 9, risk: .confirm, suggested: false, lastUsed: now.addingTimeInterval(-40 * 86_400)),
+            finding(.hidden, "虚拟机", "/h/vm-new", gb: 9, risk: .confirm, suggested: false, lastUsed: now.addingTimeInterval(-3 * 86_400)),
             finding(.hidden, "缓存", "/h/cache", gb: 9, cleanup: .command(["x"])),
             finding(.hidden, "对话记录", "/h/codex", gb: 30, risk: .readOnly),
         ]
-        let cards = Weekly.cards(fs, decisions: Decisions(), now: bj("2026-11-06T18:00:00"))
-        #expect(cards.map(\.tag) == ["备份", "安装包"])
-        #expect(cards[1].title == "下载文件夹里 2 个安装包")
+        let cards = Weekly.cards(fs, decisions: Decisions(), now: now)
+        #expect(cards.map(\.tag) == ["虚拟机", "久未打开"])
+        #expect(cards[1].title == "下载文件夹里 2 个很久没打开的文件")
         #expect(cards[1].bytes == 3 * gb)
         #expect(cards[1].actionLabel == "移到废纸篓")
+        #expect(fs.map { $0.bucket(now: now) } == [.picked, .ask, .ask, .keep, .keep, .ask, .keep, .picked, .records])
+    }
+
+    @Test func 选过保留的一律先不动() {
+        let now = bj("2026-11-06T18:00:00")
+        #expect(finding(.downloads, "久未打开", "/d/x", gb: 1, suggested: false).bucket(now: now, kept: true) == .keep)
+        #expect(finding(.downloads, "安装包", "/d/a.dmg", gb: 1).bucket(now: now, kept: true) == .keep)
     }
 
     @Test func 保留的不再问也不再默认勾选_下周再问的到下周五才回来() {
         let now = bj("2026-11-06T18:30:00")
-        let a = finding(.downloads, "安装包", "/d/a.dmg", gb: 1)
-        let b = finding(.hidden, "备份", "/h/backup", gb: 20, risk: .confirm, suggested: false)
+        let a = finding(.downloads, "久未打开", "/d/old.pdf", gb: 1, suggested: false)
+        let b = finding(.hidden, "虚拟机", "/h/vm", gb: 20, risk: .confirm, suggested: false, lastUsed: now.addingTimeInterval(-40 * 86_400))
         var d = Decisions()
         let cards = Weekly.cards([a, b], decisions: d, now: now)
-        d.keep(cards.first { $0.tag == "安装包" }!, now: now)
-        d.snooze(cards.first { $0.tag == "备份" }!, now: now)
+        d.keep(cards.first { $0.tag == "久未打开" }!, now: now)
+        d.snooze(cards.first { $0.tag == "虚拟机" }!, now: now)
         #expect(Weekly.cards([a, b], decisions: d, now: now).isEmpty)
-        #expect(Weekly.cards([a, b], decisions: d, now: bj("2026-11-13T18:00:01")).map(\.tag) == ["备份"])
-        // 保留的项扫描时不再默认勾选
-        #expect(applyDecisions([a], d).first?.suggested == false)
-        #expect(applyDecisions([a], Decisions()).first?.suggested == true)
+        #expect(Weekly.cards([a, b], decisions: d, now: bj("2026-11-13T18:00:01")).map(\.tag) == ["虚拟机"])
+        // 保留的项扫描时不再默认勾选，也保住最近使用时间
+        let c = finding(.downloads, "安装包", "/d/a.dmg", gb: 1, lastUsed: now)
+        var k = Decisions()
+        k.keep(WeeklyCard(id: "c", tag: "安装包", title: "t", why: "w", findings: [c]), now: now)
+        #expect(applyDecisions([c], k).first?.suggested == false)
+        #expect(applyDecisions([c], k).first?.lastUsed == now)
+        #expect(applyDecisions([c], Decisions()).first?.suggested == true)
     }
 
     @Test func 决定记录存取() throws {
@@ -150,8 +166,8 @@ import Testing
     }
 
     @Test func 周五18点前点下周再问_跳过当天这次() {
-        let card = WeeklyCard(id: "x", tag: "备份", title: "t", why: "w",
-                              findings: [finding(.hidden, "备份", "/h/backup", gb: 20, risk: .confirm, suggested: false)])
+        let card = WeeklyCard(id: "x", tag: "虚拟机", title: "t", why: "w",
+                              findings: [finding(.hidden, "虚拟机", "/h/vm", gb: 20, risk: .confirm, suggested: false, lastUsed: bj("2026-09-01T00:00:00"))])
         var d = Decisions()
         d.snooze(card, now: bj("2026-11-06T17:00:00"))
         #expect(Weekly.cards(card.findings, decisions: d, now: bj("2026-11-06T18:00:01")).isEmpty)
@@ -163,13 +179,14 @@ import Testing
     }
 
     @Test func 保留后涨了超过1GB再问() {
-        let small = finding(.hidden, "备份", "/h/backup", gb: 2, risk: .confirm, suggested: false)
-        let card = WeeklyCard(id: "x", tag: "备份", title: "t", why: "w", findings: [small])
+        let old = bj("2026-09-01T00:00:00")
+        let small = finding(.downloads, "久未打开", "/d/old.pdf", gb: 2, suggested: false, lastUsed: old)
+        let card = WeeklyCard(id: "x", tag: "久未打开", title: "t", why: "w", findings: [small])
         var d = Decisions()
         d.keep(card, now: bj("2026-11-06T18:00:00"))
         let now = bj("2026-11-20T18:00:00")
-        #expect(Weekly.cards([finding(.hidden, "备份", "/h/backup", gb: 2.9, risk: .confirm, suggested: false)], decisions: d, now: now).isEmpty)
-        #expect(Weekly.cards([finding(.hidden, "备份", "/h/backup", gb: 3.5, risk: .confirm, suggested: false)], decisions: d, now: now).count == 1)
+        #expect(Weekly.cards([finding(.downloads, "久未打开", "/d/old.pdf", gb: 2.9, suggested: false)], decisions: d, now: now).isEmpty)
+        #expect(Weekly.cards([finding(.downloads, "久未打开", "/d/old.pdf", gb: 3.5, suggested: false)], decisions: d, now: now).count == 1)
     }
 
     @Test func 废纸篓涨了不报() {

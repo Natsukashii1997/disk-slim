@@ -1,0 +1,334 @@
+<title>磁盘瘦身甲版排版</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 布局：页面顶部一句说明 + 三版切换；每版左边是 368 宽的真实尺寸面板，右边讲层级和取舍。苹果系统字体、系统色、卡片网格 */
+:root{
+  --page:#f5f5f7; --panel:#ececf0; --card:#ffffff; --ink:#1d1d1f; --ink2:#6e6e73; --ink3:#a1a1a6; --hair:rgba(0,0,0,.08);
+  --hero:#0b0b0c; --hero-ink:#f5f5f7; --hero-ink2:#a1a1a6; --track:#2a2a2d;
+  --blue:#0071e3; --green:#28b463; --red:#ff3b30; --orange:#ff9500; --purple:#8e5cf7; --grey:#8e8e93; --other:#d1d1d6; --keepc:#aeaeb2;
+  --grad:linear-gradient(92deg,#9b5cf6 0%,#5b6cf9 38%,#2f8fe6 64%,#22b3a6 100%);
+  --shadow:0 1px 2px rgba(0,0,0,.04),0 18px 40px rgba(0,0,0,.10);
+  --sf:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue","Noto Sans SC",sans-serif;
+  --sfd:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC","Helvetica Neue","Noto Sans SC",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --page:#000000; --panel:#1c1c1e; --card:#2c2c2e; --ink:#f5f5f7; --ink2:#a1a1a6; --ink3:#6e6e73; --hair:rgba(255,255,255,.10);
+  --hero:#000000; --hero-ink:#f5f5f7; --hero-ink2:#98989d; --track:#2c2c2e;
+  --blue:#0a84ff; --green:#30d158; --red:#ff453a; --orange:#ff9f0a; --purple:#a07cff; --grey:#8e8e93; --other:#48484a; --keepc:#7c7c80;
+  --grad:linear-gradient(92deg,#b38bff 0%,#7b8bff 38%,#4fb0ff 64%,#3fd6c4 100%);
+  --shadow:0 0 0 1px rgba(255,255,255,.06),0 18px 40px rgba(0,0,0,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --page:#000000; --panel:#1c1c1e; --card:#2c2c2e; --ink:#f5f5f7; --ink2:#a1a1a6; --ink3:#6e6e73; --hair:rgba(255,255,255,.10);
+  --hero:#000000; --hero-ink:#f5f5f7; --hero-ink2:#98989d; --track:#2c2c2e;
+  --blue:#0a84ff; --green:#30d158; --red:#ff453a; --orange:#ff9f0a; --purple:#a07cff; --grey:#8e8e93; --other:#48484a; --keepc:#7c7c80;
+  --grad:linear-gradient(92deg,#b38bff 0%,#7b8bff 38%,#4fb0ff 64%,#3fd6c4 100%);
+  --shadow:0 0 0 1px rgba(255,255,255,.06),0 18px 40px rgba(0,0,0,.6); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--page);color:var(--ink);font-family:var(--sf);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;
+  padding-block:40px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+.eyebrow{font-size:12px;letter-spacing:.08em;color:var(--ink2);text-transform:uppercase}
+h1{font-family:var(--sfd);font-size:clamp(28px,4.4vw,44px);line-height:1.12;letter-spacing:-.02em;margin:6px 0 0;font-weight:700;text-wrap:balance}
+h1 em{font-style:normal;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lead{color:var(--ink2);max-width:62ch;margin:12px 0 0}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.seg{display:inline-flex;background:var(--hair);border-radius:10px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:transparent;color:var(--ink);font:inherit;font-size:13.5px;padding:6px 14px;border-radius:8px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:600}
+.seg button:focus-visible,.tap:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.stage{display:grid;grid-template-columns:368px minmax(0,1fr);gap:40px;align-items:start}
+@media (max-width:820px){.stage{grid-template-columns:minmax(0,1fr)}}
+.notes{display:flex;flex-direction:column;gap:18px;min-width:0;padding-top:6px}
+.notes h2{font-family:var(--sfd);font-size:26px;letter-spacing:-.01em;margin:0;line-height:1.2}
+.notes p{margin:0;color:var(--ink2)}
+.order{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--hair)}
+.order div{display:grid;grid-template-columns:28px 1fr;gap:8px;padding:10px 0;border-bottom:1px solid var(--hair);font-size:14px}
+.order b{font-weight:600;color:var(--ink)}
+.order span:first-child{font-family:var(--sfd);font-weight:700;color:var(--ink3);font-variant-numeric:tabular-nums}
+.order span:last-child{color:var(--ink2)}
+.fit{font-size:13px;color:var(--ink2)}
+
+/* ===== 面板通用 ===== */
+.panel{width:368px;max-width:100%;background:var(--panel);border-radius:22px;box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:10px;font-size:13px;line-height:1.45;justify-self:center}
+.meta{display:flex;justify-content:space-between;align-items:center;color:var(--ink2);font-size:11.5px;padding:2px 4px 0}
+.meta svg{width:14px;height:14px}
+.card{background:var(--card);border-radius:18px;padding:16px}
+.hero{background:var(--hero);color:var(--hero-ink);border-radius:18px;padding:16px}
+.lbl{font-size:11.5px;color:var(--ink2)}
+.hero .lbl{color:var(--hero-ink2)}
+.num{font-variant-numeric:tabular-nums}
+.grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.tap{cursor:pointer;border:0;font:inherit;text-align:left;color:inherit}
+.btn{display:block;width:100%;border:0;border-radius:12px;padding:11px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;text-align:center}
+.btn.blue{background:var(--blue);color:#fff}
+.btn.white{background:#fff;color:#000}
+.chev{color:var(--ink3);font-size:15px}
+.foot{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:var(--ink2);padding:0 4px 2px}
+.foot a{color:var(--blue);text-decoration:none;cursor:pointer}
+.foot .links{display:flex;gap:12px}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none}
+.items{display:flex;flex-direction:column;gap:7px}
+.it{display:flex;align-items:baseline;gap:8px}
+.it .t{flex:1;min-width:0}
+.it .v{font-variant-numeric:tabular-nums;font-weight:600}
+.sub{font-size:11.5px;color:var(--ink2)}
+.drawer{display:flex;flex-direction:column;gap:12px}
+.q{display:flex;flex-direction:column;gap:8px}
+.q + .q{border-top:1px solid var(--hair);padding-top:12px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--hair);background:transparent;color:var(--ink);border-radius:999px;padding:5px 11px;font:inherit;font-size:12px;cursor:pointer}
+.chip.on{background:var(--ink);color:var(--card);border-color:var(--ink)}
+.keep{display:flex;flex-direction:column;gap:8px}
+.keep .it .t small{display:block;color:var(--ink2);font-size:11.5px}
+.banner{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink2);background:var(--card);border-radius:12px;padding:8px 12px}
+.banner b{color:var(--orange);font-weight:600}
+
+/* 甲一 大字主张 */
+.v1 h3{margin:4px 0 0;font-family:var(--sfd);font-weight:700;letter-spacing:-.02em;line-height:1.12}
+.v1 .h-a{font-size:24px}
+.v1 .h-b{font-size:34px}
+.v1 .body{color:var(--ink2);margin-top:10px;font-size:12.5px}
+.cells{display:grid;grid-template-columns:repeat(14,1fr);gap:3px;margin:12px 0 6px}
+.cells i{height:18px;border-radius:4px;background:var(--track)}
+.cells i.r{background:var(--red)}.cells i.g{background:var(--green)}.cells i.g2{background:color-mix(in srgb,var(--green) 45%,var(--track))}
+.scale{position:relative;height:16px;font-size:11px;color:var(--hero-ink2)}
+.scale span{position:absolute;top:0;white-space:nowrap}
+.scale span:nth-child(n+2){transform:translateX(-50%)}
+.scale b{color:var(--hero-ink);font-weight:600}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mini-num{font-family:var(--sfd);font-size:28px;font-weight:700;letter-spacing:-.02em;line-height:1.1;margin-top:6px}
+.cardtap{display:flex;flex-direction:column;justify-content:space-between;min-height:118px;width:100%}
+.row-end{display:flex;justify-content:space-between;align-items:flex-end}
+
+/* 甲二 仪表 */
+.v2 .big{font-family:var(--sfd);font-size:52px;font-weight:700;letter-spacing:-.03em;line-height:1;color:var(--red)}
+.v2 .big small{font-size:18px;color:var(--hero-ink2);font-weight:600;letter-spacing:0;margin-left:4px}
+.stack{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:14px 0 8px;background:var(--track);gap:2px}
+.stack span{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--hero-ink2)}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.spark{display:block;width:100%;height:46px;margin-top:10px}
+.grid2{display:grid;grid-template-columns:1.15fr 1fr;grid-template-rows:auto auto;gap:10px}
+.grid2 .tall{grid-row:span 2;display:flex;flex-direction:column;gap:10px}
+.v2 .huge{font-family:var(--sfd);font-size:40px;font-weight:700;letter-spacing:-.03em;line-height:1}
+.v2 .huge small{font-size:15px;margin-left:2px}
+
+/* 甲三 设置风 */
+.v3 .title{font-family:var(--sfd);font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.1;padding:4px 4px 0}
+.v3 .title + .sub{padding:0 4px}
+.group{background:var(--card);border-radius:14px;overflow:hidden}
+.gh{font-size:11.5px;color:var(--ink2);padding:6px 6px 0}
+.cell{display:flex;align-items:center;gap:10px;padding:10px 12px;width:100%;background:transparent}
+.cell + .cell{border-top:1px solid var(--hair)}
+.icon{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;flex:none;color:#fff}
+.icon svg{width:16px;height:16px}
+.cell .t{flex:1;min-width:0}
+.cell .t b{font-weight:500;display:block}
+.cell .v{font-variant-numeric:tabular-nums;color:var(--ink2)}
+.stor{display:flex;height:22px;border-radius:6px;overflow:hidden;gap:1.5px;background:var(--hair)}
+.stor span{height:100%}
+.leg3{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:11px;color:var(--ink2);margin-top:8px}
+.leg3 span{display:flex;align-items:center;gap:6px}
+.segc{display:inline-flex;background:var(--hair);border-radius:8px;padding:2px;gap:2px;margin-top:6px}
+.segc button{border:0;background:transparent;font:inherit;font-size:11.5px;padding:4px 10px;border-radius:6px;color:var(--ink);cursor:pointer}
+.segc button.on{background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.15);font-weight:600}
+@media (prefers-reduced-motion:no-preference){.drawer,.keep{animation:in .22s ease}@keyframes in{from{opacity:.4;transform:translateY(-4px)}to{opacity:1;transform:none}}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">磁盘瘦身 · 甲版「一键交给我」· 排版三选一</div>
+    <h1>先看到能拿回多少，<br><em>再按一下就完事。</em></h1>
+    <p class="lead">三版内容完全一样，都是 11 月 18 日 09:44 真实扫描的数字，只差排版。面板按实际宽度 368 点画。右上角能切浅色和深色，应用会跟着系统走。点面板里的卡片能展开。</p>
+  </header>
+
+  <div class="bar">
+    <div class="seg" role="group" aria-label="版本">
+      <button aria-pressed="true" data-v="1">一 · 大字主张</button>
+      <button aria-pressed="false" data-v="2">二 · 仪表卡片</button>
+      <button aria-pressed="false" data-v="3">三 · 系统设置</button>
+    </div>
+    <div class="seg" role="group" aria-label="外观">
+      <button aria-pressed="true" data-t="">跟随系统</button>
+      <button aria-pressed="false" data-t="light">浅色</button>
+      <button aria-pressed="false" data-t="dark">深色</button>
+    </div>
+  </div>
+
+  <!-- ============ 一 大字主张 ============ -->
+  <div class="stage" data-view="1">
+    <div class="panel v1">
+      <div class="meta"><span>共 460.4 GB · 09:44 扫描</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.5h-2.5"/></svg></div>
+      <div class="card">
+        <div class="lbl">我已经替你挑好了</div>
+        <h3 class="h-a">这周少了 44.7 GB，</h3>
+        <h3 class="h-b grad num">能拿回 51.8 GB。</h3>
+        <p class="body">大部分是 AI 写代码时编出来的中间文件，删了不丢任何东西，下次用到时多等几分钟。</p>
+      </div>
+      <div class="hero">
+        <div class="row-end"><div><div class="lbl">现在可用</div><div class="mini-num num" style="color:var(--red);font-size:26px">11.1 GB</div></div><div style="text-align:right"><div class="lbl">清完约</div><div class="mini-num num" style="color:var(--green);font-size:26px">56 GB</div></div></div>
+        <div class="cells" id="cells"></div>
+        <div class="scale"><span style="left:0">0</span><span style="left:42.86%">30 告急</span><span style="left:85.71%"><b>60 正常</b></span></div>
+        <div style="height:12px"></div>
+        <button class="btn white" data-go>一键清理 51.8 GB</button>
+        <p class="lbl" style="margin:8px 0 0">其中 6.8 GB 先进废纸篓，清空后到 63 GB，菜单栏图标恢复正常。</p>
+      </div>
+      <div class="two">
+        <button class="card tap cardtap" data-open="ask1"><div class="lbl">只有你知道</div><div><div class="mini-num" style="color:var(--purple)">2 件</div><div class="sub">旧下载 · 废纸篓</div></div></button>
+        <button class="card tap cardtap" data-open="keep1"><div class="lbl">先不动</div><div><div class="mini-num num">38.5<small style="font-size:14px"> GB</small></div><div class="sub">6 项 · 还在用</div></div></button>
+      </div>
+      <div class="card drawer" id="ask1" hidden></div>
+      <div class="card keep" id="keep1" hidden></div>
+      <div class="card" style="padding:12px 14px">
+        <div class="row-end"><div><div class="lbl">最近 7 天</div><div style="font-weight:600">比昨天少 237 MB，主要是其他</div></div></div>
+        <svg class="spark" data-spark viewBox="0 0 300 46" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="foot"><span>对话记录 39.9 GB · 只看不删</span><span class="links"><a>提醒设置</a><a>撤销</a><a>退出</a></span></div>
+    </div>
+    <div class="notes">
+      <h2>一句话当标题，数字当主角</h2>
+      <p>学你给的参考图：开头一张白卡只说一句主张，后半句用渐变色把「能拿回 51.8 GB」推到最前面。黑卡负责行动，一条刻度告诉你清完到哪、离 60 GB 正常线还差多少。下面两张小卡是要你操心的和不用你操心的，点开才看明细。</p>
+      <div class="order">
+        <div><span>1</span><span><b>能拿回多少</b>：渐变大字，第一眼</span></div>
+        <div><span>2</span><span><b>按哪里</b>：黑卡里唯一的白按钮</span></div>
+        <div><span>3</span><span><b>清完会怎样</b>：刻度从红到绿，标出告急线和正常线</span></div>
+        <div><span>4</span><span><b>还剩什么</b>：两张小卡，一个紫色要你答，一个灰色不用管</span></div>
+      </div>
+      <p class="fit">取舍：最有表情、最像你给的参考；文字最多，第一屏要读两行字。</p>
+    </div>
+  </div>
+
+  <!-- ============ 二 仪表卡片 ============ -->
+  <div class="stage" data-view="2" hidden>
+    <div class="panel v2">
+      <div class="meta"><span>共 460.4 GB · 09:44 扫描</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.5h-2.5"/></svg></div>
+      <div class="hero">
+        <div class="lbl">可用空间</div>
+        <div class="big num">11.1<small>GB</small></div>
+        <div class="stack" aria-label="磁盘构成">
+          <span style="flex:319;background:#48484a"></span>
+          <span style="flex:51.8;background:var(--green)"></span>
+          <span style="flex:38.5;background:#8e8e93"></span>
+          <span style="flex:39.9;background:#636366"></span>
+          <span style="flex:11.1;background:var(--red)"></span>
+        </div>
+        <div class="legend"><span><i class="dot" style="background:var(--green)"></i>能拿回 51.8</span><span><i class="dot" style="background:#8e8e93"></i>先不动 38.5</span><span><i class="dot" style="background:#636366"></i>对话记录 39.9</span><span><i class="dot" style="background:var(--red)"></i>可用 11.1</span></div>
+        <svg class="spark" data-spark data-dark viewBox="0 0 300 46" preserveAspectRatio="none"></svg>
+        <div class="legend" style="justify-content:space-between"><span>11/12 · 54.5</span><span>这周少了 44.7 GB</span><span>今天 · 9.8</span></div>
+      </div>
+      <div class="grid2">
+        <div class="card tall">
+          <div class="lbl">替你挑好的</div>
+          <div class="huge grad num">51.8<small>GB</small></div>
+          <div class="items">
+            <div class="it"><i class="dot" style="background:var(--purple)"></i><span class="t">AI 编译文件</span><span class="v">44.9</span></div>
+            <div class="it"><i class="dot" style="background:var(--orange)"></i><span class="t">Codex 旧备份</span><span class="v">6.8</span></div>
+            <div class="it"><i class="dot" style="background:var(--blue)"></i><span class="t">下载缓存</span><span class="v">0.1</span></div>
+          </div>
+          <div style="flex:1"></div>
+          <button class="btn blue" data-go>一键清理</button>
+        </div>
+        <button class="card tap" data-open="ask2"><div class="lbl">要你说一句</div><div class="mini-num" style="color:var(--purple);font-family:var(--sfd);font-size:26px;font-weight:700;margin-top:4px">2 件</div><div class="sub">旧下载、废纸篓 ›</div></button>
+        <button class="card tap" data-open="keep2"><div class="lbl">先不动</div><div class="num" style="font-family:var(--sfd);font-size:26px;font-weight:700;margin-top:4px">38.5<small style="font-size:13px"> GB</small></div><div class="sub">6 项还在用 ›</div></button>
+      </div>
+      <div class="card drawer" id="ask2" hidden></div>
+      <div class="card keep" id="keep2" hidden></div>
+      <div class="banner"><b>●</b><span>清完约 56 GB；6.8 GB 在废纸篓，清空后到 63 GB</span></div>
+      <div class="foot"><span>对话记录只看不删</span><span class="links"><a>提醒设置</a><a>撤销</a><a>退出</a></span></div>
+    </div>
+    <div class="notes">
+      <h2>先看仪表，再看能做什么</h2>
+      <p>学储能那张图的排法：顶上一块黑色仪表，大数字是现在可用，下面一条色带把 460 GB 拆成「能拿回 / 先不动 / 对话记录 / 可用」，再配 7 天曲线，一眼看出这周掉得有多快。下面三块拼成网格：左边高卡是能清的，右边两块小卡是要你答的和不用管的。</p>
+      <div class="order">
+        <div><span>1</span><span><b>现在多危险</b>：红色 11.1 GB 和往下掉的曲线</span></div>
+        <div><span>2</span><span><b>能拿回多少</b>：左边高卡的渐变数字和三行明细</span></div>
+        <div><span>3</span><span><b>按哪里</b>：高卡底部的蓝按钮</span></div>
+        <div><span>4</span><span><b>还剩什么</b>：右边两块小卡</span></div>
+      </div>
+      <p class="fit">取舍：信息最全、最像仪表盘，清完前后对比最直观；按钮在第二层，比一版晚一眼看到。</p>
+    </div>
+  </div>
+
+  <!-- ============ 三 系统设置 ============ -->
+  <div class="stage" data-view="3" hidden>
+    <div class="panel v3">
+      <div class="meta"><span>可用 <b class="num" style="color:var(--red)">11.1 GB</b> · 共 460.4 GB · 09:44</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.5h-2.5"/></svg></div>
+      <div class="title num">能拿回 <span class="grad">51.8 GB</span></div>
+      <div class="sub">已经替你挑好，清完可用约 56 GB</div>
+      <div class="card" style="padding:12px">
+        <div class="stor" aria-label="磁盘构成">
+          <span style="flex:44.9;background:var(--purple)"></span>
+          <span style="flex:6.8;background:var(--orange)"></span>
+          <span style="flex:38.5;background:var(--keepc)"></span>
+          <span style="flex:39.9;background:var(--blue)"></span>
+          <span style="flex:319;background:var(--other)"></span>
+          <span style="flex:11.1;background:var(--card)"></span>
+        </div>
+        <div class="leg3"><span><i class="dot" style="background:var(--purple)"></i>AI 编译文件 44.9</span><span><i class="dot" style="background:var(--orange)"></i>Codex 旧备份 6.8</span><span><i class="dot" style="background:var(--keepc)"></i>先不动 38.5</span><span><i class="dot" style="background:var(--blue)"></i>对话记录 39.9</span><span><i class="dot" style="background:var(--other)"></i>应用和文件 319</span><span><i class="dot" style="background:var(--card);box-shadow:inset 0 0 0 1px var(--ink3)"></i>可用 11.1</span></div>
+      </div>
+      <button class="btn blue" data-go>一键清理 51.8 GB</button>
+      <div class="gh">要你说一句</div>
+      <div class="group">
+        <div class="cell"><span class="icon" style="background:var(--blue)"><svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v8M4.5 7.5 8 11l3.5-3.5M3 13.5h10"/></svg></span><div class="t"><b>下载里 218 个旧文件</b><div class="sub">一个月没打开 · 1.1 GB</div><div class="segc" data-segc><button class="on">都不要了</button><button>让我挑</button><button>留着</button></div></div></div>
+        <div class="cell"><span class="icon" style="background:#8e8e93"><svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg></span><div class="t"><b>废纸篓</b><div class="sub">清空后才腾出空间，找不回</div><div class="segc" data-segc><button class="on">满 7 天自动清</button><button>每次问我</button></div></div></div>
+      </div>
+      <div class="gh">我替你判断先不动</div>
+      <div class="group">
+        <button class="cell tap" data-open="keep3"><span class="icon" style="background:var(--keepc)"><svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><path d="M5.5 3.5v9M10.5 3.5v9"/></svg></span><div class="t"><b>6 项还在用</b><div class="sub">虚拟机、正在运行的编译文件等</div></div><span class="v num">38.5 GB</span><span class="chev">›</span></button>
+        <div class="keep" id="keep3" hidden style="padding:4px 12px 12px 50px"></div>
+        <div class="cell"><span class="icon" style="background:var(--green)"><svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5l4 4 2.5-2.5 4.5 4.5"/></svg></span><div class="t"><b>最近 7 天少了 44.7 GB</b><div class="sub">42.7 GB 来自 AI 编译文件</div></div><svg data-spark viewBox="0 0 300 46" preserveAspectRatio="none" style="width:70px;height:26px"></svg></div>
+      </div>
+      <div class="foot"><span>对话记录 39.9 GB · 只看不删</span><span class="links"><a>提醒设置</a><a>撤销</a><a>退出</a></span></div>
+    </div>
+    <div class="notes">
+      <h2>像 Mac 自己的「储存空间」页</h2>
+      <p>最像系统原生：大标题、一条按颜色拆开的储存条、分组列表、每行左边一个彩色小图标。两个问题直接做成行内的分段选择，不用点开。没有黑卡也没有大块渐变，只在标题数字上留一点渐变。</p>
+      <div class="order">
+        <div><span>1</span><span><b>能拿回多少</b>：大标题</span></div>
+        <div><span>2</span><span><b>都是什么</b>：储存条，紫色和橙色就是这次要清的</span></div>
+        <div><span>3</span><span><b>按哪里</b>：储存条下面的蓝按钮</span></div>
+        <div><span>4</span><span><b>你答的、不用管的</b>：两个分组列表</span></div>
+      </div>
+      <p class="fit">取舍：最克制、最耐看，也最好用 SwiftUI 原样做出来；视觉冲击比一版、二版弱。</p>
+    </div>
+  </div>
+
+  <p class="fit">三版都按甲版的逻辑：替你清 51.8 GB，先不动 38.5 GB，要你说一句 2 件。这些数字要等你确认上一轮那 4 条规则改动才成立（①没合并的编译文件也能清，②两个入口合并，③旧备份默认清，④废纸篓自动清空是可选）。</p>
+</div>
+
+<script>
+(function(){
+  const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+  // 版本
+  function showV(v){$$('[data-v]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===v));$$('[data-view]').forEach(s=>s.hidden=s.dataset.view!==v);try{localStorage.setItem('v3v',v)}catch(e){}}
+  $$('[data-v]').forEach(b=>b.addEventListener('click',()=>showV(b.dataset.v)));
+  try{const s=localStorage.getItem('v3v');if(s)showV(s)}catch(e){}
+  // 外观
+  $$('[data-t]').forEach(b=>b.addEventListener('click',()=>{$$('[data-t]').forEach(x=>x.setAttribute('aria-pressed',x===b));const t=b.dataset.t;if(t)document.documentElement.setAttribute('data-theme',t);else document.documentElement.removeAttribute('data-theme')}));
+  // 刻度格：每格 5 GB，0–70
+  const cells=$('#cells');for(let i=0;i<14;i++){const a=i*5,el=document.createElement('i');el.className=a<11.1?'r':a<56?'g':a<63?'g2':'';cells.appendChild(el)}
+  // 7 天曲线（每天最后一次记录）
+  const d=[54.5,54.5,20.0,17.1,16.5,10.0,9.8];
+  $$('[data-spark]').forEach(svg=>{
+    const W=300,H=46,max=60,pts=d.map((v,i)=>[i*W/(d.length-1),4+(H-8)*(1-v/max)]);
+    const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+    const dark=svg.hasAttribute('data-dark'), c=dark?'#ff6961':'var(--red)';
+    const id='g'+Math.random().toString(36).slice(2,7);
+    svg.innerHTML='<defs><linearGradient id="'+id+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff3b30" stop-opacity=".28"/><stop offset="1" stop-color="#ff3b30" stop-opacity="0"/></linearGradient></defs>'+
+      '<path d="'+line+' L'+W+' '+H+' L0 '+H+' Z" fill="url(#'+id+')"/>'+
+      '<path d="'+line+'" fill="none" stroke="'+c+'" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>';
+  });
+  // 展开内容
+  const ask='<div class="q"><b>下载里 218 个一个月没打开的文件 · 1.1 GB</b><span class="sub">多是 9、10 月的活动海报、电子书、截图。进废纸篓，后悔能放回。</span><div class="chips"><button class="chip on">都不要了</button><button class="chip">让我挑</button><button class="chip">都留着</button></div></div>'+
+            '<div class="q"><b>废纸篓以后怎么办</b><span class="sub">进废纸篓的东西还占着空间，清空后才腾出来，清空就找不回。</span><div class="chips"><button class="chip on">放满 7 天自动清</button><button class="chip">每次问我</button></div></div>';
+  const keep=[['正在用的编译文件','有程序在里面运行，停了自动归到能清的','13.0'],['Docker 虚拟机','11 月 15 日还用过','9.9'],['Claude Cowork 虚拟机','11 月 15 日还用过','9.8'],['最新一份 Codex 备份','留一份保底','4.2'],['AI 插件的运行文件','插件正靠它运行，省得也不多','1.1'],['pnpm 存储','上次清过，一点没少','0.5']]
+    .map(k=>'<div class="it"><span class="t">'+k[0]+'<small>'+k[1]+'</small></span><span class="v">'+k[2]+' GB</span></div>').join('');
+  ['ask1','ask2'].forEach(id=>$('#'+id).innerHTML=ask);
+  ['keep1','keep2','keep3'].forEach(id=>$('#'+id).innerHTML=keep);
+  $$('[data-open]').forEach(b=>b.addEventListener('click',()=>{const t=$('#'+b.dataset.open),open=t.hidden;
+    $$('.drawer,.keep',b.closest('.panel')).forEach(x=>x.hidden=true);t.hidden=!open}));
+  document.addEventListener('click',e=>{const c=e.target.closest('.chip,.segc button');if(!c)return;[...c.parentNode.children].forEach(x=>x.classList.toggle('on',x===c))});
+  $$('[data-go]').forEach(b=>b.addEventListener('click',()=>{b.textContent='已清理 · 可用约 56 GB（示例）';b.disabled=true;b.style.opacity=.7}));
+})();
+</script>

@@ -2,7 +2,59 @@
 
 当前阶段目标：第 6 批试用一周收尾，定下 disk-space-guard 去留，之后转常态维护。（2026-11-08 常浩确认，digital-twin#114）
 
-更新：2026-11-06。第 0–8 批都已完成（第 8 批桌面悬浮球真屏实测通过）。第 9 批「挂进驿窗侧栏」三批都已完成：磁盘瘦身这一半在 `feat/postpane-pendant`（接在 `feat/floating-ball` 后面），驿窗挂件已合并（postpane PR #159），两边真屏验收通过，悬浮球已改为默认关并重新装机。分支 main → feat/scan-engine → … → feat/floating-ball → feat/postpane-pendant，都没合并、没推送，GitHub 远端未建。唯一下一步：等用户定这条分支链怎么合并、要不要建远端。第 6 批的「试用一周」、`disk-space-guard` 要不要停、postpane 的 Cargo 配置，这几件照旧等用户定。
+更新：2026-11-18。第 0–9 批已合回 main（PR #1），GitHub 远端已建。第 10 批「替你判断」（issue #4）在分支 `claude/4-decide-for-me`（PR #5）：规则、首页改版、审查修复、清理彩带、只留浅色、重扫期间文案都已提交并装机。常浩 11-18 说「跳过，直接合并」：真屏彩带不看，凭离屏截图验收，PR #5 squash 合并回 main。唯一下一步：常浩在「完全磁盘访问权限」里删掉旧条目再加回；下次真实清理时顺便看一眼彩带。第 6 批的「试用一周」、`disk-space-guard` 要不要停，照旧等用户定。
+
+## 第 10 批之三：删掉深色、重扫期间文案、色带跟着变色（2026-11-18，Claude，常浩看过分批计划说「按计划开工，直接删除深色模式就行，我只保留目前这一个模式」，之后说「跳过，直接合并」；已提交并随 PR #5 合并、已装机、未发布）
+
+- 时间：开工 `2026-11-18 11:05`（按会话记录；测试完 `date '+%F %H:%M'` 为 11:11）。★ 来由：PR #5 收尾。看完彩带离屏截图（1.3、2.4 秒、放完、深色，动效都没问题），修清理后重扫期间的文案；深色截图里发现两处毛病（扫描中「一键清理」看着能点、提示条和面板一样黑），常浩决定不修，直接删掉深色。
+- 改了哪些文件：
+  - `Sources/DiskSlimApp/Views.swift`：`Tone` 只留浅色，删掉深色配色和 `colorScheme` 读取；`PanelView` 固定浅色（`.environment(\.colorScheme, .light)` + `.preferredColorScheme(.light)`）；新增 `Tone.level`，色带可用那段低于 30 GB 红、低于 60 GB 橙、60 GB 以上绿（顶卡大数字不变：60 GB 以上仍是正文色）；还没有扫描结果时「要你说一句」「先不动」写「扫描完就有」、「先不动」不显示 0 KB，页脚写「对话记录 · 扫描完就有」。
+  - `Sources/DiskSlimApp/FloatingBall.swift`：悬浮球叫开的面板窗口固定浅色外观。
+  - `Sources/DiskSlimApp/Snapshot.swift`：只出浅色，文件名不再带「-浅色 / -深色」；彩带截图带上「正在扫描」状态（之前截图写「还没扫描」是因为没模拟这个状态，应用里清理后本来就显示「正在扫描…」）；新增 18、19 号示例截图看 72 GB（绿）、22 GB（红）。
+  - `Sources/DiskSlimCore/Model.swift`：`DiskStatus` 加公开的构造函数，给截图用示例数字。
+  - `docs/PRD.md` 3.2、第 7 节第 10 批；`AGENTS.md` 截图命令说明；本文件。
+- 测试：`scripts/test.sh` 原样结果 `✔ Test run with 253 tests in 34 suites passed`；`node --test tests/*.test.mjs` 原样结果 `ℹ pass 4` / `ℹ fail 0`；`node scripts/check-rules.mjs` 输出「通用规则检查通过」。改 `Model.swift` 后又全量跑了一遍，结果相同。
+- 验证：离屏截图 `snap5-light-only/` 两轮：彩带 0.5 / 1.3 / 2.4 秒与放完、首页、要你说一句、清理前确认、72 GB / 22 GB 示例都看过——重扫期间顶部「正在扫描…」、两段和页脚「扫描完就有」，色带与数字同色（橙 / 绿 / 红），浅色界面其余部分与改前一致。装机后用 `diskslim://panel/toggle` 在真屏打开面板（`real-2-light-only.png`）：浅色，47.8 GB 橙色数字、色带橙色。真屏彩带未看：刚清理过，「替你挑好的」为空、「一键清理」点不了；常浩说「跳过，直接合并」，凭离屏截图验收，下次真实清理时顺便看。没有运行任何真实清理。
+- 截图：`~/Library/Application Support/disk-slim/evidence/2026-11-18-decide-for-me/`（`snap5-light-only/`、`real-2-light-only.png`；`snap4-confetti/` 是删深色前的旧图）。
+- 发布与回读：未发布。`scripts/install.sh` 退出码 0（`install-light-only.log`），`pgrep` 只有 `/Applications/DiskSlim.app` 一个进程。签名变了，面板上「废纸篓读不了」，要常浩在「完全磁盘访问权限」里删旧条目再加。
+- 与授权不一致之处、遗留问题、范围外发现：
+  - 计划里「深色两处小毛病」改成整个删掉深色，按常浩这轮的话做。
+  - 「要你说一句」扫描中原来写「现在没有要问你的」，同属扫描中误报「没有」，一并改成「扫描完就有」（计划里没列，顺手改）。
+  - 离屏「清理前确认」截图在「替你挑好的」为空时画出「确认清理 0 项」，只是截图直接塞了空列表；应用里列表为空时不会弹确认框，没改。
+  - 菜单栏图标和数字跟着系统菜单栏走，不在「只留浅色」范围内。
+- 本轮新坑：无。
+
+## 第 10 批之二：清理完成放彩带（2026-11-18，Claude，常浩在三版动效预览里选「二版 彩带雨」；已提交到 `claude/4-decide-for-me`、未装机、未发布）
+
+- 时间：开工 `2026-11-18 11:00`（按会话记录）。★ 来由：常浩清完一次后说「如果完成清理，可以放个烟花什么的」；三版预览 `docs/design/ui-v6-celebrate.html`（线上 https://claude.ai/artifact/L8TBXp9sWYfSwiJec2XoNJ），选二版。
+- 改了哪些文件：`Store.swift`（`Celebration`：手动清理腾出了空间才放，清完马上重读可用空间，结果提示晚 1.2 秒弹，彩带放完刷新一次停帧，约 9 秒后收掉「+X GB」；自动清理不放）、`Views.swift`（`ConfettiView` 彩带雨 90 片、`CelebrationClock` 按真实时间或离屏定格、顶卡数字 1.4 秒从清理前滚到清理后、「+X GB」标签、「刚腾出 / 废纸篓里还有」；系统「减少动态效果」时只换数字）、`Snapshot.swift`（14～17 号彩带定格截图）、`docs/design/ui-v6-celebrate.html`。
+- 测试：`scripts/test.sh` 原样结果 `✔ Test run with 253 tests in 34 suites passed`；`node --test tests/*.test.mjs` 原样结果 `ℹ pass 4` / `ℹ fail 0`。
+- 验证：离屏截图 `evidence/2026-11-18-decide-for-me/snap4-confetti/`，0.5 秒那张看过（彩带在飘、数字滚到一半、「+45.3 GB」出来）；1.3、2.4 秒和放完、深色那几张还没看。没装机，真屏没看过动效。
+- 截图：同上。
+- 发布与回读：未发布，未装机。
+- 与授权不一致之处、遗留问题、范围外发现：
+  - 常浩那次清理（10:54）11 项全部成功，直接腾出 45.3 GB、6.7 GB 进废纸篓；之后驿窗新开 `384-hermes-jobs` 几分钟编出 5.2 GB，`nostalgic-bartik-8bdeee` 也在长，可用空间回落到 37 GB。根治要驿窗各 worktree 共用编译目录，属驿窗项目。
+  - 清理后重扫期间：顶部写「还没扫描」应为「正在扫描…」，「先不动」写「没有 · 0 KB」、对话记录 0 KB，应写「扫描完就有」；顶卡色带里可用那段固定红色，数字是橙色时应跟着变。
+- 本轮新坑：无。
+
+## 第 10 批「替你判断」：三条规则 + 首页雾光两块式（2026-11-18，Claude，常浩选定逻辑甲、排版「一黑一白」、顶卡「雾光」，规则①②③改④不改，说「雾光，按计划开工」；已提交到 `claude/4-decide-for-me`、已装机、未发布）
+
+- 时间：开工 `2026-11-18 10:20`（`date '+%F %H:%M'` 记录）。★ 来由：常浩不懂技术，面板上「要你决定 89.7 GB」「本周待决定 28 GB」没法判断，要应用替他做 99% 的判断（issue #4）。设计预览四轮都在 `docs/design/ui-v2～v5-*.html`，定稿 v5「雾光」。
+- 改了哪些文件：
+  - 规则（`8af91d9`）：`WorktreeScanner.swift`（没在用的编译文件，PR 没合并或有未提交改动也默认勾选，标需确认、不进自动清理；`git status` 失败仍不清；删掉不用的 `idleSince`）、`KnownPlaces.swift`（Codex 备份按修改时间留最新一份、30 天前的旧份默认勾选；虚拟机记最近使用日期）、`Model.swift`（`Finding.lastUsed`、三段归类 `Bucket`）、`Weekly.swift`（周报只问「要你说一句」里能执行的）、`Alerts.swift`（周报文案）。
+  - 界面（`b802bd2`）：`Views.swift`（首页雾光顶卡 + 白卡「替你挑好的 / 要你说一句 / 先不动」，删本周待决定页和 4 个不用的旧配色）、`Store.swift`（页面换成 picked / downloads / keep / records，按三段取数据，`openTrash` 只打开不清空）、`Snapshot.swift`、`DiskSlimApp.swift`、`FloatingBall.swift`（开面板时收起抽屉）。
+  - 审查修复（`a6cbaef`）：「替你挑好的」每项加「留着」，「要你说一句」补回「下周再问」，扫描时间统一传入，虚拟机说明与分段同一判断、最近使用看到第三层，「先不动的」页与首页同一批，`applyHistory` 保住 `lastUsed`。
+  - 文档：`docs/PRD.md`（3、3.2、3.3、4.2、第 7 节加第 10 批）、`AGENTS.md`（结构说明）、本文件。测试：`WorktreeTests`、`AlertsTests`、`AlertsAdversarialTests` 按新规则改写，`KnownPlacesTests` 新增 8 条。
+- 测试：`scripts/test.sh` 原样结果 `✔ Test run with 253 tests in 34 suites passed`；`node --test tests/*.test.mjs` 原样结果 `ℹ pass 4` / `ℹ fail 0`；`node scripts/check-rules.mjs` 输出「通用规则检查通过」。
+- 验证：`diskslim scan` 只读扫描真实磁盘：默认勾选 10 项共 51.8 GB（4 个 worktree 编译文件 45.0 GB、5 份旧 Codex 备份 6.7 GB、npm 缓存 123 MB），和预览一致；Colima、Cowork 都显示 11 月 15～18 日用过、归「先不动」。离屏截图三轮浅色、深色对照预览。装机后用 `diskslim://panel/toggle` 在真屏打开面板，新首页正常渲染、正在扫描；系统弹出「DiskSlim 想访问文稿文件夹」，要常浩自己点「允许」，所以带真实数据的真屏截图还没拍到。没有运行任何真实清理。
+- 截图：`~/Library/Application Support/disk-slim/evidence/2026-11-18-decide-for-me/`（`snap1`～`snap3` 离屏截图，`real-1-home.png` 真屏，`install.log`）。
+- 发布与回读：未发布（GitHub 只推分支、开 PR）。`scripts/install.sh` 退出码 0，`pgrep` 只有一个进程（88871）。
+- 独立审查（L-06）：只读审查员报中 1、低 9，无高。已修 M1、L1、L2、L3、L5、L8、L9；未改：L4（最新一份不到 50 MB 时会多留一份，偏保守，可接受）、L6（首页角标含「下周再问」的和虚拟机，周报不含，按设计）、L7（「让我挑」进下载页时安装包已勾着，旧行为，确认框只列数量；都进废纸篓可撤销，记作后续）。
+- 与授权不一致之处、遗留问题、范围外发现：
+  - 「下周再问」原来在本周待决定页，删页后补到「要你说一句」里；确认框的「需确认」提示改成只在自己从「先不动」挑了需确认项时出现。
+  - 扫描中「先不动」写「没有」、对话记录写 0 KB，应写「扫描完就有」，下次顺手改。
+  - 磁盘只剩约 2.6 GB（10:47），别的程序在持续写入；驿窗测试证据两周 21 GB，建议另开驿窗任务处理。
+- 本轮新坑：无。
 
 ## AGENTS 补「AI 接入」一节（2026-11-07，Claude，常浩定全局规则 P-13 后母会话派来，常浩看过计划说「按计划开工」；已提交到 `claude/2-ai-access`、PR 待合并、无需发布）
 
