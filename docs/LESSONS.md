@@ -106,6 +106,14 @@
 - 证据：`evidence/2026-11-06-floating-ball-realscreen/`（截图与脚本）；CURRENT.md 第 8 批「真屏实测」一条。
 - 升级：未升级。「computer-use 的点击不能代表真实鼠标」换个项目也成立，提议提升为全局 G-xx，等用户批准。
 
+## L-12 SwiftUI 细线图标按钮点不中、菜单栏弹窗不能直接关窗口（2026-11-18）
+
+- 现象：首页顶栏加缩小键「—」后真屏实测，CGEvent 点在横线上时灵时不灵；菜单栏图标弹出的面板用 `window.close()` 收起后，下次点菜单栏图标第一下打不开、要点两下；改用 `NSStatusBarButton.performClick`、`NSApp.deactivate()` 都收不起。
+- 根因：① `.buttonStyle(.plain)` 的按钮只认图标画出来的像素，`minus` 只有一两个像素高，差一个像素就落空；② `MenuBarExtra(.window)` 自己记着「开着」，绕过它关窗口，它不知道，下一下点击被当成「收起」；③ 测试自身的坑：面板内容长到出滚动条时顶栏的键整体左移约 19 点，菜单栏读数变窄（47G→43G）图标也左移，固定坐标会点空。
+- 正确做法：细线、小图标做按钮时给 label 加 `.frame(...)` 和 `.contentShape(Rectangle())`；菜单栏弹窗里要收起就用 `@Environment(\.dismiss)`，不要自己关窗口；真屏点击前先截图定位目标（`evidence/2026-11-18-minimize/findmin.py`），点之前再确认窗口还在屏上，否则会点到用户屏幕上别的窗口。
+- 证据：`evidence/2026-11-18-minimize/`（`final-realscreen.txt`、`diag-log.txt` 诊断日志、截图与脚本）；CURRENT.md「面板顶栏加缩小键」一节。
+- 升级：未升级。「细线图标按钮要放大点击区」「MenuBarExtra 用 dismiss 收起」换个 SwiftUI 项目也成立，提议提升为全局 G-xx，等用户批准。
+
 ---
 
 格式：
