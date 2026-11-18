@@ -1,0 +1,199 @@
+<title>磁盘瘦身顶卡配色</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 布局：定稿的「一黑一白」面板，只换顶部卡片的颜色，三选一；面板整体浅色，顶卡改成同一家族的浅色调 */
+:root{
+  --page:#f5f5f7; --panel:#ececf0; --card:#ffffff; --ink:#1d1d1f; --ink2:#6e6e73; --ink3:#a1a1a6; --hair:rgba(0,0,0,.08);
+  --blue:#0071e3; --red:#ff3b30; --orange:#ff9500; --green:#28b463;
+  --grad:linear-gradient(92deg,#9b5cf6 0%,#5b6cf9 38%,#2f8fe6 64%,#22b3a6 100%);
+  --shadow:0 1px 2px rgba(0,0,0,.04),0 18px 40px rgba(0,0,0,.10);
+  /* 三种顶卡 */
+  --mist-bg:linear-gradient(140deg,#f1ecff 0%,#e8effe 52%,#e3f5f2 100%); --mist-used:#c9cbe0; --mist-track:rgba(60,60,120,.08);
+  --crit-bg:#fff0ee; --low-bg:#fff5e5; --ok-bg:#ecf8f0; --stat-used:#d6cfcf; --stat-track:rgba(0,0,0,.06);
+  --slate-bg:#e3e8f0; --slate-used:#b9c1cd; --slate-track:rgba(0,0,0,.06);
+  --h-ink:#1d1d1f; --h-ink2:#6e6e73;
+  --sf:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue","Noto Sans SC",sans-serif;
+  --sfd:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC","Helvetica Neue","Noto Sans SC",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --page:#000; --panel:#1c1c1e; --card:#2c2c2e; --ink:#f5f5f7; --ink2:#a1a1a6; --ink3:#6e6e73; --hair:rgba(255,255,255,.10);
+  --blue:#0a84ff; --red:#ff453a; --orange:#ff9f0a; --green:#30d158;
+  --grad:linear-gradient(92deg,#b38bff 0%,#7b8bff 38%,#4fb0ff 64%,#3fd6c4 100%);
+  --shadow:0 0 0 1px rgba(255,255,255,.06),0 18px 40px rgba(0,0,0,.6);
+  --mist-bg:linear-gradient(140deg,#2a2342 0%,#1f2846 52%,#173532 100%); --mist-used:#4a4a66; --mist-track:rgba(255,255,255,.08);
+  --crit-bg:#3a1d1c; --low-bg:#3a2b13; --ok-bg:#16301f; --stat-used:#5a4a4a; --stat-track:rgba(255,255,255,.08);
+  --slate-bg:#28303b; --slate-used:#4c5563; --slate-track:rgba(255,255,255,.08);
+  --h-ink:#f5f5f7; --h-ink2:#a1a1a6; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --page:#000; --panel:#1c1c1e; --card:#2c2c2e; --ink:#f5f5f7; --ink2:#a1a1a6; --ink3:#6e6e73; --hair:rgba(255,255,255,.10);
+  --blue:#0a84ff; --red:#ff453a; --orange:#ff9f0a; --green:#30d158;
+  --grad:linear-gradient(92deg,#b38bff 0%,#7b8bff 38%,#4fb0ff 64%,#3fd6c4 100%);
+  --shadow:0 0 0 1px rgba(255,255,255,.06),0 18px 40px rgba(0,0,0,.6);
+  --mist-bg:linear-gradient(140deg,#2a2342 0%,#1f2846 52%,#173532 100%); --mist-used:#4a4a66; --mist-track:rgba(255,255,255,.08);
+  --crit-bg:#3a1d1c; --low-bg:#3a2b13; --ok-bg:#16301f; --stat-used:#5a4a4a; --stat-track:rgba(255,255,255,.08);
+  --slate-bg:#28303b; --slate-used:#4c5563; --slate-track:rgba(255,255,255,.08);
+  --h-ink:#f5f5f7; --h-ink2:#a1a1a6; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--page);color:var(--ink);font-family:var(--sf);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;
+  padding-block:40px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+.eyebrow{font-size:12px;letter-spacing:.06em;color:var(--ink2)}
+h1{font-family:var(--sfd);font-size:clamp(28px,4.2vw,42px);line-height:1.14;letter-spacing:-.02em;margin:6px 0 0;font-weight:700;text-wrap:balance}
+.lead{color:var(--ink2);max-width:64ch;margin:12px 0 0}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.seg{display:inline-flex;background:var(--hair);border-radius:10px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:transparent;color:var(--ink);font:inherit;font-size:13.5px;padding:6px 14px;border-radius:8px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:600}
+button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.stage{display:grid;grid-template-columns:368px minmax(0,1fr);gap:44px;align-items:start}
+@media (max-width:820px){.stage{grid-template-columns:minmax(0,1fr)}}
+.notes{display:flex;flex-direction:column;gap:16px;min-width:0;padding-top:6px}
+.notes h2{font-family:var(--sfd);font-size:26px;letter-spacing:-.01em;margin:0;line-height:1.2}
+.notes p{margin:0;color:var(--ink2)}
+.fit{font-size:13px;color:var(--ink2)}
+.swatches{display:flex;gap:10px;flex-wrap:wrap}
+.sw{flex:1;min-width:90px;border-radius:12px;padding:10px 12px;color:var(--h-ink);font-size:12px;border:1px solid var(--hair)}
+.sw b{display:block;font-family:var(--sfd);font-size:20px;letter-spacing:-.02em}
+
+/* 面板 */
+.panel{width:368px;max-width:100%;background:var(--panel);border-radius:22px;box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:12px;font-size:13px;line-height:1.45;justify-self:center}
+.meta{display:flex;justify-content:space-between;align-items:center;color:var(--ink2);font-size:11.5px;padding:0 4px}
+.meta svg{width:14px;height:14px}
+.hero{border-radius:18px;padding:18px;color:var(--h-ink);box-shadow:inset 0 0 0 1px var(--hair);cursor:pointer}
+.hero .lbl{color:var(--h-ink2)}
+.h-mist{background:var(--mist-bg);--used:var(--mist-used);--track:var(--mist-track)}
+.h-crit{background:var(--crit-bg);--used:var(--stat-used);--track:var(--stat-track)}
+.h-slate{background:var(--slate-bg);--used:var(--slate-used);--track:var(--slate-track)}
+.card{background:var(--card);border-radius:18px}
+.lbl{font-size:11.5px;color:var(--ink2)}
+.num{font-variant-numeric:tabular-nums}
+.grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.big{font-family:var(--sfd);font-size:48px;font-weight:700;letter-spacing:-.03em;line-height:1;color:var(--red)}
+.big small{font-size:17px;font-weight:600;letter-spacing:0;margin-left:4px;color:var(--h-ink2)}
+.mid{font-family:var(--sfd);font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.mid small{font-size:13px;font-weight:600;letter-spacing:0;margin-left:2px}
+.between{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.stack{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px;margin:16px 0 8px;background:var(--track)}
+.stack span{display:block;height:100%}
+.s-used{background:var(--used)}.s-gain{background:var(--grad)}.s-free{background:var(--red)}
+.cap{display:flex;justify-content:space-between;font-size:11.5px;color:var(--h-ink2)}
+.cap b{font-weight:600;color:var(--h-ink)}
+.spark{display:block;width:100%;height:40px;margin-top:12px}
+.btn{display:block;width:100%;border:0;border-radius:12px;padding:11px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;text-align:center;background:var(--blue);color:#fff}
+.note{font-size:11.5px;color:var(--ink2);margin:8px 0 0;text-align:center}
+.note a{color:var(--blue);text-decoration:none;cursor:pointer}
+.list3{font-size:12px;color:var(--ink2);display:flex;flex-direction:column;gap:4px;margin:10px 0 14px}
+.list3 div{display:flex;justify-content:space-between}
+.list3 span:last-child{font-variant-numeric:tabular-nums;color:var(--ink)}
+.rowbtn{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;font:inherit;color:inherit;text-align:left;cursor:pointer;padding:13px 16px;border-top:1px solid var(--hair)}
+.rowbtn .t{flex:1;min-width:0}
+.rowbtn .t b{display:block;font-weight:600}
+.rowbtn .v{font-variant-numeric:tabular-nums;font-weight:600}
+.chev{color:var(--ink3);font-size:16px;line-height:1}
+.badge{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--ink);color:var(--card);font-size:11.5px;font-weight:700}
+.sub{font-size:11.5px;color:var(--ink2)}
+.foot{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:var(--ink2);padding:0 4px}
+.foot .links{display:flex;gap:14px}
+.drop{padding:4px 16px 14px;display:flex;flex-direction:column;gap:10px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--hair);background:transparent;color:var(--ink);border-radius:999px;padding:5px 11px;font:inherit;font-size:12px;cursor:pointer}
+.chip.on{background:var(--ink);color:var(--card);border-color:var(--ink)}
+.kv{display:flex;flex-direction:column;gap:8px}
+.kv div{display:flex;justify-content:space-between;gap:10px}
+.kv small{display:block;color:var(--ink2);font-size:11.5px}
+.kv .v{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">磁盘瘦身 · 定稿「一黑一白」· 顶部卡片配色三选一</div>
+    <h1>顶卡换成浅色，<br>和整个面板是一家人。</h1>
+    <p class="lead">只换顶部那张卡的底色，其他都按你定的甲方案不动。按你定的规则（①②③改、④不改），废纸篓不再是一个问题，改成按钮下面一句提醒，所以「要你说一句」现在是 1 件。面板按真实宽度 368 点画，右上角能切深色；点顶卡能进 7 天涨幅页，点下面两行能展开。</p>
+  </header>
+
+  <div class="bar">
+    <div class="seg" role="group" aria-label="配色">
+      <button aria-pressed="true" data-v="mist">一 · 雾光</button>
+      <button aria-pressed="false" data-v="crit">二 · 跟着状态变色</button>
+      <button aria-pressed="false" data-v="slate">三 · 灰蓝</button>
+    </div>
+    <div class="seg" role="group" aria-label="外观">
+      <button aria-pressed="true" data-t="">跟随系统</button>
+      <button aria-pressed="false" data-t="light">浅色</button>
+      <button aria-pressed="false" data-t="dark">深色</button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="panel">
+      <div class="meta"><span>共 460.4 GB · 09:44 扫描</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.5h-2.5"/></svg></div>
+      <div class="hero h-mist" id="hero" title="点开看 7 天涨幅">
+        <div class="between"><span class="lbl">可用空间</span><span class="lbl">这周 −44.7 GB ›</span></div>
+        <div class="big num" style="margin-top:6px">11.1<small>GB</small></div>
+        <svg class="spark" id="spark" viewBox="0 0 300 40" preserveAspectRatio="none"></svg>
+        <div class="stack"><span class="s-used" style="flex:297.5"></span><span class="s-gain" style="flex:51.8"></span><span class="s-free" style="flex:11.1"></span></div>
+        <div class="cap"><span>清完约 <b>56 GB</b></span><span class="grad" style="font-weight:600">能拿回 51.8 GB</span></div>
+      </div>
+      <div class="card">
+        <div style="padding:16px 16px 14px">
+          <div class="between"><span class="lbl">替你挑好的</span><span class="mid grad num">51.8<small>GB</small></span></div>
+          <div class="list3"><div><span>AI 写代码编出来的文件</span><span>44.9</span></div><div><span>Codex 旧备份</span><span>6.8</span></div><div><span>下载缓存</span><span>0.1</span></div></div>
+          <button class="btn" id="go">一键清理</button>
+          <p class="note">6.8 GB 先进废纸篓，清空后到 63 GB · <a>打开废纸篓</a></p>
+        </div>
+        <button class="rowbtn" data-open="dA"><span class="t"><b>要你说一句</b><span class="sub">下载里一个月没打开的文件</span></span><span class="badge">1</span><span class="chev">›</span></button>
+        <div class="drop" id="dA" hidden>
+          <b>下载里 218 个一个月没打开的文件 · 1.1 GB</b>
+          <span class="sub">多是 9、10 月的活动海报、电子书、截图。进废纸篓，后悔能放回。</span>
+          <div class="chips"><button class="chip on">都不要了</button><button class="chip">让我挑</button><button class="chip">都留着</button></div>
+        </div>
+        <button class="rowbtn" data-open="dB"><span class="t"><b>先不动</b><span class="sub">6 项还在用</span></span><span class="v">38.5 GB</span><span class="chev">›</span></button>
+        <div class="drop" id="dB" hidden><div class="kv" id="keep"></div></div>
+      </div>
+      <div class="foot"><span>对话记录 39.9 GB · 只看不删</span><span class="links"><span>提醒</span><span>撤销</span><span>退出</span></span></div>
+    </div>
+
+    <div class="notes">
+      <div data-note="mist">
+        <h2>雾光：和「能拿回」用同一组颜色</h2>
+        <p style="margin-top:12px">顶卡底色是很淡的紫、蓝、青渐变，正好是「能拿回 51.8 GB」那串字的颜色调淡了。上下两张卡用的是同一组颜色，整张面板最像一个整体，也最有苹果的味道。告急只靠红色大数字来表达。</p>
+        <p class="fit" style="margin-top:12px">代价：空间充足时顶卡也是同一个颜色，状态主要靠数字的颜色看。</p>
+      </div>
+      <div data-note="crit" hidden>
+        <h2>跟着状态变色：一眼看出急不急</h2>
+        <p style="margin-top:12px">顶卡底色跟菜单栏图标同一套规矩：60 GB 以上是淡绿，30～60 GB 是淡橙，30 GB 以下是淡红。你现在是 11.1 GB，所以是淡红。不用读数字就知道急不急。</p>
+        <div class="swatches" style="margin-top:12px">
+          <div class="sw" style="background:var(--ok-bg)">充足（示例）<b class="num" style="color:var(--green)">91 GB</b></div>
+          <div class="sw" style="background:var(--low-bg)">偏紧（示例）<b class="num" style="color:var(--orange)">45 GB</b></div>
+          <div class="sw" style="background:var(--crit-bg)">告急（现在）<b class="num" style="color:var(--red)">11.1 GB</b></div>
+        </div>
+        <p class="fit" style="margin-top:12px">代价：告急时整块偏红，和下面渐变的「能拿回」放在一起，颜色稍微杂一点。</p>
+      </div>
+      <div data-note="slate" hidden>
+        <h2>灰蓝：最安静的一种</h2>
+        <p style="margin-top:12px">顶卡底色是一层冷灰蓝，比面板底色深一点点，靠深浅分出上下两块，几乎不带情绪。最像系统设置里的分组底色，看久了也不累。</p>
+        <p class="fit" style="margin-top:12px">代价：三种里最平淡，第一眼的吸引力最弱。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+  const hero=$('#hero');
+  function showV(v){$$('[data-v]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===v));hero.className='hero h-'+v;$$('[data-note]').forEach(n=>n.hidden=n.dataset.note!==v);try{localStorage.setItem('v5v',v)}catch(e){}}
+  $$('[data-v]').forEach(b=>b.addEventListener('click',()=>showV(b.dataset.v)));
+  try{const s=localStorage.getItem('v5v');if(s)showV(s)}catch(e){}
+  $$('[data-t]').forEach(b=>b.addEventListener('click',()=>{$$('[data-t]').forEach(x=>x.setAttribute('aria-pressed',x===b));const t=b.dataset.t;if(t)document.documentElement.setAttribute('data-theme',t);else document.documentElement.removeAttribute('data-theme')}));
+  const d=[54.5,54.5,20.0,17.1,16.5,10.0,9.8],W=300,H=40,pts=d.map((v,i)=>[i*W/(d.length-1),3+(H-6)*(1-v/60)]);
+  const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  $('#spark').innerHTML='<defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff453a" stop-opacity=".22"/><stop offset="1" stop-color="#ff453a" stop-opacity="0"/></linearGradient></defs><path d="'+line+' L'+W+' '+H+' L0 '+H+' Z" fill="url(#sg)"/><path d="'+line+'" fill="none" stroke="#ff453a" stroke-width="1.8" vector-effect="non-scaling-stroke" stroke-linejoin="round"/><circle cx="'+pts[6][0]+'" cy="'+pts[6][1]+'" r="3" fill="#ff453a"/>';
+  $('#keep').innerHTML=[['正在用的编译文件','有程序在运行，停了自动归到能清的','13.0'],['Docker 虚拟机','11 月 15 日还用过','9.9'],['Claude Cowork 虚拟机','11 月 15 日还用过','9.8'],['最新一份 Codex 备份','留一份保底','4.2'],['AI 插件的运行文件','插件正靠它运行','1.1'],['pnpm 存储','上次清过，一点没少','0.5']]
+    .map(k=>'<div><span>'+k[0]+'<small>'+k[1]+'</small></span><span class="v">'+k[2]+' GB</span></div>').join('');
+  $$('[data-open]').forEach(b=>b.addEventListener('click',()=>{const t=$('#'+b.dataset.open),open=t.hidden;$$('.drop').forEach(x=>x.hidden=true);t.hidden=!open}));
+  document.addEventListener('click',e=>{const c=e.target.closest('.chip');if(!c)return;[...c.parentNode.children].forEach(x=>x.classList.toggle('on',x===c))});
+  $('#go').addEventListener('click',e=>{e.target.textContent='已清理 · 可用约 56 GB（示例）';e.target.disabled=true;e.target.style.opacity=.7});
+})();
+</script>

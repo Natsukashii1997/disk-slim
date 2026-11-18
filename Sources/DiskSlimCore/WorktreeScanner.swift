@@ -1,11 +1,11 @@
 import Foundation
 
 /// 各项目 `.claude/worktrees/*/target`：Rust 构建产物（docs/PRD.md 4.2）。
-/// 前提：是 Rust 构建目录（有 Cargo.toml、target 被 git 忽略）、没有未提交的已跟踪改动、没在用。
+/// 前提：是 Rust 构建目录（有 Cargo.toml、target 被 git 忽略）、没在用。只删 `target/`，代码和没提交的改动都不碰。
 /// 「没在用」三道一起判（第 7 批）：worktree 没被 git 锁住、cargo 的锁文件没被占（没在编译）、没有进程的工作目录或可执行文件在里面，
 /// 外加 2 小时内没编译过。
-/// - 已落地（PR 已合并且停在合并时的提交，或者当前提交已在 main 里）：默认勾选，可以自动清理。
-/// - 没落地但闲置 ≥ 3 天：列成「要你决定」，不默认勾选。
+/// - 已落地（PR 已合并且停在合并时的提交，或者当前提交已在 main 里）、没有未提交的改动：安全、默认勾选，可以自动清理。
+/// - 其余没在用的（PR 还没合并，或有未提交的改动）：也默认勾选（2026-11-18 常浩定，issue #4），但标成需确认，自动清理不碰。
 /// 项目主仓库根目录的 `target/` 不在扫描范围内；路径里有符号链接的 worktree 直接跳过。
 public struct WorktreeScanner {
     let workRoot: URL
@@ -51,15 +51,19 @@ public struct WorktreeScanner {
                    !reasons.contains("2 小时内编译过") {
                     reasons.append("刚从主分支切出来或一直跟着主分支，24 小时内编译过")
                 }
-                let idleDays = Int(now.timeIntervalSince(idleSince(wt, target: target) ?? now) / 86_400)
-                if reasons.isEmpty, let landed {
+                // 没提交的改动在代码里，不在 target/ 里：不挡清理，只决定能不能进自动清理
+                let dirty = reasons.contains(Self.dirtyReason)
+                reasons.removeAll { $0 == Self.dirtyReason }
+                if reasons.isEmpty, let landed, !dirty {
                     found.append(Finding(area: .hidden, category: "已合并 worktree 的构建产物", title: title,
                                          detail: "\(landed)，最后编译 \(built)", paths: [target.path],
                                          bytes: sizeOf(target), risk: .safe, suggested: true, cleanup: .remove))
-                } else if reasons.isEmpty, idleDays >= 3 {
-                    found.append(Finding(area: .hidden, category: "闲置的 worktree 构建产物", title: title,
-                                         detail: "闲置 \(idleDays) 天，PR 还没合并；清掉下次要重新编译", paths: [target.path],
-                                         bytes: sizeOf(target), risk: .confirm, suggested: false, cleanup: .remove))
+                } else if reasons.isEmpty {
+                    let why = [landed == nil ? (merged == nil ? "查不到 PR 状态" : "PR 还没合并") : nil,
+                               dirty ? "有没提交的改动（只删编译文件，代码不动）" : nil].compactMap { $0 }
+                    found.append(Finding(area: .hidden, category: "还在做的 worktree 构建产物", title: title,
+                                         detail: why.joined(separator: "；") + "；最后编译 \(built)，删了下次要重新编译几分钟",
+                                         paths: [target.path], bytes: sizeOf(target), risk: .confirm, suggested: true, cleanup: .remove))
                 } else {
                     if landed == nil { reasons.insert(merged == nil ? "查不到 PR 状态" : "PR 还没合并", at: 0) }
                     found.append(Finding(area: .hidden, category: "暂时不能清的构建产物", title: title,
@@ -83,6 +87,8 @@ public struct WorktreeScanner {
         }
         return heads
     }
+
+    static let dirtyReason = "有未提交的改动"
 
     /// 静置窗口：这么久内编译过就不清（第 7 批从 24 小时缩到 2 小时，换来的是下面三道「正在用」的判断）
     public static let quietSeconds: TimeInterval = 2 * 3600
@@ -200,17 +206,6 @@ public struct WorktreeScanner {
         return nil
     }
 
-    /// 闲置从什么时候算：最后编译时间和 worktree 的 HEAD 最后变动时间取较晚的
-    private func idleSince(_ wt: URL, target: URL) -> Date? {
-        var dates = [Self.lastBuilt(target)]
-        let gitDir = git(wt, "rev-parse", "--absolute-git-dir")
-        if !gitDir.isEmpty {
-            dates.append((try? URL(fileURLWithPath: gitDir).appendingPathComponent("logs/HEAD")
-                .resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate)
-        }
-        return dates.compactMap { $0 }.max()
-    }
-
     private func git(_ wt: URL, _ args: String...) -> String {
         runner.run(["git", "--no-optional-locks", "-C", wt.path] + args, cwd: nil).output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -227,7 +222,7 @@ public struct WorktreeScanner {
 
         let status = runner.run(["git", "--no-optional-locks", "-C", wt.path, "status", "--porcelain"], cwd: nil)
         let dirty = status.output.split(separator: "\n").contains { !$0.hasPrefix("??") }
-        if status.status != 0 || dirty { reasons.append("有未提交的改动") }
+        if status.status != 0 { reasons.append("查不到 git 状态") } else if dirty { reasons.append(Self.dirtyReason) }
         return reasons
     }
 

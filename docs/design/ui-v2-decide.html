@@ -1,0 +1,316 @@
+<title>磁盘瘦身替你判断</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 布局：上面一句结论 + 三版面板切换（仿真菜单栏面板 360 宽），下面是判断表和要你点头的改动 */
+:root{
+  --bg:#eef1f5; --surface:#ffffff; --sunk:#f4f6f9; --line:#dfe3ea;
+  --fg:#1b2230; --muted:#5f6b7d; --faint:#8a94a4;
+  --accent:#2463eb; --accent-fg:#ffffff;
+  --go:#1f9d5a; --go-soft:#e3f5ea; --wait:#c77700; --wait-soft:#fdf1dc; --stop:#8a94a4; --stop-soft:#eef0f3;
+  --hot:#e5383b; --you:#7a4fd6; --you-soft:#efe8fc;
+  --shadow:0 10px 30px rgba(20,30,50,.12),0 2px 6px rgba(20,30,50,.06);
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12151b; --surface:#1c2129; --sunk:#232933; --line:#2f3743;
+  --fg:#e7ebf1; --muted:#a3adbc; --faint:#7d8796;
+  --accent:#4b84ff; --accent-fg:#ffffff;
+  --go:#3cc77b; --go-soft:#173326; --wait:#f0a43a; --wait-soft:#3a2c14; --stop:#8a94a4; --stop-soft:#262c35;
+  --hot:#ff5a5d; --you:#a888ff; --you-soft:#2b2340;
+  --shadow:0 10px 30px rgba(0,0,0,.45); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12151b; --surface:#1c2129; --sunk:#232933; --line:#2f3743;
+  --fg:#e7ebf1; --muted:#a3adbc; --faint:#7d8796;
+  --accent:#4b84ff; --accent-fg:#ffffff;
+  --go:#3cc77b; --go-soft:#173326; --wait:#f0a43a; --wait-soft:#3a2c14; --stop:#8a94a4; --stop-soft:#262c35;
+  --hot:#ff5a5d; --you:#a888ff; --you-soft:#2b2340;
+  --shadow:0 10px 30px rgba(0,0,0,.45); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.6;
+  padding-block:28px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:36px}
+h1{font-size:26px;line-height:1.3;margin:0;text-wrap:balance}
+h2{font-size:19px;margin:0 0 12px;text-wrap:balance}
+p{margin:0}
+.lead{color:var(--muted);max-width:68ch;margin-top:8px}
+.num{font-variant-numeric:tabular-nums}
+.kpis{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-width:0}
+.kpi b{display:block;font-size:20px}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.diag{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px}
+.diag div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:14px}
+.diag b{display:block;margin-bottom:2px}
+.diag i{font-style:normal;color:var(--muted)}
+
+/* 版本切换 */
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.tab{border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:7px 14px;font:inherit;font-size:14px;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.tab:focus-visible,.btn:focus-visible,.mini:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.stage{display:grid;grid-template-columns:minmax(0,370px) minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:760px){.stage{grid-template-columns:minmax(0,1fr)}}
+.note{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;font-size:14.5px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.note h3{margin:0;font-size:17px}
+.note ul{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px}
+.note .who{color:var(--muted);font-size:13.5px}
+
+/* 仿菜单栏面板 */
+.panel{background:var(--surface);border-radius:16px;box-shadow:var(--shadow);padding:16px;display:flex;flex-direction:column;gap:12px;width:100%;max-width:370px;font-size:13.5px}
+.p-top{display:flex;align-items:baseline;gap:6px}
+.p-free{font-size:34px;font-weight:700;color:var(--hot);line-height:1}
+.p-sub{color:var(--muted);font-size:12px}
+.sec{font-size:12px;color:var(--muted);margin-top:2px}
+.card{border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.card.go{background:var(--go-soft)}
+.card.you{background:var(--you-soft)}
+.card.plain{background:var(--sunk)}
+.row{display:flex;gap:10px;align-items:flex-start}
+.row .t{flex:1;min-width:0}
+.row .t b{font-weight:600;display:block}
+.row .t small{display:block;color:var(--muted);font-size:12px;line-height:1.45}
+.row .v{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+.dot{width:9px;height:9px;border-radius:50%;margin-top:6px;flex:none}
+.dot.go{background:var(--go)}.dot.wait{background:var(--wait)}.dot.stop{background:var(--stop)}.dot.you{background:var(--you)}
+.btn{border:0;border-radius:9px;background:var(--accent);color:var(--accent-fg);font:inherit;font-weight:600;padding:10px;cursor:pointer;width:100%}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
+.mini{border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:7px;padding:4px 10px;font:inherit;font-size:12.5px;cursor:pointer}
+.mini.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.minis{display:flex;gap:6px;flex-wrap:wrap}
+.big{font-size:22px;font-weight:700;color:var(--go)}
+.foot{display:flex;justify-content:space-between;color:var(--accent);font-size:12px}
+.link{color:var(--accent);cursor:pointer;background:none;border:0;padding:0;font:inherit;font-size:12.5px;text-align:left}
+.list{display:flex;flex-direction:column;gap:9px}
+.light{display:flex;align-items:center;gap:6px;font-weight:600;font-size:12.5px}
+.light.go{color:var(--go)}.light.wait{color:var(--wait)}.light.stop{color:var(--stop)}.light.you{color:var(--you)}
+.chk{width:16px;height:16px;margin-top:3px;accent-color:var(--go);flex:none}
+.bubble{background:var(--sunk);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.step{color:var(--muted);font-size:12px;display:flex;justify-content:space-between}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:12.5px}
+.kv dt{color:var(--muted)}.kv dd{margin:0}
+.done{color:var(--go);font-weight:600}
+.trash{font-size:12px;color:var(--muted);border-top:1px dashed var(--line);padding-top:8px}
+
+/* 表格 */
+.tablebox{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:14px}
+th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:12.5px;color:var(--muted);font-weight:600;background:var(--sunk)}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+tr:last-child td{border-bottom:0}
+.pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.pill.go{background:var(--go-soft);color:var(--go)}.pill.wait{background:var(--wait-soft);color:var(--wait)}.pill.stop{background:var(--stop-soft);color:var(--muted)}.pill.you{background:var(--you-soft);color:var(--you)}
+.confirm{display:flex;flex-direction:column;gap:12px}
+.confirm div{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--wait);border-radius:10px;padding:12px 14px;font-size:14px}
+.confirm b{display:block;margin-bottom:4px}
+.confirm span{color:var(--muted)}
+.small{font-size:13px;color:var(--muted)}
+</style>
+
+<div class="wrap">
+
+<header>
+  <h1>以后你只回答「你还用不用」，其余我来判断</h1>
+  <p class="lead">按 11 月 18 日对你这台 Mac 的真实扫描：现在面板上那 89.7 GB「要你决定」的东西，我逐项查了最近有没有在用、删了能不能再生。结论是大约 52 GB 可以直接替你清，38 GB 应该先别动，真正需要你开口的只有 2 件小事。</p>
+  <div class="kpis">
+    <div class="kpi"><b class="num">11.1 GB</b><span>现在可用</span></div>
+    <div class="kpi"><b class="num" style="color:var(--go)">≈ 56 GB</b><span>按建议清完，马上可用</span></div>
+    <div class="kpi"><b class="num" style="color:var(--go)">≈ 63 GB</b><span>再清空废纸篓后</span></div>
+    <div class="kpi"><b class="num">2 件</b><span>需要你自己定</span></div>
+  </div>
+</header>
+
+<section>
+  <h2>为什么你现在没法决定</h2>
+  <div class="diag">
+    <div><b>按「东西是什么」分组，不按「该怎么办」分组</b><i>「备份、虚拟机、在用的构建产物」是技术分类，你看了也不知道该不该清。</i></div>
+    <div><b>应用手里有答案，却把原始信息丢给你</b><i>「PR 还没合并」「闲置 3 天」这些它自己能判断，却原样展示，变成了你的作业。</i></div>
+    <div><b>最大的 45 GB 其实删了不丢任何东西</b><i>那是 AI 写代码时编译出来的中间文件，随时能重新生成，代价只是下次多等几分钟。规则把它们当成了有风险。</i></div>
+    <div><b>两个红框重复</b><i>「本周待决定」的 10 件，有 9 件就是「要你决定」里的同一批东西，看起来像有两份作业。</i></div>
+    <div><b>没说「移到废纸篓」不等于腾出空间</b><i>备份、下载文件只是挪进废纸篓，要清空废纸篓空间才真正回来。</i></div>
+    <div><b>大头不在面板上</b><i>已用约 449 GB，面板只看到 130 GB。比如驿窗的测试截图两周攒了 21 GB，面板只能算进「其他」。</i></div>
+  </div>
+</section>
+
+<section>
+  <h2>三版面板，点上面切换</h2>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-v="a">甲 · 一键交给我</button>
+    <button class="tab" role="tab" aria-selected="false" data-v="b">乙 · 红绿灯清单</button>
+    <button class="tab" role="tab" aria-selected="false" data-v="c">丙 · 一件一件问</button>
+  </div>
+
+  <!-- 甲 -->
+  <div class="stage" data-view="a">
+    <div class="panel">
+      <div><div class="p-top"><span class="p-free num">11.1</span><span>GB 可用</span></div><div class="p-sub">共 460.4 GB · 09:44 扫描</div></div>
+      <div class="card go">
+        <div class="sec" style="margin:0">我已经替你挑好了</div>
+        <div class="big num">能腾出 51.8 GB</div>
+        <div class="list">
+          <div class="row"><span class="dot go"></span><div class="t"><b>AI 写代码留下的编译文件</b><small>4 份，删了什么都不丢，下次多等几分钟</small></div><span class="v">44.9 GB</span></div>
+          <div class="row"><span class="dot go"></span><div class="t"><b>Codex 的旧备份</b><small>留最新一份，其余 5 份进废纸篓</small></div><span class="v">6.8 GB</span></div>
+          <div class="row"><span class="dot go"></span><div class="t"><b>下载缓存</b><small>npm 的，下次会自动重新下</small></div><span class="v">0.1 GB</span></div>
+        </div>
+        <button class="btn" id="a-go">一键清理 51.8 GB</button>
+        <div class="trash" id="a-trash">其中 6.8 GB 先进废纸篓，确认电脑一切正常后清空废纸篓才算真正腾出来。</div>
+      </div>
+      <div class="card you">
+        <div class="sec" style="margin:0">只有你知道的 · 2 件</div>
+        <div class="row"><span class="dot you"></span><div class="t"><b>下载里 218 个一个月没打开的文件</b><small>多是 9、10 月的海报、电子书、截图，共 1.1 GB</small><div class="minis" style="margin-top:6px"><button class="mini pri">都不要了</button><button class="mini">让我挑</button><button class="mini">都留着</button></div></div></div>
+        <div class="row"><span class="dot you"></span><div class="t"><b>废纸篓多久清一次？</b><small>清空后才腾出空间，清空就找不回了</small><div class="minis" style="margin-top:6px"><button class="mini pri">放满 7 天自动清</button><button class="mini">每次问我</button></div></div></div>
+      </div>
+      <button class="link" id="a-more">先不动的 6 项 · 38.5 GB · 为什么不动 ›</button>
+      <div class="card plain" id="a-keep" hidden>
+        <div class="row"><span class="dot wait"></span><div class="t"><b>正在用的编译文件</b><small>有程序在里面跑，停了我会自动归到上面</small></div><span class="v">13.0 GB</span></div>
+        <div class="row"><span class="dot stop"></span><div class="t"><b>Docker 虚拟机（Colima）</b><small>11 月 15 日还在用</small></div><span class="v">9.9 GB</span></div>
+        <div class="row"><span class="dot stop"></span><div class="t"><b>Claude 的 Cowork 虚拟机</b><small>11 月 15 日还在用</small></div><span class="v">9.8 GB</span></div>
+        <div class="row"><span class="dot stop"></span><div class="t"><b>最新一份 Codex 备份</b><small>留一份保底</small></div><span class="v">4.2 GB</span></div>
+        <div class="row"><span class="dot stop"></span><div class="t"><b>AI 工具的运行文件（npx）</b><small>你的 AI 插件正靠它运行，省得也不多</small></div><span class="v">1.1 GB</span></div>
+        <div class="row"><span class="dot stop"></span><div class="t"><b>pnpm 存储</b><small>上次清过，一点没少，都在用</small></div><span class="v">0.5 GB</span></div>
+      </div>
+      <div class="foot"><span>对话记录 39.9 GB · 只看不删</span><span>撤销上一次</span></div>
+    </div>
+    <div class="note">
+      <h3>甲：把判断做完，只给你一个按钮</h3>
+      <p>首页最显眼的是「能腾出多少」和一个按钮。我已经判断好的东西不让你看明细，想看再点开。需要你开口的单独放一块，每件只有两三个按钮，用的是生活里的话。</p>
+      <ul>
+        <li>「要你决定」和「本周待决定」两个入口合并，不再有两份作业。</li>
+        <li>先不动的东西写明为什么不动，等条件变了（程序停了、一个月没用了）自动挪到「替你清」。</li>
+        <li>按钮下面直接说清哪部分进废纸篓、要清空废纸篓才算腾出来。</li>
+      </ul>
+      <p class="who">适合：你只想要结果，不想看过程。代价：你很少有机会知道清了些什么，靠「撤销」兜底。</p>
+    </div>
+  </div>
+
+  <!-- 乙 -->
+  <div class="stage" data-view="b" hidden>
+    <div class="panel">
+      <div><div class="p-top"><span class="p-free num">11.1</span><span>GB 可用</span></div><div class="p-sub">共 460.4 GB · 09:44 扫描</div></div>
+      <div class="list">
+        <div class="light go"><span class="dot go" style="margin:0"></span>绿灯 · 放心清 · 已替你勾好</div>
+        <div class="row"><input type="checkbox" class="chk" checked id="b1"><div class="t"><b>AI 写代码留下的编译文件 · 4 份</b><small>删了什么都不丢。后果：下次 AI 在这几个分支干活多等几分钟</small></div><span class="v">44.9 GB</span></div>
+        <div class="row"><input type="checkbox" class="chk" checked id="b2"><div class="t"><b>Codex 的 5 份旧备份</b><small>两个多月前的，Codex 一直正常。后果：进废纸篓，能放回</small></div><span class="v">6.8 GB</span></div>
+        <div class="row"><input type="checkbox" class="chk" checked id="b3"><div class="t"><b>npm 下载缓存</b><small>后果：下次装东西重新下载</small></div><span class="v">0.1 GB</span></div>
+
+        <div class="light you" style="margin-top:6px"><span class="dot you" style="margin:0"></span>紫灯 · 只有你知道</div>
+        <div class="row"><input type="checkbox" class="chk" id="b4" style="accent-color:var(--you)"><div class="t"><b>下载里一个月没打开的 218 个文件</b><small>9、10 月的海报、电子书、截图。勾上就进废纸篓</small></div><span class="v">1.1 GB</span></div>
+
+        <div class="light wait" style="margin-top:6px"><span class="dot wait" style="margin:0"></span>黄灯 · 现在不行，晚点我再看</div>
+        <div class="row"><span class="dot wait"></span><div class="t"><b>正在用的编译文件</b><small>有程序在里面跑，停了自动变绿</small></div><span class="v">13.0 GB</span></div>
+
+        <div class="light stop" style="margin-top:6px"><span class="dot stop" style="margin:0"></span>灰灯 · 别动，还在用</div>
+        <div class="row"><span class="dot stop"></span><div class="t"><b>两个虚拟机（Docker、Cowork）</b><small>11 月 15 日都还用过；一个月没用会变紫灯问你</small></div><span class="v">19.7 GB</span></div>
+        <div class="row"><span class="dot stop"></span><div class="t"><b>其他 3 项</b><small>最新备份、AI 插件运行文件、pnpm</small></div><span class="v">5.8 GB</span></div>
+      </div>
+      <button class="btn" id="b-go">清理勾选的 51.8 GB</button>
+      <div class="trash">绿灯里 6.8 GB 进废纸篓，清空废纸篓后才腾出来。</div>
+      <div class="foot"><span>对话记录 39.9 GB · 只看不删</span><span>撤销上一次</span></div>
+    </div>
+    <div class="note">
+      <h3>乙：一张清单，每行用颜色告诉你答案</h3>
+      <p>所有东西都在一张表里，但每一行已经带着结论：绿灯我替你勾好了，灰灯和黄灯勾不了，紫灯等你勾。每行第二句只写「删了会怎样」。</p>
+      <ul>
+        <li>和现在最像，改动最小，你能一眼看完全部。</li>
+        <li>颜色会随时间变：程序停了黄变绿，虚拟机一个月没用灰变紫。</li>
+        <li>「本周待决定」取消，周五的通知只提紫灯那几件。</li>
+      </ul>
+      <p class="who">适合：想看清全貌再按按钮。代价：条目多时还是一长串，需要往下翻。</p>
+    </div>
+  </div>
+
+  <!-- 丙 -->
+  <div class="stage" data-view="c" hidden>
+    <div class="panel">
+      <div><div class="p-top"><span class="p-free num" id="c-free">11.1</span><span>GB 可用</span></div><div class="p-sub">共 460.4 GB · 09:44 扫描</div></div>
+      <div class="bubble" id="c-card"></div>
+      <button class="link" id="c-auto">另外 6 项我判断先不动，点开看理由 ›</button>
+      <div class="foot"><span>对话记录 39.9 GB · 只看不删</span><span>撤销上一次</span></div>
+    </div>
+    <div class="note">
+      <h3>丙：像助理一样，一次只问一件</h3>
+      <p>面板中间只有一张卡片：这是什么、删了会怎样、我建议怎么办。你点「按建议」就到下一张。先不动的东西不出卡片，只留一行入口。</p>
+      <ul>
+        <li>一次只想一件事，最不费脑。</li>
+        <li>卡片按腾出空间多少排序，前两张就解决 9 成。</li>
+        <li>周五的周报也改成这种卡片，只问新出现的。</li>
+      </ul>
+      <p class="who">适合：完全不想看清单。代价：要点 3～4 下才清完，没有一眼看全的视图。</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>我替你做的判断（真实数据，11 月 18 日）</h2>
+  <div class="tablebox"><table>
+    <thead><tr><th>东西</th><th>大小</th><th>判断</th><th>依据</th><th>删了会怎样</th></tr></thead>
+    <tbody>
+      <tr><td>驿窗 4 个分支的编译文件（347-review-gate、codex-audit-fix-1112、relay-inline-code、359-board-peek）</td><td class="n">44.9 GB</td><td><span class="pill go">替你清</span></td><td>只删编译出来的 target 目录，代码和没提交的改动都不碰</td><td>什么都不丢；下次 AI 在这些分支上干活要重新编译几分钟。直接删除，马上腾出</td></tr>
+      <tr><td>Codex 旧备份 5 份（8 月 26 日～9 月 7 日）</td><td class="n">6.8 GB</td><td><span class="pill go">替你清</span></td><td>你自己做的保险，两个多月 Codex 一直正常；留 9 月 16 日最新一份</td><td>进废纸篓，能放回</td></tr>
+      <tr><td>npm 缓存</td><td class="n">0.1 GB</td><td><span class="pill go">替你清</span></td><td>官方命令清理</td><td>下次安装重新下载</td></tr>
+      <tr><td>驿窗 nostalgic-bartik 的编译文件</td><td class="n">13.0 GB</td><td><span class="pill wait">晚点再看</span></td><td>现在有程序在里面运行</td><td>程序停了自动归到「替你清」</td></tr>
+      <tr><td>Colima（Docker）虚拟机 multica</td><td class="n">9.9 GB</td><td><span class="pill stop">先别动</span></td><td>11 月 15 日还启动过</td><td>删了要重装镜像；一个月没用再问你</td></tr>
+      <tr><td>Claude Cowork 虚拟机</td><td class="n">9.8 GB</td><td><span class="pill stop">先别动</span></td><td>11 月 15 日还用过</td><td>由 Claude 应用管，一个月没用再提示你去 Claude 设置里清</td></tr>
+      <tr><td>Codex 最新一份备份（9 月 16 日）</td><td class="n">4.2 GB</td><td><span class="pill stop">先别动</span></td><td>留一份保底</td><td>—</td></tr>
+      <tr><td>npx 运行过的工具</td><td class="n">1.1 GB</td><td><span class="pill stop">先别动</span></td><td>你的 AI 插件（MCP）正靠它运行</td><td>清了插件可能暂时坏掉，省得也不多</td></tr>
+      <tr><td>pnpm 存储</td><td class="n">0.5 GB</td><td><span class="pill stop">先别动</span></td><td>11 月 5 日清过，一点没少</td><td>—</td></tr>
+      <tr><td>下载里 30 天没打开的 218 个文件</td><td class="n">1.1 GB</td><td><span class="pill you">问你</span></td><td>是你的私人文件，用不用得上只有你知道</td><td>进废纸篓，能放回</td></tr>
+      <tr><td>废纸篓</td><td class="n">读不到</td><td><span class="pill you">问你</span></td><td>清空后找不回，要你定一次规矩</td><td>空间真正回来</td></tr>
+      <tr><td>Claude / Codex 对话记录</td><td class="n">39.9 GB</td><td><span class="pill stop">只看不删</span></td><td>之前定的底线，不变</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small" style="margin-top:10px">面板外还看到两处大头，不归磁盘瘦身管，另行处理：驿窗测试证据 <span class="num">21 GB</span>（全是最近两周的截图和日志，在 <code>~/Library/Application Support/postpane/evidence</code>）；各应用缓存 <span class="num">12 GB</span>，其中几个应用的旧更新安装包约 <span class="num">2.5 GB</span>。</p>
+</section>
+
+<section>
+  <h2>这些是之前定过的，要改先问你</h2>
+  <div class="confirm">
+    <div><b>① 没合并、有未提交改动的编译文件也算「替你清」</b><span>原来（11 月 5 日 PRD 4.2，第 7 批）：只有已合并、或闲置 3 天以上才能清，有未提交改动的一律不碰。改成：只要现在没有程序在用，就替你清，因为删的只是编译出来的中间文件，代码和改动都在。风险：AI 下次在这些分支上干活要多等几分钟重新编译。自动清理仍然只清已合并的。</span></div>
+    <div><b>② 首页「要你决定」「本周待决定」合并改版</b><span>原来（第 3 批定稿的融合版首页，PRD 3.2、3.3）：两个入口分开，周报每张卡对应一项。改成你从上面三版里挑的那版。风险：周报的「保留 / 下周再问」记录要跟着迁移，已经点过「保留」的不会再冒出来。</span></div>
+    <div><b>③ Codex 旧备份默认替你清、只留最新一份</b><span>原来（PRD 4.2）：需确认，逐项勾。改成：超过 30 天、且不是最新的那份，默认勾上进废纸篓。风险：放回要去废纸篓里找。</span></div>
+    <div><b>④ 废纸篓「放满 7 天自动清」（可选）</b><span>原来（PRD 第 5 节安全底线）：永不自动清空废纸篓。只有你在面板上明确选了「放满 7 天自动清」才生效，而且只清磁盘瘦身自己放进去、放满 7 天的那些；默认仍然是不清。风险：清了就找不回。也可以不做这条，只在面板上提醒你去清。</span></div>
+  </div>
+</section>
+
+<p class="small">这页只是方案预览，代码一行没改。数据来自 <code>diskslim scan</code> 只读扫描和对虚拟机、备份最近使用时间的只读查看。</p>
+</div>
+
+<script>
+(function(){
+  const tabs=[...document.querySelectorAll('.tab')], views=[...document.querySelectorAll('[data-view]')];
+  function show(v){tabs.forEach(t=>t.setAttribute('aria-selected',t.dataset.v===v));views.forEach(s=>s.hidden=s.dataset.view!==v);try{localStorage.setItem('v',v)}catch(e){}}
+  tabs.forEach(t=>t.addEventListener('click',()=>show(t.dataset.v)));
+  try{const s=localStorage.getItem('v');if(s)show(s)}catch(e){}
+
+  const more=document.getElementById('a-more'), keep=document.getElementById('a-keep');
+  more.addEventListener('click',()=>{keep.hidden=!keep.hidden;more.textContent=keep.hidden?'先不动的 6 项 · 38.5 GB · 为什么不动 ›':'收起 ‹'});
+  document.getElementById('a-go').addEventListener('click',e=>{e.target.textContent='已清理 · 现在可用约 56 GB（示例）';e.target.disabled=true});
+
+  const bs=['b1','b2','b3','b4'].map(id=>document.getElementById(id)), sz=[44.9,6.8,0.1,1.1], bgo=document.getElementById('b-go');
+  function sum(){const t=bs.reduce((a,c,i)=>a+(c.checked?sz[i]:0),0);bgo.textContent='清理勾选的 '+t.toFixed(1)+' GB'}
+  bs.forEach(c=>c.addEventListener('change',sum));
+
+  const cards=[
+    {t:'AI 写代码留下的编译文件',s:'44.9 GB',what:'驿窗项目 4 个分支编译出来的中间文件',after:'什么都不丢。下次 AI 在这几个分支干活，要多等几分钟重新生成',back:'不用找回，随时能重新生成',rec:'清',yes:'按建议清',no:'这次先不',gain:44.9},
+    {t:'Codex 的 5 份旧备份',s:'6.8 GB',what:'8 月底到 9 月初你给 Codex 做的保险，最新一份我替你留着',after:'Codex 两个多月一直正常，用不上了',back:'先进废纸篓，能放回',rec:'清',yes:'按建议清',no:'都留着',gain:6.8},
+    {t:'下载里 218 个一个月没打开的文件',s:'1.1 GB',what:'多是 9、10 月的活动海报、电子书、截图',after:'这只有你知道还用不用',back:'进废纸篓，能放回',rec:'你定',yes:'都不要了',no:'让我挑',gain:1.1},
+    {t:'废纸篓以后怎么办',s:'',what:'进废纸篓的东西还占着空间，清空才真正腾出来',after:'清空后找不回',back:'—',rec:'你定',yes:'放满 7 天自动清',no:'每次问我',gain:0}
+  ];
+  let i=0, free=11.1;
+  const box=document.getElementById('c-card'), freeEl=document.getElementById('c-free');
+  function render(){
+    if(i>=cards.length){box.innerHTML='<div class="done">都处理完了，现在可用约 '+free.toFixed(1)+' GB（示例）</div><div class="small">下一次有新东西要问你时，周五的通知会带你回来。</div>';return}
+    const c=cards[i];
+    box.innerHTML='<div class="step"><span>第 '+(i+1)+' 件，共 '+cards.length+' 件</span><span class="num">'+c.s+'</span></div>'+
+      '<b style="font-size:15px">'+c.t+'</b>'+
+      '<dl class="kv"><dt>是什么</dt><dd>'+c.what+'</dd><dt>删了会怎样</dt><dd>'+c.after+'</dd><dt>能找回吗</dt><dd>'+c.back+'</dd><dt>我的建议</dt><dd><b style="color:'+(c.rec==='清'?'var(--go)':'var(--you)')+'">'+c.rec+'</b></dd></dl>'+
+      '<div class="minis"><button class="mini pri" id="c-y">'+c.yes+'</button><button class="mini" id="c-n">'+c.no+'</button></div>';
+    document.getElementById('c-y').onclick=()=>{if(i<2)free+=c.gain;freeEl.textContent=free.toFixed(1);i++;render()};
+    document.getElementById('c-n').onclick=()=>{i++;render()};
+  }
+  render();
+  document.getElementById('c-auto').addEventListener('click',()=>{show('a');keep.hidden=false;more.textContent='收起 ‹';keep.scrollIntoView({behavior:'smooth',block:'center'})});
+})();
+</script>

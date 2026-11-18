@@ -21,6 +21,64 @@ import Testing
         #expect(found.first { $0.title.hasPrefix("Codex 备份") }?.suggested == false)
     }
 
+    /// 2026-11-18 起（issue #4）：最新一份留着保底，一个月以前的旧份默认勾选（进废纸篓），一个月内的先留着；仍是需确认，不进自动清理
+    @Test func Codex备份_留最新一份_一个月前的旧份默认勾选() {
+        let t = TempDir()
+        let dates: [String: Double] = ["session-guard-0827": 83, "session-guard-0916": 63, "before-mod-0915": 64, "provider-1110": 8]
+        for (name, days) in dates {
+            t.file(".codex/recovery/\(name)/state.sqlite", bytes: 50_000, modified: daysAgo(days))
+            t.setModified(t.url.appendingPathComponent(".codex/recovery/\(name)"), daysAgo(days))
+        }
+        let found = KnownPlacesScanner(home: t.url, minBytes: 20_000, now: now).scan()
+        let r = Dictionary(uniqueKeysWithValues: found.map { ($0.title.replacingOccurrences(of: "Codex 备份 · ", with: ""), $0) })
+        // 名字排序和时间先后对不上：最新一份按修改时间认
+        #expect(r["provider-1110"]?.suggested == false)
+        #expect(r["provider-1110"]?.detail.hasSuffix("最新一份，留着保底") == true)
+        #expect(r["session-guard-0827"]?.suggested == true)
+        #expect(r["session-guard-0916"]?.suggested == true)
+        #expect(r["before-mod-0915"]?.suggested == true)
+        #expect(found.allSatisfy { $0.risk == .confirm && $0.cleanup == .trash })
+        #expect(Alerts.autoCleanPicks(found).isEmpty)
+        #expect(found.filter { $0.bucket(now: now) == .picked }.count == 3)
+    }
+
+    @Test func Codex备份_一个月内做的除了最新一份也先留着() {
+        let t = TempDir()
+        for (name, days) in [("a", 10.0), ("b", 2.0)] {
+            t.file(".codex/recovery/\(name)/x", bytes: 50_000, modified: daysAgo(days))
+            t.setModified(t.url.appendingPathComponent(".codex/recovery/\(name)"), daysAgo(days))
+        }
+        let found = KnownPlacesScanner(home: t.url, minBytes: 20_000, now: now).scan()
+        #expect(found.allSatisfy { !$0.suggested })
+        #expect(found.first { $0.title.hasSuffix(" · a") }?.detail.hasSuffix("一个月内做的，先留着") == true)
+    }
+
+    @Test func 虚拟机_记最近用过的日期_一个月没用才问() {
+        for (days, bucket) in [(3.0, Bucket.keep), (45.0, Bucket.ask)] {
+            let t = TempDir()
+            t.file(".colima/_lima/colima-x/diffdisk", bytes: 60_000, modified: daysAgo(days))
+            t.setModified(t.url.appendingPathComponent(".colima/_lima/colima-x"), daysAgo(days))
+            t.setModified(t.url.appendingPathComponent(".colima/_lima"), daysAgo(days))
+            t.setModified(t.url.appendingPathComponent(".colima"), daysAgo(days))
+            let vm = KnownPlacesScanner(home: t.url, minBytes: 20_000, now: now).scan().first { $0.title == "Colima 虚拟机" }
+            #expect(vm?.bucket(now: now) == bucket, "\(days) 天没用")
+            #expect(vm?.suggested == false && vm?.cleanup == Cleanup.none)
+            if days < 30 { #expect(vm?.detail.hasSuffix("还用过，先留着") == true) }
+            else { #expect(vm?.detail.hasPrefix("45 天没用了。") == true) }
+        }
+    }
+
+    @Test func 最近修改时间只看往下两层() {
+        let t = TempDir()
+        let root = t.dir("vm", modified: daysAgo(50))
+        t.file("vm/a/b/deep.img", modified: daysAgo(1)) // 第三层，不算
+        t.setModified(t.url.appendingPathComponent("vm/a/b"), daysAgo(40))
+        t.setModified(t.url.appendingPathComponent("vm/a"), daysAgo(40))
+        t.setModified(root, daysAgo(50))
+        let got = latestModification(root)!
+        #expect(abs(got.timeIntervalSince(daysAgo(40))) < 2)
+    }
+
     @Test func 多个路径合成一项() {
         let t = TempDir()
         t.file(".codex/sessions/a.jsonl", bytes: 30_000)
