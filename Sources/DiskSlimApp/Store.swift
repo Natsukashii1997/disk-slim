@@ -22,6 +22,22 @@ struct Toast: Identifiable {
     let canUndo: Bool
 }
 
+/// 自己点清理、真的腾出了空间时放的彩带（2026-11-18 常浩选「二版 彩带雨」，预览 docs/design/ui-v6-celebrate.html）
+struct Celebration: Identifiable {
+    let id = UUID()
+    let at: Date
+    /// 清理前、清理后的可用空间：顶卡大数字从前一个滚到后一个
+    let fromBytes: Int64
+    let toBytes: Int64
+    let freedBytes: Int64
+    let trashedBytes: Int64
+
+    /// 彩带一共放多久；数字滚多久；结果提示多久后弹
+    static let duration: TimeInterval = 2.8
+    static let countUp: TimeInterval = 1.4
+    static let toastDelay: TimeInterval = 1.2
+}
+
 @MainActor
 final class Store: ObservableObject {
     @Published var report: ScanReport?
@@ -36,6 +52,10 @@ final class Store: ObservableObject {
     @Published var drawer: HomeDrawer?
     @Published var confirming: [Finding]?
     @Published var toast: Toast?
+    /// 清理完成的彩带；过一会儿自动清掉（顶卡上的「+X GB」跟着消失）
+    @Published var celebration: Celebration?
+    /// 离屏截图用：把彩带和数字定格在第几秒；平时为 nil，按真实时间走
+    var celebrationFrozenAt: TimeInterval?
     /// 每日记录（usage.json），首页曲线和涨幅页用
     @Published var samples: [UsageSample] = []
     /// 卡片上的「保留」「下周再问」（decisions.json）
@@ -392,10 +412,33 @@ final class Store: ObservableObject {
             let batch = cleaner.clean(list)
             await MainActor.run {
                 self.working = false
-                self.toast = Toast(text: Self.summary(batch), canUndo: batch.trashedBytes > 0 && batch.note == nil)
+                let toast = Toast(text: Self.summary(batch), canUndo: batch.trashedBytes > 0 && batch.note == nil)
+                let before = self.disk?.availableBytes
+                // 马上重读可用空间，不等那次几十秒的重新扫描，数字才能当场滚上去
+                self.refreshDisk()
+                if batch.freedBytes + batch.trashedBytes > 0, let before, let after = self.disk?.availableBytes {
+                    self.celebrate(Celebration(at: Date(), fromBytes: before, toBytes: after,
+                                               freedBytes: batch.freedBytes, trashedBytes: batch.trashedBytes), toast: toast)
+                } else {
+                    self.toast = toast
+                }
                 self.report = nil
                 self.scan(force: true)
             }
+        }
+    }
+
+    /// 放彩带：结果提示晚一点弹，彩带放完、再停一会儿后把「+X GB」收掉
+    private func celebrate(_ c: Celebration, toast: Toast) {
+        celebration = c
+        Task {
+            try? await Task.sleep(nanoseconds: UInt64(Celebration.toastDelay * 1e9))
+            if self.celebration?.id == c.id, self.toast == nil { self.toast = toast }
+            // 彩带放完：刷新一次，让每帧刷新的时钟停下来
+            try? await Task.sleep(nanoseconds: UInt64((Celebration.duration - Celebration.toastDelay + 0.1) * 1e9))
+            if self.celebration?.id == c.id { self.objectWillChange.send() }
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            if self.celebration?.id == c.id { self.celebration = nil }
         }
     }
 

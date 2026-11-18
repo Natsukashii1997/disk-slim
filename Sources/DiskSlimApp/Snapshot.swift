@@ -23,6 +23,11 @@ enum Snapshot {
             ("11-首页-示例记录", { $0.samples = example(report) }),
             ("12-涨幅-示例记录", { $0.samples = example(report); $0.page = .growth }),
             ("13-提醒设置", { $0.page = .alerts }),
+            // 清理完成的彩带，用 11 月 18 日那次真实清理的数字（清理前 5.9 GB，腾出 45.3 GB，6.7 GB 进废纸篓）定格在几个时刻
+            ("14-清理完成彩带-示例-0.5秒", { celebrate($0, at: 0.5) }),
+            ("15-清理完成彩带-示例-1.3秒", { celebrate($0, at: 1.3) }),
+            ("16-清理完成彩带-示例-2.4秒", { celebrate($0, at: 2.4) }),
+            ("17-清理完成彩带-示例-放完", { celebrate($0, at: 3.5) }),
         ]
         for (name, setup) in shots {
             for scheme in [ColorScheme.light, .dark] {
@@ -54,6 +59,20 @@ enum Snapshot {
             }
         }
         ball(to: dir)
+    }
+
+    /// 刚清理完的样子：重新扫描还没回来（report 为空），彩带定格在第 `t` 秒
+    static func celebrate(_ store: Store, at t: TimeInterval) {
+        let gb: Double = 1_073_741_824
+        store.report = nil
+        // 清理后的数字用现在真实的可用空间；清理前固定写 5.9 GB
+        let after = store.disk?.availableBytes ?? Int64(51.2 * gb)
+        store.celebration = Celebration(at: Date(), fromBytes: Int64(5.9 * gb), toBytes: after,
+                                        freedBytes: Int64(45.3 * gb), trashedBytes: Int64(6.7 * gb))
+        store.celebrationFrozenAt = t
+        if t >= Celebration.toastDelay {
+            store.toast = Toast(text: "已释放 45.3 GB，移到废纸篓 6.7 GB（清空后才释放）", canUndo: true)
+        }
     }
 
     /// 第 8 批：桌面悬浮球各状态（2 倍图）。要用打包版跑才有图标，调试版画的是缺图时的圆

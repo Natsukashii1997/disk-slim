@@ -77,6 +77,9 @@ struct PanelView: View {
             if let list = store.confirming { ConfirmView(list: list).padding(10) }
             if let t = store.toast, store.confirming == nil { ToastView(toast: t).padding(10) }
         }
+        .overlay {
+            if let c = store.celebration { ConfettiView(celebration: c).allowsHitTesting(false) }
+        }
         .frame(width: panelWidth)
         .font(.system(size: 13))
         .background(Tone(scheme).panel)
@@ -432,11 +435,21 @@ struct HeroCard: View {
                 }
                 .font(.system(size: 11.5)).foregroundStyle(.secondary)
 
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(store.disk.map { String(format: "%.1f", Double($0.availableBytes) / 1_073_741_824) } ?? "—")
-                        .font(.system(size: 48, weight: .bold)).monospacedDigit().tracking(-1)
-                        .foregroundStyle(levelColor)
-                    Text("GB").font(.system(size: 17, weight: .semibold)).foregroundStyle(.secondary)
+                CelebrationClock(celebration: store.celebration, frozenAt: store.celebrationFrozenAt) { elapsed in
+                    let gb = shownGB(elapsed)
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(gb.map { String(format: "%.1f", $0) } ?? "—")
+                            .font(.system(size: 48, weight: .bold)).monospacedDigit().tracking(-1)
+                            .foregroundStyle(levelColor(gb))
+                        Text("GB").font(.system(size: 17, weight: .semibold)).foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                        if let c = store.celebration {
+                            Text("+\(formatBytes(c.freedBytes))").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                                .padding(.horizontal, 10).padding(.vertical, 4)
+                                .background(Capsule().fill(t.gain))
+                                .scaleEffect(pillScale(elapsed)).opacity(pillScale(elapsed) > 0 ? 1 : 0)
+                        }
+                    }
                 }
                 .padding(.top, 6)
 
@@ -454,7 +467,13 @@ struct HeroCard: View {
                 }
 
                 HStack {
-                    if picks.isEmpty {
+                    if let c = store.celebration, picks.isEmpty {
+                        Text("刚腾出 ") + Text(formatBytes(c.freedBytes)).fontWeight(.semibold).foregroundColor(.primary)
+                        Spacer()
+                        if c.trashedBytes > 0 {
+                            Text("废纸篓里还有 \(formatBytes(c.trashedBytes))").fontWeight(.semibold).foregroundStyle(t.gain)
+                        }
+                    } else if picks.isEmpty {
                         Text("暂时没有能拿回的")
                     } else {
                         Text("清完约 ") + Text(formatBytes(free + soon)).fontWeight(.semibold).foregroundColor(.primary)
@@ -475,10 +494,98 @@ struct HeroCard: View {
     }
 
     /// 和菜单栏图标同一套：低于 30 GB 红，低于 60 GB 橙
-    private var levelColor: Color {
-        guard let d = store.disk else { return .primary }
-        let gb = Double(d.availableBytes) / 1_073_741_824
+    private func levelColor(_ gb: Double?) -> Color {
+        guard let gb else { return .primary }
         return gb < 30 ? t.red : gb < 60 ? t.orange : .primary
+    }
+
+    /// 刚清理完的头 1.4 秒，数字从清理前滚到清理后（先快后慢）；其余时候就是现在的可用空间
+    private func shownGB(_ elapsed: TimeInterval?) -> Double? {
+        let gb = { (b: Int64) in Double(b) / 1_073_741_824 }
+        if let c = store.celebration, let elapsed, elapsed < Celebration.countUp {
+            let k = max(0, elapsed) / Celebration.countUp
+            return gb(c.fromBytes) + (gb(c.toBytes) - gb(c.fromBytes)) * (1 - pow(1 - k, 3))
+        }
+        return store.disk.map { gb($0.availableBytes) }
+    }
+
+    /// 「+X GB」先弹大一点再落定
+    private func pillScale(_ elapsed: TimeInterval?) -> Double {
+        guard let e = elapsed else { return 1 }
+        let k = min(1, max(0, (e - 0.25) / 0.35))
+        return k <= 0 ? 0 : k < 1 ? 0.9 + 0.2 * sin(k * .pi) + 0.1 * k : 1
+    }
+}
+
+/// 彩带和数字滚动的时钟：放的时候按真实时间每帧刷新，其余时候不刷；离屏截图时定格在给定的秒数
+struct CelebrationClock<Content: View>: View {
+    let celebration: Celebration?
+    let frozenAt: TimeInterval?
+    @ViewBuilder let content: (TimeInterval?) -> Content
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        if let c = celebration, !reduceMotion {
+            if let frozenAt {
+                content(frozenAt)
+            } else {
+                TimelineView(.animation(paused: Date().timeIntervalSince(c.at) > Celebration.duration)) { tl in
+                    content(tl.date.timeIntervalSince(c.at))
+                }
+            }
+        } else {
+            content(nil)
+        }
+    }
+}
+
+/// 彩带雨：从面板顶上飘落，边转边摆，落到底部淡出；颜色是「能拿回」那组紫、蓝、青再加一点暖金。
+/// 每片的位置、速度、颜色由序号算出来，同一时刻画出来都一样（离屏截图能定格）
+struct ConfettiView: View {
+    let celebration: Celebration
+    @EnvironmentObject var store: Store
+
+    var body: some View {
+        CelebrationClock(celebration: celebration, frozenAt: store.celebrationFrozenAt) { elapsed in
+            if let t = elapsed, t < Celebration.duration {
+                Canvas { ctx, size in Self.draw(&ctx, size: size, t: t) }
+            }
+        }
+    }
+
+    static let colors: [Color] = [0x9B5CF6, 0x5B6CF9, 0x2F8FE6, 0x22B3A6, 0xFFB21E].map {
+        Color(red: Double(($0 >> 16) & 0xff) / 255, green: Double(($0 >> 8) & 0xff) / 255, blue: Double($0 & 0xff) / 255)
+    }
+    static let count = 90
+
+    /// 0～1 之间的伪随机数：同一片、同一用途永远一样
+    static func rand(_ i: Int, _ salt: Int) -> Double {
+        let x = sin(Double(i * 127 + salt * 311) * 12.9898) * 43758.5453
+        return x - x.rounded(.down)
+    }
+
+    static func draw(_ ctx: inout GraphicsContext, size: CGSize, t: Double) {
+        for i in 0..<count {
+            let start = -20 - rand(i, 1) * 160                // 从面板上沿外面开始，错开落下
+            let vy = 100 + rand(i, 2) * 110                   // 每秒落多少点
+            let y = start + vy * t
+            if y < -20 || y > size.height + 20 { continue }
+            let phase = rand(i, 3) * 6.28
+            let x = rand(i, 4) * size.width + (rand(i, 5) - 0.5) * 70 * t + sin(t * 4.2 + phase) * 10
+            // 快放完时、或落到底部时淡出
+            let fadeEnd = min(1, max(0, (Celebration.duration - t) / 0.6))
+            let fadeBottom = min(1, max(0, (size.height - 10 - y) / 40))
+            let alpha = min(fadeEnd, fadeBottom)
+            if alpha <= 0 { continue }
+            let w = 5 + rand(i, 6) * 4, h = 8 + rand(i, 7) * 6
+            var c = ctx
+            c.opacity = alpha
+            c.translateBy(x: x, y: y)
+            c.rotate(by: .radians(rand(i, 8) * 6.28 + (rand(i, 9) - 0.5) * 9 * t))
+            c.scaleBy(x: 1, y: max(0.15, abs(cos(t * 5.5 + phase))))
+            c.fill(Path(roundedRect: CGRect(x: -w / 2, y: -h / 2, width: w, height: h), cornerRadius: 1.2),
+                   with: .color(colors[i % colors.count]))
+        }
     }
 }
 
