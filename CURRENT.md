@@ -2,7 +2,26 @@
 
 当前阶段目标：第 6 批试用一周收尾，定下 disk-space-guard 去留，之后转常态维护。（2026-11-08 常浩确认，digital-twin#114）
 
-更新：2026-11-06。第 0–8 批都已完成（第 8 批桌面悬浮球真屏实测通过）。第 9 批「挂进驿窗侧栏」三批都已完成：磁盘瘦身这一半在 `feat/postpane-pendant`（接在 `feat/floating-ball` 后面），驿窗挂件已合并（postpane PR #159），两边真屏验收通过，悬浮球已改为默认关并重新装机。分支 main → feat/scan-engine → … → feat/floating-ball → feat/postpane-pendant，都没合并、没推送，GitHub 远端未建。唯一下一步：等用户定这条分支链怎么合并、要不要建远端。第 6 批的「试用一周」、`disk-space-guard` 要不要停、postpane 的 Cargo 配置，这几件照旧等用户定。
+更新：2026-11-18。第 0–9 批已合回 main（PR #1），GitHub 远端已建。第 10 批「替你判断」（issue #4）在分支 `claude/4-decide-for-me`：规则、首页改版、审查修复都已提交并装机，等常浩点系统权限弹窗「允许」后做真屏验收，再定合并。唯一下一步：常浩在弹窗里点「允许」、重新加「完全磁盘访问权限」，打开面板看新首页并点「一键清理」。第 6 批的「试用一周」、`disk-space-guard` 要不要停，照旧等用户定。
+
+## 第 10 批「替你判断」：三条规则 + 首页雾光两块式（2026-11-18，Claude，常浩选定逻辑甲、排版「一黑一白」、顶卡「雾光」，规则①②③改④不改，说「雾光，按计划开工」；已提交到 `claude/4-decide-for-me`、已装机、未发布）
+
+- 时间：开工 `2026-11-18 10:20`（`date '+%F %H:%M'` 记录）。★ 来由：常浩不懂技术，面板上「要你决定 89.7 GB」「本周待决定 28 GB」没法判断，要应用替他做 99% 的判断（issue #4）。设计预览四轮都在 `docs/design/ui-v2～v5-*.html`，定稿 v5「雾光」。
+- 改了哪些文件：
+  - 规则（`8af91d9`）：`WorktreeScanner.swift`（没在用的编译文件，PR 没合并或有未提交改动也默认勾选，标需确认、不进自动清理；`git status` 失败仍不清；删掉不用的 `idleSince`）、`KnownPlaces.swift`（Codex 备份按修改时间留最新一份、30 天前的旧份默认勾选；虚拟机记最近使用日期）、`Model.swift`（`Finding.lastUsed`、三段归类 `Bucket`）、`Weekly.swift`（周报只问「要你说一句」里能执行的）、`Alerts.swift`（周报文案）。
+  - 界面（`b802bd2`）：`Views.swift`（首页雾光顶卡 + 白卡「替你挑好的 / 要你说一句 / 先不动」，删本周待决定页和 4 个不用的旧配色）、`Store.swift`（页面换成 picked / downloads / keep / records，按三段取数据，`openTrash` 只打开不清空）、`Snapshot.swift`、`DiskSlimApp.swift`、`FloatingBall.swift`（开面板时收起抽屉）。
+  - 审查修复（`a6cbaef`）：「替你挑好的」每项加「留着」，「要你说一句」补回「下周再问」，扫描时间统一传入，虚拟机说明与分段同一判断、最近使用看到第三层，「先不动的」页与首页同一批，`applyHistory` 保住 `lastUsed`。
+  - 文档：`docs/PRD.md`（3、3.2、3.3、4.2、第 7 节加第 10 批）、`AGENTS.md`（结构说明）、本文件。测试：`WorktreeTests`、`AlertsTests`、`AlertsAdversarialTests` 按新规则改写，`KnownPlacesTests` 新增 8 条。
+- 测试：`scripts/test.sh` 原样结果 `✔ Test run with 253 tests in 34 suites passed`；`node --test tests/*.test.mjs` 原样结果 `ℹ pass 4` / `ℹ fail 0`；`node scripts/check-rules.mjs` 输出「通用规则检查通过」。
+- 验证：`diskslim scan` 只读扫描真实磁盘：默认勾选 10 项共 51.8 GB（4 个 worktree 编译文件 45.0 GB、5 份旧 Codex 备份 6.7 GB、npm 缓存 123 MB），和预览一致；Colima、Cowork 都显示 11 月 15～18 日用过、归「先不动」。离屏截图三轮浅色、深色对照预览。装机后用 `diskslim://panel/toggle` 在真屏打开面板，新首页正常渲染、正在扫描；系统弹出「DiskSlim 想访问文稿文件夹」，要常浩自己点「允许」，所以带真实数据的真屏截图还没拍到。没有运行任何真实清理。
+- 截图：`~/Library/Application Support/disk-slim/evidence/2026-11-18-decide-for-me/`（`snap1`～`snap3` 离屏截图，`real-1-home.png` 真屏，`install.log`）。
+- 发布与回读：未发布（GitHub 只推分支、开 PR）。`scripts/install.sh` 退出码 0，`pgrep` 只有一个进程（88871）。
+- 独立审查（L-06）：只读审查员报中 1、低 9，无高。已修 M1、L1、L2、L3、L5、L8、L9；未改：L4（最新一份不到 50 MB 时会多留一份，偏保守，可接受）、L6（首页角标含「下周再问」的和虚拟机，周报不含，按设计）、L7（「让我挑」进下载页时安装包已勾着，旧行为，确认框只列数量；都进废纸篓可撤销，记作后续）。
+- 与授权不一致之处、遗留问题、范围外发现：
+  - 「下周再问」原来在本周待决定页，删页后补到「要你说一句」里；确认框的「需确认」提示改成只在自己从「先不动」挑了需确认项时出现。
+  - 扫描中「先不动」写「没有」、对话记录写 0 KB，应写「扫描完就有」，下次顺手改。
+  - 磁盘只剩约 2.6 GB（10:47），别的程序在持续写入；驿窗测试证据两周 21 GB，建议另开驿窗任务处理。
+- 本轮新坑：无。
 
 ## AGENTS 补「AI 接入」一节（2026-11-07，Claude，常浩定全局规则 P-13 后母会话派来，常浩看过计划说「按计划开工」；已提交到 `claude/2-ai-access`、PR 待合并、无需发布）
 
