@@ -158,6 +158,11 @@ final class FloatingBall: NSObject {
         store.panelOpen = true
     }
 
+    /// 面板顶栏的缩小键：悬浮面板（挂件或球叫开的）照常收起；菜单栏弹出的那个直接关掉窗口，下次点图标再开
+    func collapse(_ window: NSWindow?) {
+        if let window, window === panel { closePanel() } else { window?.close() }
+    }
+
     func closePanel(byOutsideClick: Bool = false) {
         guard panelOpen else { return }
         panel?.orderOut(nil)

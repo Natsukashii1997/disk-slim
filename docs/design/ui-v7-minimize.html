@@ -1,0 +1,166 @@
+<title>磁盘瘦身缩小键</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 布局：三块面板并排（手机上竖排），每块下面一条放大三倍的顶栏；面板配色照 Views.swift 的 Tone */
+:root{
+  --page:#F4F4F7; --ink:#1D1D1F; --sub:#6E6E73; --hair:rgba(0,0,0,.08);
+  --panel:#ECECF0; --card:#FFFFFF; --mist1:#F1ECFF; --mist2:#E8EFFE; --mist3:#E3F5F2;
+  --orange:#FF9500; --red:#FF3B30; --blue:#0071E3; --used:#C9CBE0;
+  --chip:#1B2233; --chipLine:#FFFFFF; --soft:rgba(0,0,0,.06); --softHover:rgba(0,0,0,.11);
+  --pick:#0071E3;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --page:#111113; --ink:#F5F5F7; --sub:#98989D; --hair:rgba(255,255,255,.10);
+  --panel:#1C1C1E; --card:#2C2C2E; --mist1:#2A2342; --mist2:#1F2846; --mist3:#173532;
+  --orange:#FF9F0A; --red:#FF453A; --blue:#0A84FF; --used:#4A4A66;
+  --chip:#0E1320; --chipLine:#E8ECF5; --soft:rgba(255,255,255,.08); --softHover:rgba(255,255,255,.14);
+  --pick:#0A84FF; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --page:#111113; --ink:#F5F5F7; --sub:#98989D; --hair:rgba(255,255,255,.10);
+  --panel:#1C1C1E; --card:#2C2C2E; --mist1:#2A2342; --mist2:#1F2846; --mist3:#173532;
+  --orange:#FF9F0A; --red:#FF453A; --blue:#0A84FF; --used:#4A4A66;
+  --chip:#0E1320; --chipLine:#E8ECF5; --soft:rgba(255,255,255,.08); --softHover:rgba(255,255,255,.14);
+  --pick:#0A84FF; color-scheme:dark}
+body{background:var(--page);color:var(--ink);font-family:var(--sans);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+h1{font-size:22px;margin:0;text-wrap:balance}
+.lead{margin:0;color:var(--sub);line-height:1.65;max-width:68ch}
+.lead b{color:var(--ink);font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+@media (max-width:900px){.grid{grid-template-columns:1fr}}
+.col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.tag{display:flex;align-items:baseline;gap:8px}
+.tag strong{font-size:17px}
+.tag span{color:var(--sub);font-size:13px}
+.note{margin:0;color:var(--sub);font-size:13px;line-height:1.6}
+
+/* 舞台：面板 + 右边的挂件 */
+.stage{position:relative;height:330px;border-radius:14px;background:
+  linear-gradient(135deg,rgba(120,130,170,.10),rgba(120,170,160,.08)),var(--page);
+  border:1px solid var(--hair);overflow:hidden}
+.panel{position:absolute;top:14px;right:44px;width:min(320px,calc(100% - 60px));background:var(--panel);
+  border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18),0 0 0 .5px var(--hair);
+  padding:12px;display:flex;flex-direction:column;gap:10px;transform-origin:calc(100% + 30px) 22px;
+  transition:transform .28s cubic-bezier(.3,.7,.3,1),opacity .22s}
+.panel.gone{transform:scale(.06);opacity:0;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.panel{transition:none}}
+.meta{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--sub);padding:0 4px;min-height:22px}
+.meta .txt{flex:1}
+.ib{all:unset;cursor:pointer;display:inline-grid;place-items:center;color:var(--sub);border-radius:6px}
+.ib:focus-visible{outline:2px solid var(--pick);outline-offset:2px}
+.ib svg{display:block}
+/* 甲：同款线条 */
+.v1 .ib{width:16px;height:16px}
+.v1 .ib:hover{color:var(--ink)}
+/* 乙：深色小块（照常浩第二张图） */
+.v2 .ib.min{width:24px;height:16px;border-radius:5px;background:var(--chip);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.12)}
+.v2 .ib.min i{display:block;width:9px;height:1.6px;border-radius:1px;background:var(--chipLine)}
+.v2 .ib.min:hover{filter:brightness(1.35)}
+.v2 .ib.ref{width:16px;height:16px}
+/* 丙：浅底圆钮成对 */
+.v3 .ib{width:22px;height:22px;border-radius:50%;background:var(--soft)}
+.v3 .ib:hover{background:var(--softHover);color:var(--ink)}
+.v3 .meta{gap:6px}
+
+.hero{border-radius:12px;padding:12px 14px;background:linear-gradient(135deg,var(--mist1),var(--mist2),var(--mist3));
+  display:flex;flex-direction:column;gap:6px}
+.hero .row{display:flex;justify-content:space-between;font-size:11.5px;color:var(--sub)}
+.big{display:flex;align-items:baseline;gap:6px}
+.big b{font-size:40px;line-height:1;color:var(--orange);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.big span{font-size:14px;color:var(--sub);font-weight:600}
+.bar{height:6px;border-radius:3px;background:var(--used);position:relative;overflow:hidden}
+.bar::after{content:"";position:absolute;right:0;top:0;bottom:0;width:9%;background:var(--red)}
+.whitecard{background:var(--card);border-radius:12px;padding:10px 12px;font-size:12px;display:flex;flex-direction:column;gap:8px}
+.whitecard .h{color:var(--sub);font-size:11.5px}
+.btn{height:26px;border-radius:9px;background:var(--blue);opacity:.45;color:#fff;display:grid;place-items:center;font-size:12px;font-weight:600}
+
+/* 挂件（示意驿窗侧栏上的那颗） */
+.pend{position:absolute;top:12px;right:8px;width:26px;height:26px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#7FD9C8,#2F8F86 70%);box-shadow:0 0 0 2px var(--page),0 2px 6px rgba(0,0,0,.25);
+  cursor:pointer;border:0;padding:0}
+.pend:focus-visible{outline:2px solid var(--pick);outline-offset:3px}
+.pend.lit{box-shadow:0 0 0 2px var(--page),0 0 0 5px rgba(63,214,196,.45),0 2px 6px rgba(0,0,0,.25)}
+.line{position:absolute;top:0;right:20px;width:1px;height:12px;background:var(--sub);opacity:.5}
+.hint{position:absolute;left:14px;bottom:12px;font-size:12px;color:var(--sub)}
+
+/* 放大三倍的顶栏 */
+.zoom{background:var(--panel);border-radius:12px;border:1px solid var(--hair);overflow-x:auto}
+.zoom .meta{transform:scale(2.6);transform-origin:right center;width:calc(100% / 2.6);margin-left:auto;padding:22px 6px;pointer-events:none}
+.zoom .meta .txt{visibility:hidden}
+
+.ask{background:var(--card);border:1px solid var(--hair);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;max-width:80ch}
+.ask p{margin:0;line-height:1.65;font-size:13.5px}
+.ask p b{font-weight:600}
+</style>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:8px">
+    <h1>磁盘瘦身：顶栏加一个缩小键</h1>
+    <p class="lead">三版只差在<b>缩小键长什么样</b>，位置都在刷新键 ↻ 右边。点一下面板就收起，回到它来的地方（驿窗挂件 / 悬浮球 / 菜单栏图标），和现在按 Esc、点别处收起是同一个动作。每块面板都能真的点：点缩小键收起，点右上角挂件再打开。</p>
+  </header>
+
+  <div class="grid">
+    <!-- 甲 -->
+    <section class="col">
+      <div class="tag"><strong>甲 · 同款线条</strong><span>和 ↻ 一样的灰色细线，没有底</span></div>
+      <div class="stage v1" data-v>
+        <span class="line"></span><button class="pend" aria-label="驿窗挂件：打开面板"></button>
+        <div class="panel" data-panel></div>
+        <span class="hint">点「—」收起</span>
+      </div>
+      <div class="zoom v1"><div class="meta" data-meta></div></div>
+      <p class="note">最安静，像系统自带的。缺点是小，和 ↻ 挨着不太显眼。</p>
+    </section>
+    <!-- 乙 -->
+    <section class="col">
+      <div class="tag"><strong>乙 · 深色小块</strong><span>照你发的第二张图：深色圆角块 + 白横线</span></div>
+      <div class="stage v2" data-v>
+        <span class="line"></span><button class="pend" aria-label="驿窗挂件：打开面板"></button>
+        <div class="panel" data-panel></div>
+        <span class="hint">点深色小块收起</span>
+      </div>
+      <div class="zoom v2"><div class="meta" data-meta></div></div>
+      <p class="note">一眼能找到。浅色面板上它是唯一的深色块，比 ↻ 抢眼。</p>
+    </section>
+    <!-- 丙 -->
+    <section class="col">
+      <div class="tag"><strong>丙 · 浅底圆钮成对</strong><span>↻ 和 — 都加一层淡灰圆底</span></div>
+      <div class="stage v3" data-v>
+        <span class="line"></span><button class="pend" aria-label="驿窗挂件：打开面板"></button>
+        <div class="panel" data-panel></div>
+        <span class="hint">点「—」圆钮收起</span>
+      </div>
+      <div class="zoom v3"><div class="meta" data-meta></div></div>
+      <p class="note">两个键成一对，好点、看得出是按钮。会顺带给 ↻ 也加上圆底。</p>
+    </section>
+  </div>
+
+  <div class="ask">
+    <p><b>要你定的三件事</b></p>
+    <p>① 选甲、乙、丙哪一版。</p>
+    <p>② 你发的第二张小图（深色块中间一道横线）是想要的<b>按钮样子</b>，还是想要的<b>缩小后的样子</b>（面板缩成一个小深色块停在边上）？这页按「按钮样子」做；如果是后者，那是新做一种缩小状态，要另出三版。</p>
+    <p>③ 丙会顺带改 ↻ 的样子，↻ 属于今天定稿的「雾光」首页，选丙就算你同意改它。</p>
+  </div>
+</div>
+
+<script>
+const ICON_REFRESH='<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13.2 8a5.2 5.2 0 1 1-1.5-3.7"/><path d="M12.2 1.8v2.8H9.4"/></svg>';
+const ICON_MIN='<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3.5 8h9"/></svg>';
+function meta(v){
+  const min = v==='v2' ? '<button class="ib min" aria-label="缩小"><i></i></button>' : '<button class="ib min" aria-label="缩小">'+ICON_MIN+'</button>';
+  return '<span class="txt">正在扫描…</span><button class="ib ref" aria-label="重新扫描">'+ICON_REFRESH+'</button>'+min;
+}
+const PANEL_BODY='<div class="hero"><div class="row"><span>可用空间</span><span>这周 −48.8 GB ›</span></div><div class="big"><b>42.7</b><span>GB</span></div><div class="bar"></div><div class="row"><span>暂时没有能拿回的</span></div></div><div class="whitecard"><div class="h">替你挑好的 ›</div><div>这会儿没有要清的，挺干净</div><div class="btn">一键清理</div></div>';
+document.querySelectorAll('[data-v]').forEach(stage=>{
+  const v=[...stage.classList].find(c=>/^v\d$/.test(c));
+  const panel=stage.querySelector('[data-panel]');
+  panel.innerHTML='<div class="meta">'+meta(v)+'</div>'+PANEL_BODY;
+  const pend=stage.querySelector('.pend'); pend.classList.add('lit');
+  const hint=stage.querySelector('.hint'); const hintText=hint.textContent;
+  panel.querySelector('.min').addEventListener('click',()=>{panel.classList.add('gone');pend.classList.remove('lit');hint.textContent='已收起，点右上角挂件再打开';});
+  pend.addEventListener('click',()=>{const open=!panel.classList.contains('gone');panel.classList.toggle('gone',open);pend.classList.toggle('lit',!open);hint.textContent=open?'已收起，点右上角挂件再打开':hintText;});
+});
+document.querySelectorAll('.zoom').forEach(z=>{const v=[...z.classList].find(c=>/^v\d$/.test(c));z.querySelector('[data-meta]').innerHTML=meta(v);});
+</script>

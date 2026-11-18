@@ -201,9 +201,18 @@ struct HomeView: View {
             Spacer()
             Button { store.scan() } label: { Image(systemName: "arrow.clockwise") }
                 .buttonStyle(.plain).help("重新扫描")
+            // 缩小键（2026-11-18 常浩选甲「同款线条」，预览 docs/design/ui-v7-minimize.html）：收回挂件、悬浮球或菜单栏图标
+            Button { FloatingBall.shared.collapse(clickedWindow()) } label: { Image(systemName: "minus") }
+                .buttonStyle(.plain).help("缩小")
         }
         .font(.system(size: 11.5)).foregroundStyle(.secondary)
         .padding(.horizontal, 4)
+    }
+
+    /// 点下去那一刻鼠标所在的最上层窗口，就是放这个按钮的面板
+    private func clickedWindow() -> NSWindow? {
+        let p = NSEvent.mouseLocation
+        return NSApp.orderedWindows.first { $0.isVisible && $0.frame.contains(p) }
     }
 
     private var statusLine: String {
