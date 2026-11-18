@@ -6,7 +6,7 @@ public struct AlertSettings: Codable, Equatable {
     public var lowSpace = true
     /// 某个被跟踪的位置一天涨超过 10 GB（不含正好 10 GB）时发通知
     public var growth = true
-    /// 每周五 18:00 发周报（本周待决定）
+    /// 每周五 18:00 发周报（只问首页「要你说一句」里的事）
     public var weekly = true
     /// 自动清理「安全」的缓存和构建产物：默认关闭；打开后只在可用低于 60 GB 时执行，每天最多一次
     public var autoClean = false
@@ -126,8 +126,8 @@ public enum Alerts {
             let friday = BeijingTime.dayKey(Weekly.lastReport(atOrBefore: now))
             if state.sent["weekly"] != friday {
                 let total = cards.reduce(Int64(0)) { $0 + $1.bytes }
-                list.append(Alert(key: "weekly", day: friday, title: "本周瘦身：\(cards.count) 件待决定",
-                                  body: "一共能腾出 \(formatBytes(total))。点菜单栏的磁盘瘦身，逐件决定。"))
+                list.append(Alert(key: "weekly", day: friday, title: "本周瘦身：\(cards.count) 件要你说一句",
+                                  body: "一共能腾出 \(formatBytes(total))。打开磁盘瘦身，在「要你说一句」里点一下就行。"))
             }
         }
         return list

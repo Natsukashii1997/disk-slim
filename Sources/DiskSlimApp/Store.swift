@@ -3,20 +3,15 @@ import Foundation
 import ServiceManagement
 import SwiftUI
 
-/// 面板里的页面：首页 + 四个下钻页（第 2 版「首页 + 下钻」）。
+/// 面板里的页面：首页 + 下钻页（2026-11-18 改版「替你判断」，issue #4）。
 enum Page: Hashable {
-    case home, downloads, caches, decide, records, growth, week, alerts
+    case home, picked, downloads, keep, records, growth, alerts
 }
 
-extension Finding {
-    /// 每一项归到哪个下钻页
-    var page: Page {
-        if area == .downloads { return .downloads }
-        if risk == .readOnly { return .records }
-        if risk == .confirm || cleanup == .none { return .decide }
-        return .caches
-    }
+/// 首页白卡里展开的那一段
+enum HomeDrawer { case ask, keep }
 
+extension Finding {
     /// 能不能勾选（只展示、没有清理方式的不能）
     var selectable: Bool { risk != .readOnly && cleanup != .none }
 }
@@ -37,6 +32,8 @@ final class Store: ObservableObject {
     @Published var selected: Set<String> = []
     @Published var expanded: Set<String> = []
     @Published var page: Page = .home
+    /// 首页白卡里展开了哪一段（打开面板时收起）
+    @Published var drawer: HomeDrawer?
     @Published var confirming: [Finding]?
     @Published var toast: Toast?
     /// 每日记录（usage.json），首页曲线和涨幅页用
@@ -172,7 +169,7 @@ final class Store: ObservableObject {
 
     // MARK: 提醒
 
-    /// 本周还要决定的卡片；没扫描过时为空
+    /// 周报要催的卡片（不含「下周再问」的）；没扫描过时为空
     var cards: [WeeklyCard] { report.map { Weekly.cards($0.findings, decisions: decisions, now: Date()) } ?? [] }
 
     func checkAlerts() {
@@ -334,13 +331,42 @@ final class Store: ObservableObject {
     /// 涨幅排行里某个位置对应哪个下钻页：只认里面有能勾选清理的项的那一页（「其他」、废纸篓、只展示的、已经扫不到的都没有）
     func pageFor(part name: String) -> Page? {
         if name == Usage.downloads { return .downloads }
-        return report?.findings.first { $0.area == .hidden && $0.selectable && Usage.partName($0) == name }?.page
+        return report?.findings.first { $0.area == .hidden && $0.selectable && Usage.partName($0) == name }.map(page(of:))
     }
 
-    func findings(_ page: Page) -> [Finding] { report?.findings.filter { $0.page == page } ?? [] }
+    /// 首页三段：替你挑好的 / 要你说一句 / 先不动 / 对话记录（选过「保留」的一律先不动）
+    func bucket(_ f: Finding) -> Bucket { f.bucket(now: Date(), kept: decisions.isKept(f)) }
+
+    /// 每一项在哪个下钻页：下载文件夹的都在下载页，看不见的按三段分
+    func page(of f: Finding) -> Page {
+        if f.area == .downloads { return .downloads }
+        switch bucket(f) {
+        case .picked: return .picked
+        case .records: return .records
+        case .ask, .keep: return .keep
+        }
+    }
+
+    func findings(_ page: Page) -> [Finding] {
+        guard let all = report?.findings else { return [] }
+        // 「替你挑好的」页把下载里挑好的也列上，和首页按钮清的是同一批
+        if page == .picked { return all.filter { bucket($0) == .picked } }
+        return all.filter { self.page(of: $0) == page }
+    }
     func picked(_ page: Page) -> [Finding] { findings(page).filter { $0.selectable && selected.contains($0.id) } }
-    /// 首页大按钮：下载 + 缓存与构建产物里已勾选的
-    var suggestedPicks: [Finding] { picked(.downloads) + picked(.caches) }
+    /// 首页「一键清理」：替你挑好的里还勾着的
+    var suggestedPicks: [Finding] { picked(.picked) }
+    /// 「要你说一句」：能清的按卡片（下载按分组），清不了的（虚拟机）单列，只能选留着
+    var askCards: [WeeklyCard] { report.map { Weekly.cards($0.findings, decisions: decisions, now: Date(), includeSnoozed: true) } ?? [] }
+    var askInfo: [Finding] { report?.findings.filter { bucket($0) == .ask && !$0.cleanup.runnable } ?? [] }
+    /// 「先不动」：看得见、看不见的都算，大的在前
+    var keepList: [Finding] { (report?.findings.filter { bucket($0) == .keep } ?? []).sorted { $0.bytes > $1.bytes } }
+
+    /// 单独一项选「留着」（虚拟机这类清不了的）
+    func keep(_ f: Finding) { keep(WeeklyCard(id: f.id, tag: f.category, title: f.title, why: f.detail, findings: [f])) }
+
+    /// 只打开废纸篓给用户看；清不清空由用户自己决定（PRD 第 5 节：永不自动清空）
+    func openTrash() { NSWorkspace.shared.open(home.appendingPathComponent(".Trash")) }
 
     func toggle(_ f: Finding) {
         guard f.selectable else { return }

@@ -11,17 +11,18 @@ enum Snapshot {
         let report = Scan().run()
         let shots: [(String, (Store) -> Void)] = [
             ("1-首页", { _ in }),
-            ("2-下载", { $0.page = .downloads }),
-            ("3-缓存与构建产物", { $0.page = .caches }),
-            ("4-要你决定", { $0.page = .decide }),
-            ("5-对话记录", { $0.page = .records }),
-            ("6-清理前确认", { $0.confirming = $0.suggestedPicks }),
-            ("7-清理后提示", { $0.toast = Toast(text: "移到废纸篓 139 MB（清空后才释放），已释放 897 MB", canUndo: true) }),
-            ("8-涨幅-真实记录", { $0.page = .growth }),
-            ("9-首页-示例记录", { $0.samples = example(report) }),
-            ("10-涨幅-示例记录", { $0.samples = example(report); $0.page = .growth }),
-            ("11-本周待决定", { $0.page = .week }),
-            ("12-提醒设置", { $0.page = .alerts }),
+            ("2-首页-要你说一句", { $0.drawer = .ask }),
+            ("3-首页-先不动", { $0.drawer = .keep }),
+            ("4-替你挑好的", { $0.page = .picked }),
+            ("5-下载", { $0.page = .downloads }),
+            ("6-先不动的", { $0.page = .keep }),
+            ("7-对话记录", { $0.page = .records }),
+            ("8-清理前确认", { $0.confirming = $0.suggestedPicks }),
+            ("9-清理后提示", { $0.toast = Toast(text: "移到废纸篓 139 MB（清空后才释放），已释放 897 MB", canUndo: true) }),
+            ("10-涨幅-真实记录", { $0.page = .growth }),
+            ("11-首页-示例记录", { $0.samples = example(report) }),
+            ("12-涨幅-示例记录", { $0.samples = example(report); $0.page = .growth }),
+            ("13-提醒设置", { $0.page = .alerts }),
         ]
         for (name, setup) in shots {
             for scheme in [ColorScheme.light, .dark] {
@@ -59,10 +60,10 @@ enum Snapshot {
     static func ball(to dir: URL) {
         let gb: Int64 = 1_073_741_824
         let states: [(String, Int64?, Bool)] = [
-            ("13-悬浮球-平时", 120 * gb, false),
-            ("14-悬浮球-面板打开", 120 * gb, true),
-            ("15-悬浮球-低于60GB", 45 * gb, false),
-            ("16-悬浮球-低于30GB", 20 * gb, false),
+            ("21-悬浮球-平时", 120 * gb, false),
+            ("22-悬浮球-面板打开", 120 * gb, true),
+            ("23-悬浮球-低于60GB", 45 * gb, false),
+            ("24-悬浮球-低于30GB", 20 * gb, false),
         ]
         for (name, free, expanded) in states {
             let v = BallView(frame: NSRect(x: 0, y: 0, width: FloatGeometry.size, height: FloatGeometry.size))

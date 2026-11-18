@@ -3,7 +3,7 @@ import Charts
 import DiskSlimCore
 import SwiftUI
 
-// 第 2 版「首页 + 下钻」（docs/design/ui-v2.html#v2）。
+// 「首页 + 下钻」；首页 2026-11-18 改成「替你判断」（docs/design/ui-v5-hero-color.html，issue #4）。
 // 控件都用自绘样式：离屏截图（--snapshot）渲染不了 AppKit 自带的按钮和勾选框。
 
 let panelWidth: CGFloat = 368
@@ -14,10 +14,6 @@ enum Palette {
     static let ok = Color(red: 0.12, green: 0.62, blue: 0.33)
     static let warn = Color(red: 0.78, green: 0.49, blue: 0.07)
     static let bad = Color(red: 0.84, green: 0.27, blue: 0.27)
-    static let downloads = Color(red: 0.16, green: 0.63, blue: 0.60)
-    static let caches = Color(red: 0.54, green: 0.39, blue: 0.82)
-    static let projects = Color(red: 0.88, green: 0.47, blue: 0.23)
-    static let system = Color(red: 0.60, green: 0.64, blue: 0.70)
 }
 
 struct PrimaryButton: ButtonStyle {
@@ -60,18 +56,18 @@ struct Scroller<Content: View>: View {
 
 struct PanelView: View {
     @EnvironmentObject var store: Store
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         ZStack(alignment: .bottom) {
             Group {
                 switch store.page {
                 case .home: HomeView()
+                case .picked: ListPage(page: .picked, title: "替你挑好的", action: "清理所选")
                 case .downloads: ListPage(page: .downloads, title: "下载文件夹", action: "移到废纸篓")
-                case .caches: ListPage(page: .caches, title: "缓存与构建产物", action: "清理")
-                case .decide: ListPage(page: .decide, title: "要你决定的", action: "处理所选")
+                case .keep: ListPage(page: .keep, title: "先不动的", action: "清理所选")
                 case .records: ListPage(page: .records, title: "对话记录", action: nil)
                 case .growth: GrowthPage()
-                case .week: WeekPage()
                 case .alerts: AlertsPage()
                 }
             }
@@ -83,156 +79,458 @@ struct PanelView: View {
         }
         .frame(width: panelWidth)
         .font(.system(size: 13))
+        .background(Tone(scheme).panel)
     }
 }
 
-// MARK: - 首页
+// MARK: - 首页（2026-11-18 改版「替你判断」：雾光顶卡 + 白卡三段，预览 docs/design/ui-v5-hero-color.html，issue #4）
+
+/// 首页的颜色：跟着浅色 / 深色走。用 SwiftUI 的 colorScheme 取，不用动态 NSColor（离屏截图解析不了）
+struct Tone {
+    let dark: Bool
+    init(_ scheme: ColorScheme) { dark = scheme == .dark }
+
+    private func hex(_ v: UInt32) -> Color {
+        Color(red: Double((v >> 16) & 0xff) / 255, green: Double((v >> 8) & 0xff) / 255, blue: Double(v & 0xff) / 255)
+    }
+    private func pick(_ light: UInt32, _ dark: UInt32) -> Color { hex(self.dark ? dark : light) }
+
+    var panel: Color { pick(0xECECF0, 0x1C1C1E) }
+    var card: Color { pick(0xFFFFFF, 0x2C2C2E) }
+    var red: Color { pick(0xFF3B30, 0xFF453A) }
+    var orange: Color { pick(0xFF9500, 0xFF9F0A) }
+    var blue: Color { pick(0x0071E3, 0x0A84FF) }
+    var used: Color { pick(0xC9CBE0, 0x4A4A66) }
+    var track: Color { dark ? .white.opacity(0.08) : .black.opacity(0.06) }
+    var hair: Color { dark ? .white.opacity(0.10) : .black.opacity(0.08) }
+    /// 顶卡底色「雾光」：很淡的紫、蓝、青，就是「能拿回」那串字的颜色调淡
+    var mist: LinearGradient {
+        LinearGradient(colors: dark ? [hex(0x2A2342), hex(0x1F2846), hex(0x173532)] : [hex(0xF1ECFF), hex(0xE8EFFE), hex(0xE3F5F2)],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+    /// 「能拿回」的渐变字和色条
+    var gain: LinearGradient {
+        LinearGradient(colors: dark ? [hex(0xB38BFF), hex(0x7B8BFF), hex(0x4FB0FF), hex(0x3FD6C4)]
+                                    : [hex(0x9B5CF6), hex(0x5B6CF9), hex(0x2F8FE6), hex(0x22B3A6)],
+                       startPoint: .leading, endPoint: .trailing)
+    }
+}
+
+/// 首页大按钮：蓝底白字，圆角 12
+struct BigButton: ButtonStyle {
+    let color: Color
+    var enabled = true
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity).padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 12).fill(color.opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.35)))
+    }
+}
+
+/// 「要你说一句」里的小按钮：第一个实心，其余描边
+struct ChipButton: ButtonStyle {
+    var primary = false
+    @Environment(\.colorScheme) private var scheme
+    func makeBody(configuration: Configuration) -> some View {
+        let t = Tone(scheme)
+        configuration.label
+            .font(.system(size: 12, weight: primary ? .semibold : .regular))
+            .foregroundStyle(primary ? t.card : Color.primary)
+            .padding(.horizontal, 11).padding(.vertical, 5)
+            .background(Capsule().fill(primary ? Color.primary : .clear))
+            .overlay(Capsule().stroke(primary ? .clear : t.hair))
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .fixedSize()
+    }
+}
+
+/// 「51.8 GB」拆成数字和单位，数字大、单位小
+func splitBytes(_ bytes: Int64) -> (String, String) {
+    let s = formatBytes(bytes)
+    guard let space = s.lastIndex(of: " ") else { return (s, "") }
+    return (String(s[..<space]), String(s[s.index(after: space)...]))
+}
+
+/// 首页列表里给人看的名字：worktree 编译文件写成「AI 编译文件 · 项目」
+func friendlyName(_ f: Finding) -> String {
+    if f.category.contains("构建产物") {
+        let project = f.title.range(of: " · ", options: .backwards).map { String(f.title[..<$0.lowerBound]) } ?? f.title
+        return "AI 编译文件 · \(project)"
+    }
+    // 备份文件夹名很长，日期已经写在说明里
+    if f.title.hasPrefix("Codex 备份 · ") { return "Codex 备份" }
+    return f.title
+}
+
+/// 「替你挑好的」按用途合并成几行
+func pickedLabel(_ f: Finding) -> String {
+    if f.area == .downloads {
+        switch f.category {
+        case "安装包": return "下载里装好的安装包"
+        case "已解压的压缩包": return "下载里解压过的压缩包"
+        default: return "下载里的\(f.category)"
+        }
+    }
+    if f.category.contains("构建产物") { return "AI 写代码编出来的文件" }
+    if f.category == "备份快照" { return "Codex 旧备份" }
+    if f.category == "包管理器缓存" { return "下载缓存" }
+    return f.category
+}
 
 struct HomeView: View {
     @EnvironmentObject var store: Store
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            hero
-            if !store.unreadable.isEmpty { accessHint }
-            growth
-            VStack(alignment: .leading, spacing: 2) {
-                section("可以清")
-                row(.downloads, color: Palette.downloads, title: "下载文件夹", sub: downloadsSub, value: total(store.picked(.downloads)))
-                row(.caches, color: Palette.caches, title: "缓存与构建产物", sub: "\(store.picked(.caches).count) 项 · 官方命令清或直接删", value: total(store.picked(.caches)))
-                section("要你决定").padding(.top, 6)
-                row(.decide, color: Palette.projects, title: "备份、虚拟机、在用的构建产物", sub: "默认不勾，逐项看", value: total(store.findings(.decide)))
-                row(.records, color: Palette.system, title: "对话记录", sub: "只展示，不会删", value: total(store.findings(.records)))
-                let cards = store.cards
-                row(.week, color: Palette.warn, title: "本周待决定",
-                    sub: store.report == nil ? "扫描完就有" : cards.isEmpty ? "都处理完了" : "\(cards.count) 件，一件一件点完",
-                    value: cards.reduce(0) { $0 + $1.bytes })
-            }
-            .padding(.horizontal, -6)
-
-            let picks = store.suggestedPicks
-            Button(store.working ? "正在清理…" : picks.isEmpty ? "暂时没有建议清理的" : "清理建议项 · \(formatBytes(total(picks)))") { store.askToClean(picks) }
-                .buttonStyle(PrimaryButton(enabled: !picks.isEmpty && !store.busy))
-                .disabled(picks.isEmpty || store.busy)
-
-            HStack {
-                Button("提醒设置") { store.page = .alerts }
-                    .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(Palette.accent)
-                if store.canUndo {
-                    Button("撤销上一次清理") { store.undo() }
-                        .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(Palette.accent)
-                        .disabled(store.busy)
-                        .padding(.leading, 10)
-                }
-                Spacer()
-                Button("退出磁盘瘦身") { NSApp.terminate(nil) }
-                    .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(.secondary)
-            }
+        let t = Tone(scheme)
+        VStack(spacing: 12) {
+            meta
+            if !store.unreadable.isEmpty { accessHint(t) }
+            HeroCard(t: t)
+            decideCard(t)
+            footer
         }
-        .padding(16)
+        .padding(14)
     }
 
-    private var downloadsSub: String {
-        let all = store.findings(.downloads).count, picked = store.picked(.downloads).count
-        return "建议 \(picked) 项 · 另有 \(all - picked) 项可以看看"
-    }
-
-    private var hero: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(store.disk.map { String(format: "%.1f", Double($0.availableBytes) / 1_073_741_824) } ?? "—")
-                        .font(.system(size: 34, weight: .semibold)).monospacedDigit()
-                        .foregroundStyle(freeColor)
-                    Text("GB 可用").foregroundStyle(.secondary)
-                }
-                Text(statusLine).font(.system(size: 12)).foregroundStyle(.secondary)
-            }
+    private var meta: some View {
+        HStack {
+            Text(statusLine)
             Spacer()
-            Button { store.scan() } label: {
-                Image(systemName: "arrow.clockwise").foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .help("重新扫描")
+            Button { store.scan() } label: { Image(systemName: "arrow.clockwise") }
+                .buttonStyle(.plain).help("重新扫描")
         }
-    }
-
-    private var freeColor: Color {
-        guard let d = store.disk else { return .primary }
-        let gb = Double(d.availableBytes) / 1_073_741_824
-        return gb < 30 ? Palette.bad : gb < 60 ? Palette.warn : .primary
+        .font(.system(size: 11.5)).foregroundStyle(.secondary)
+        .padding(.horizontal, 4)
     }
 
     private var statusLine: String {
         if store.scanning { return "正在扫描…" }
-        guard let r = store.report else { return "还没扫描" }
         let total = store.disk.map { "共 \(formatBytes($0.totalBytes))" } ?? ""
+        guard let r = store.report else { return total.isEmpty ? "还没扫描" : "\(total) · 还没扫描" }
         return "\(total) · \(BeijingTime.hourMinute(r.scannedAt)) 扫描"
     }
 
     /// 没有「完全磁盘访问权限」时有些位置量不到：说清影响，一键打开系统设置那一页（授权要用户自己点）
-    private var accessHint: some View {
+    private func accessHint(_ t: Tone) -> some View {
         Button { store.openFullDiskAccessSettings() } label: {
             HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "lock.shield").foregroundStyle(Palette.warn)
+                Image(systemName: "lock.shield").foregroundStyle(t.orange)
                 Text("\(store.unreadable.joined(separator: "、"))读不了，它们的变化会算进「其他」。点这里打开「完全磁盘访问权限」，把磁盘瘦身加进去；列表里已经有的话，先用「−」删掉再加（每次更新后都要）。")
                     .font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            .padding(10)
+            .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Palette.warn.opacity(0.1)))
+            .background(RoundedRectangle(cornerRadius: 14).fill(t.card))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
-    /// 最近 7 天可用空间曲线和「比昨天少了 X，主要是 Y」，点进涨幅页；不够两天先说明
-    private var growth: some View {
-        let days = store.dailySamples
-        return Button { store.page = .growth } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                if days.count >= 2 {
-                    FreeChart(days: days, height: 64, showDates: false)
-                    if let line = Usage.headline(days, now: Date()) {
-                        Text(line).font(.system(size: 11.5)).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                } else {
-                    HStack(spacing: 8) {
-                        Image(systemName: "chart.line.uptrend.xyaxis").foregroundStyle(.secondary)
-                        Text(GrowthPage.notEnough).font(.system(size: 11.5)).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+    // MARK: 白卡：替你挑好的 / 要你说一句 / 先不动
+
+    private func decideCard(_ t: Tone) -> some View {
+        VStack(spacing: 0) {
+            picked(t).padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 14)
+            let askCount = store.askCards.count + store.askInfo.count
+            drawerRow(t, .ask, title: "要你说一句",
+                      sub: askCount == 0 ? "现在没有要问你的" : store.drawer == .ask ? "选一个就行，选错了能撤销" : askSub) {
+                if askCount > 0 {
+                    Text("\(askCount)").font(.system(size: 11.5, weight: .bold)).foregroundStyle(t.card)
+                        .frame(minWidth: 20, minHeight: 20).padding(.horizontal, askCount > 9 ? 4 : 0)
+                        .background(Capsule().fill(Color.primary))
                 }
             }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary.opacity(0.5)))
-            .contentShape(Rectangle())
+            if store.drawer == .ask { askDrawer(t) }
+            let keep = store.keepList
+            drawerRow(t, .keep, title: "先不动", sub: keep.isEmpty ? "没有" : "\(keep.count) 项还在用或留着保底") {
+                Text(formatBytes(total(keep))).font(.system(size: 13, weight: .semibold)).monospacedDigit()
+            }
+            if store.drawer == .keep { keepDrawer(t, keep) }
         }
-        .buttonStyle(.plain)
+        .background(RoundedRectangle(cornerRadius: 18).fill(t.card))
     }
 
-    private func section(_ text: String) -> some View {
-        Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 6)
+    private var askSub: String {
+        (store.askCards.map(\.title) + store.askInfo.map(\.title)).joined(separator: "、")
     }
 
-    private func row(_ page: Page, color: Color, title: String, sub: String, value: Int64) -> some View {
-        Button { store.page = page } label: {
+    @ViewBuilder private func picked(_ t: Tone) -> some View {
+        let picks = store.suggestedPicks
+        let (num, unit) = splitBytes(total(picks))
+        VStack(alignment: .leading, spacing: 0) {
+            Button { store.page = .picked } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("替你挑好的").font(.system(size: 11.5)).foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
+                    Spacer()
+                    if !picks.isEmpty {
+                        Text(num).font(.system(size: 26, weight: .bold)).monospacedDigit().tracking(-0.5).foregroundStyle(t.gain)
+                        Text(unit).font(.system(size: 13, weight: .semibold)).foregroundStyle(t.gain)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if picks.isEmpty {
+                Text(store.report == nil ? "扫描完就知道能清多少" : "这会儿没有要清的，挺干净")
+                    .font(.system(size: 12)).foregroundStyle(.secondary).padding(.vertical, 12)
+            } else {
+                VStack(spacing: 4) {
+                    ForEach(groups(picks), id: \.0) { g in
+                        HStack {
+                            Text(g.0).foregroundStyle(.secondary)
+                            Spacer()
+                            Text(formatBytes(g.1)).monospacedDigit()
+                        }
+                    }
+                }
+                .font(.system(size: 12))
+                .padding(.top, 10).padding(.bottom, 14)
+            }
+
+            Button(store.working ? "正在清理…" : "一键清理") { store.askToClean(picks) }
+                .buttonStyle(BigButton(color: t.blue, enabled: !picks.isEmpty && !store.busy))
+                .disabled(picks.isEmpty || store.busy)
+
+            let trash = total(picks.filter { $0.cleanup == .trash })
+            if trash > 0, let disk = store.disk {
+                HStack(spacing: 0) {
+                    Text("\(formatBytes(trash)) 先进废纸篓，清空后到 \(formatBytes(disk.availableBytes + total(picks))) · ")
+                    Button("打开废纸篓") { store.openTrash() }.buttonStyle(.plain).foregroundStyle(t.blue)
+                }
+                .font(.system(size: 11.5)).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity).padding(.top, 8)
+            }
+        }
+    }
+
+    /// 按用途合并，大的在前
+    private func groups(_ picks: [Finding]) -> [(String, Int64)] {
+        var sums: [String: Int64] = [:]
+        for f in picks { sums[pickedLabel(f), default: 0] += f.bytes }
+        return sums.sorted { $0.value > $1.value }.map { ($0.key, $0.value) }
+    }
+
+    private func drawerRow<Trailing: View>(_ t: Tone, _ which: HomeDrawer, title: String, sub: String,
+                                           @ViewBuilder trailing: () -> Trailing) -> some View {
+        Button { store.drawer = store.drawer == which ? nil : which } label: {
             HStack(spacing: 10) {
-                Circle().fill(color).frame(width: 8, height: 8)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                    Text(sub).font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(title).font(.system(size: 13, weight: .semibold))
+                    Text(sub).font(.system(size: 11.5)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
                 }
                 Spacer(minLength: 8)
-                Text(formatBytes(value)).font(.system(size: 12.5, weight: .semibold, design: .monospaced))
-                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(.tertiary)
+                trailing()
+                Image(systemName: store.drawer == which ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(.tertiary).frame(width: 12)
             }
-            .padding(.horizontal, 6).padding(.vertical, 8)
+            .padding(.horizontal, 16).padding(.vertical, 12)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .overlay(alignment: .top) { Rectangle().fill(t.hair).frame(height: 1) }
+    }
+
+    private func askDrawer(_ t: Tone) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(store.askCards) { card in
+                question(title: "\(card.title) · \(formatBytes(card.bytes))", why: card.why) {
+                    if card.findings.allSatisfy({ $0.area == .downloads }) {
+                        Button("都不要了") { store.askToClean(card.findings) }.buttonStyle(ChipButton(primary: true))
+                        Button("让我挑") { store.page = .downloads }.buttonStyle(ChipButton())
+                        Button("都留着") { store.keep(card) }.buttonStyle(ChipButton())
+                    } else {
+                        Button(card.actionLabel) { store.askToClean(card.findings) }.buttonStyle(ChipButton(primary: true))
+                        Button("留着") { store.keep(card) }.buttonStyle(ChipButton())
+                    }
+                }
+                .disabled(store.busy)
+            }
+            ForEach(store.askInfo) { f in
+                question(title: "\(f.title) · \(formatBytes(f.bytes))", why: f.detail) {
+                    Button("还要用，留着") { store.keep(f) }.buttonStyle(ChipButton(primary: true))
+                }
+            }
+            if store.askCards.isEmpty && store.askInfo.isEmpty {
+                Text("现在没有要问你的，有新的会在周五通知你。").font(.system(size: 11.5)).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 16).padding(.bottom, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func question<Buttons: View>(title: String, why: String, @ViewBuilder buttons: () -> Buttons) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.system(size: 12.5, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
+            Text(why).font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 6) { buttons() }
+        }
+    }
+
+    private func keepDrawer(_ t: Tone, _ keep: [Finding]) -> some View {
+        let shown = 8
+        return VStack(alignment: .leading, spacing: 8) {
+            ForEach(keep.prefix(shown)) { f in
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(friendlyName(f)).font(.system(size: 12.5)).lineLimit(1).truncationMode(.middle)
+                        Text(f.detail).font(.system(size: 11.5)).foregroundStyle(.secondary).lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 6)
+                    Text(formatBytes(f.bytes)).font(.system(size: 12.5, weight: .semibold)).monospacedDigit()
+                }
+            }
+            Button(keep.count > shown ? "还有 \(keep.count - shown) 项，全部看看 ›" : "想自己挑着清，点这里 ›") { store.page = .keep }
+                .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(t.blue)
+        }
+        .padding(.horizontal, 16).padding(.bottom, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var footer: some View {
+        HStack(spacing: 14) {
+            let records = store.findings(.records)
+            Button("对话记录 \(formatBytes(total(records))) · 只看不删") { store.page = .records }
+            Spacer()
+            Button("提醒") { store.page = .alerts }
+            if store.canUndo { Button("撤销") { store.undo() }.disabled(store.busy) }
+            Button("退出") { NSApp.terminate(nil) }
+        }
+        .buttonStyle(.plain)
+        .font(.system(size: 11.5)).foregroundStyle(.secondary)
+        .padding(.horizontal, 4)
+    }
+}
+
+/// 顶卡：现在可用多少、这周掉了多少、清完能到多少。点进涨幅页
+struct HeroCard: View {
+    @EnvironmentObject var store: Store
+    let t: Tone
+
+    var body: some View {
+        let days = store.dailySamples
+        let free = store.disk?.availableBytes ?? 0
+        let picks = store.suggestedPicks
+        let soon = total(picks.filter { $0.cleanup != .trash })
+        Button { store.page = .growth } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("可用空间")
+                    Spacer()
+                    if let first = days.first, let last = days.last, days.count >= 2 {
+                        Text("这周 \(formatDelta(last.freeBytes - first.freeBytes)) ›")
+                    } else {
+                        Text("涨幅 ›")
+                    }
+                }
+                .font(.system(size: 11.5)).foregroundStyle(.secondary)
+
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(store.disk.map { String(format: "%.1f", Double($0.availableBytes) / 1_073_741_824) } ?? "—")
+                        .font(.system(size: 48, weight: .bold)).monospacedDigit().tracking(-1)
+                        .foregroundStyle(levelColor)
+                    Text("GB").font(.system(size: 17, weight: .semibold)).foregroundStyle(.secondary)
+                }
+                .padding(.top, 6)
+
+                if days.count >= 2 {
+                    Spark(values: days.map { Double($0.freeBytes) / 1_073_741_824 }, color: t.red)
+                        .frame(height: 40).padding(.top, 12)
+                } else {
+                    Text(GrowthPage.notEnough).font(.system(size: 11)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true).padding(.top, 10)
+                }
+
+                if let disk = store.disk {
+                    CapacityBar(total: disk.totalBytes, free: free, gain: total(picks), t: t)
+                        .frame(height: 8).padding(.top, 16)
+                }
+
+                HStack {
+                    if picks.isEmpty {
+                        Text("暂时没有能拿回的")
+                    } else {
+                        Text("清完约 ") + Text(formatBytes(free + soon)).fontWeight(.semibold).foregroundColor(.primary)
+                        Spacer()
+                        Text("能拿回 \(formatBytes(total(picks)))").fontWeight(.semibold).foregroundStyle(t.gain)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .font(.system(size: 11.5)).foregroundStyle(.secondary)
+                .padding(.top, 8)
+            }
+            .padding(18)
+            .background(RoundedRectangle(cornerRadius: 18).fill(t.mist))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(t.hair, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 和菜单栏图标同一套：低于 30 GB 红，低于 60 GB 橙
+    private var levelColor: Color {
+        guard let d = store.disk else { return .primary }
+        let gb = Double(d.availableBytes) / 1_073_741_824
+        return gb < 30 ? t.red : gb < 60 ? t.orange : .primary
+    }
+}
+
+/// 7 天可用空间的小曲线：一条线、一层渐隐的面、末端一个点
+struct Spark: View {
+    let values: [Double]
+    let color: Color
+
+    var body: some View {
+        GeometryReader { g in
+            let top = max(60, (values.max() ?? 0) * 1.1)
+            let pts = values.enumerated().map { i, v in
+                CGPoint(x: values.count > 1 ? g.size.width * CGFloat(i) / CGFloat(values.count - 1) : 0,
+                        y: 3 + (g.size.height - 6) * (1 - CGFloat(min(v, top) / top)))
+            }
+            let line = Path { p in p.addLines(pts) }
+            ZStack {
+                Path { p in
+                    p.addLines(pts)
+                    p.addLine(to: CGPoint(x: g.size.width, y: g.size.height))
+                    p.addLine(to: CGPoint(x: 0, y: g.size.height))
+                    p.closeSubpath()
+                }
+                .fill(LinearGradient(colors: [color.opacity(0.24), color.opacity(0)], startPoint: .top, endPoint: .bottom))
+                line.stroke(color, style: StrokeStyle(lineWidth: 1.8, lineJoin: .round))
+                if let last = pts.last {
+                    Circle().fill(color).frame(width: 6, height: 6).position(last)
+                }
+            }
+        }
+    }
+}
+
+/// 一条色带：已经用掉的 / 能拿回的（渐变）/ 现在可用的（红）
+struct CapacityBar: View {
+    let total: Int64
+    let free: Int64
+    let gain: Int64
+    let t: Tone
+
+    var body: some View {
+        GeometryReader { g in
+            let all = Double(max(total, 1))
+            let gap: CGFloat = 2
+            let w = g.size.width - gap * 2
+            let gainW = max(gain > 0 ? 3 : 0, w * CGFloat(Double(gain) / all))
+            let freeW = max(3, w * CGFloat(Double(free) / all))
+            HStack(spacing: gap) {
+                Rectangle().fill(t.used)
+                if gain > 0 { Rectangle().fill(t.gain).frame(width: gainW) }
+                Rectangle().fill(t.red).frame(width: freeW)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+        }
     }
 }
 
@@ -376,7 +674,8 @@ struct ItemRow: View {
     @ViewBuilder private var chip: some View {
         if f.risk == .readOnly { tag("只展示", .secondary) }
         else if f.cleanup == .none { tag(f.area == .downloads ? "只提示" : "不能清", .secondary) }
-        else if f.risk == .confirm { tag("需确认", Palette.warn) }
+        // 替你挑好的已经替用户判断过，不再挂「需确认」
+        else if f.risk == .confirm && store.bucket(f) != .picked { tag("需确认", Palette.warn) }
     }
 
     private func tag(_ text: String, _ color: Color) -> some View {
@@ -401,7 +700,8 @@ struct ConfirmView: View {
                 line("直接删除可再生的目录，不能撤销", list.filter { $0.cleanup == .remove })
                 line("运行官方清理命令，不能撤销", list.filter { if case .command = $0.cleanup { return true }; return false })
             }
-            if list.contains(where: { $0.risk == .confirm }) {
+            // 替你挑好的已经替用户判断过；自己从「先不动」里挑的需确认项才提醒
+            if list.contains(where: { $0.risk == .confirm && store.bucket($0) != .picked }) {
                 Text("其中有「需确认」的项，请确认你已经看过。").font(.system(size: 11.5)).foregroundStyle(Palette.warn)
             }
             Text("移到废纸篓的要清空废纸篓后才真正腾出空间。").font(.system(size: 11.5)).foregroundStyle(.secondary)
@@ -563,68 +863,6 @@ struct GrowthPage: View {
                 }
             }
             .padding(.horizontal, 6).padding(.vertical, 6)
-        }
-    }
-}
-
-// MARK: - 本周待决定
-
-/// 一次一件：移到废纸篓（或清理，先经过确认框）/ 保留（以后不再问）/ 下周再问
-struct WeekPage: View {
-    @EnvironmentObject var store: Store
-    private let showFiles = 6
-
-    var body: some View {
-        let cards = store.cards
-        VStack(alignment: .leading, spacing: 0) {
-            PageHeader(title: "本周待决定")
-            if let card = cards.first {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("还有 \(cards.count) 件").font(.system(size: 11.5)).foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(card.tag).font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.warn)
-                            .padding(.horizontal, 7).padding(.vertical, 2)
-                            .background(Capsule().fill(Palette.warn.opacity(0.15)))
-                        Text(card.title).font(.system(size: 14, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text(formatBytes(card.bytes)).font(.system(size: 26, weight: .semibold)).monospacedDigit()
-                            Text("可腾出").foregroundStyle(.secondary)
-                        }
-                        Text(card.why).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        // 只有一项时标题就是它，不再列一遍
-                        if card.findings.count > 1 { VStack(alignment: .leading, spacing: 3) {
-                            ForEach(card.findings.prefix(showFiles), id: \.id) { f in
-                                HStack {
-                                    Text(f.title).lineLimit(1).truncationMode(.middle)
-                                    Spacer(minLength: 8)
-                                    Text(formatBytes(f.bytes)).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(.secondary)
-                                }
-                                .font(.system(size: 12))
-                            }
-                            if card.findings.count > showFiles {
-                                Text("等 \(card.findings.count) 个").font(.system(size: 11.5)).foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(.top, 2) }
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(.quaternary.opacity(0.5)))
-
-                    HStack(spacing: 8) {
-                        Button(card.actionLabel) { store.askToClean(card.findings) }
-                            .buttonStyle(PrimaryButton(enabled: !store.busy)).disabled(store.busy)
-                        Button("保留") { store.keep(card) }.buttonStyle(QuietButton()).disabled(store.busy)
-                        Button("下周再问") { store.snooze(card) }.buttonStyle(QuietButton()).disabled(store.busy)
-                    }
-                    Text("「保留」以后不再问、也不再默认勾选（涨了超过 1 GB 会再问）；「下周再问」到下周五 18:00 再出现。")
-                        .font(.system(size: 11)).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.horizontal, 16).padding(.bottom, 16)
-            } else {
-                Text(store.scanning || store.report == nil ? "正在扫描…" : "本周都处理完了。下周五 18:00 再来。")
-                    .foregroundStyle(.secondary).padding(16)
-            }
         }
     }
 }

@@ -147,6 +147,7 @@ final class FloatingBall: NSObject {
         if panel == nil { makePanel(store) }
         // 和菜单栏面板打开时一样：回首页、收起确认框、结果旧了就重扫
         store.page = .home
+        store.drawer = nil
         store.confirming = nil
         store.scanIfStale()
         placePanel()

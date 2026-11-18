@@ -10,6 +10,14 @@ public struct WeeklyCard: Identifiable {
     public let why: String
     public let findings: [Finding]
 
+    public init(id: String, tag: String, title: String, why: String, findings: [Finding]) {
+        self.id = id
+        self.tag = tag
+        self.title = title
+        self.why = why
+        self.findings = findings
+    }
+
     public var bytes: Int64 { findings.reduce(0) { $0 + $1.bytes } }
     public var paths: [String] { findings.flatMap(\.paths) }
     /// 全是移到废纸篓的写「移到废纸篓」，否则写「清理」
@@ -126,9 +134,10 @@ public enum Weekly {
     ]
 
     /// 这次扫描里还要问的卡片，大的在前
-    public static func cards(_ findings: [Finding], decisions: Decisions, now: Date) -> [WeeklyCard] {
+    /// `includeSnoozed` 为 true 时连「下周再问」的也算（首页「要你说一句」一直列着，只是周报不催）
+    public static func cards(_ findings: [Finding], decisions: Decisions, now: Date, includeSnoozed: Bool = false) -> [WeeklyCard] {
         let open = findings.filter { f in
-            f.cleanup.runnable && f.bucket(now: now, kept: decisions.isKept(f)) == .ask && !decisions.isSnoozed(f, now: now)
+            f.cleanup.runnable && f.bucket(now: now, kept: decisions.isKept(f)) == .ask && (includeSnoozed || !decisions.isSnoozed(f, now: now))
         }
         var cards: [WeeklyCard] = []
         let downloads = open.filter { $0.area == .downloads }
