@@ -30,12 +30,21 @@ extension Store {
         let apps = RunningApps.current()
         memGeneration += 1
         let generation = memGeneration
+        memReading = true
+        let started = Date()
         Task.detached {
             let status = readMemoryStatus()
             let usage = MemoryAttribution.usage(listProcesses(), apps: apps)
             await MainActor.run {
                 // 后发的那次已经回来过了：这份是旧的，不用它（done 照样调，免得等它的动作卡住）
-                if generation == self.memGeneration { self.applyMemory(status: status, usage: usage) }
+                if generation == self.memGeneration {
+                    self.applyMemory(status: status, usage: usage)
+                    // 读内存往往不到半秒：↻ 至少转 0.8 秒，点了能看出来
+                    let rest = max(0, 0.8 - Date().timeIntervalSince(started))
+                    DispatchQueue.main.asyncAfter(deadline: .now() + rest) {
+                        MainActor.assumeIsolated { if generation == self.memGeneration { self.memReading = false } }
+                    }
+                }
                 done?()
             }
         }

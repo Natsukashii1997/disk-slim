@@ -7,6 +7,9 @@ import SwiftUI
 // 控件都用自绘样式：离屏截图（--snapshot）渲染不了 AppKit 自带的按钮和勾选框。
 
 let panelWidth: CGFloat = 368
+/// 面板高度：每一页都用这一个尺寸，切页、展开抽屉都不变大小，放不下的在面板里滚动（2026-11-18 常浩定）。
+/// 屏幕太矮时让出上下各 12 点
+let panelHeight: CGFloat = min(810, (NSScreen.main?.visibleFrame.height ?? 900) - 24)
 let isSnapshot = CommandLine.arguments.contains("--snapshot")
 
 enum Palette {
@@ -39,15 +42,18 @@ struct QuietButton: ButtonStyle {
     }
 }
 
-/// 滚动区；离屏截图时换成普通堆叠，否则 ScrollView 渲染出来是空的
+/// 滚动区：铺满面板里剩下的高度，放不下的上下滚。离屏截图时换成普通堆叠（ScrollView 渲染出来是空的），超出的部分裁掉
 struct Scroller<Content: View>: View {
+    var inset: CGFloat = 8
+    var spacing: CGFloat = 0
     @ViewBuilder let content: Content
     var body: some View {
         if isSnapshot {
-            VStack(alignment: .leading, spacing: 0) { content }.padding(.horizontal, 8)
+            VStack(alignment: .leading, spacing: spacing) { content }.padding(.horizontal, inset)
+                .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top).clipped()
         } else {
-            ScrollView { VStack(alignment: .leading, spacing: 0) { content }.padding(.horizontal, 8) }
-                .frame(maxHeight: 380)
+            ScrollView { VStack(alignment: .leading, spacing: spacing) { content }.padding(.horizontal, inset) }
+                .frame(minHeight: 0, maxHeight: .infinity)
         }
     }
 }
@@ -71,6 +77,7 @@ struct PanelView: View {
                 case .forceQuit: ForceQuitPage()
                 }
             }
+            .frame(maxHeight: .infinity, alignment: .top)
             .disabled(store.confirming != nil)
             .blur(radius: store.confirming != nil ? 2 : 0)
 
@@ -80,7 +87,7 @@ struct PanelView: View {
         .overlay {
             if let c = store.celebration { ConfettiView(celebration: c).allowsHitTesting(false) }
         }
-        .frame(width: panelWidth)
+        .frame(width: panelWidth, height: panelHeight)
         .font(.system(size: 13))
         .background(Tone().panel)
         // 只有浅色一种外观（2026-11-18 常浩定）：系统切深色也不跟
@@ -184,6 +191,93 @@ func pickedLabel(_ f: Finding) -> String {
     return f.category
 }
 
+/// 磁盘顶卡「谁占着」的一行
+struct DiskTopItem {
+    let label: String
+    let symbol: String
+    let bytes: Int64
+}
+
+/// 扫描到的位置按用途合并，取最大的几类：下载文件夹按整个文件夹算，废纸篓里有东西也算一类（清空前还占着）
+func diskTop(_ r: ScanReport, limit: Int = 5) -> [DiskTopItem] {
+    var sums: [String: (String, Int64)] = [:]
+    func add(_ label: String, _ symbol: String, _ bytes: Int64) {
+        sums[label] = (symbol, (sums[label]?.1 ?? 0) + bytes)
+    }
+    for f in r.findings where f.area == .hidden {
+        if f.risk == .readOnly { add("对话记录", "bubble.left.and.bubble.right", f.bytes); continue }
+        let label = pickedLabel(f)
+        let symbol = switch label {
+        case "AI 写代码编出来的文件": "hammer"
+        case "虚拟机": "desktopcomputer"
+        case "Codex 旧备份": "clock.arrow.circlepath"
+        case "下载缓存": "shippingbox"
+        case "测试用浏览器": "globe"
+        default: "folder"
+        }
+        add(label, symbol, f.bytes)
+    }
+    let downloads = r.downloadsBytes ?? r.findings.filter { $0.area == .downloads }.reduce(0) { $0 + $1.bytes }
+    if downloads > 0 { add("下载文件夹", "arrow.down.circle", downloads) }
+    if let trash = r.trashBytes, trash > 0 { add("废纸篓", "trash", trash) }
+    return sums.map { DiskTopItem(label: $0.key, symbol: $0.value.0, bytes: $0.value.1) }
+        .sorted { $0.bytes > $1.bytes }.prefix(limit).map { $0 }
+}
+
+/// 「谁占着」每行下面的细条：和最大那一项比
+struct ShareBar: View {
+    let fraction: Double
+    var body: some View {
+        GeometryReader { g in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color(red: 0.24, green: 0.24, blue: 0.35).opacity(0.16))
+                Capsule().fill(Color(red: 0.49, green: 0.53, blue: 0.72)).frame(width: g.size.width * CGFloat(min(1, max(0, fraction))))
+            }
+        }
+        .frame(height: 4)
+    }
+}
+
+/// 顶栏的小图标按钮（↻、—）：平时灰色细线、无底；悬停出一块淡灰圆角底，按下灰底加深、图标变深。
+/// 22×22 的底也是点击区（横线只有一两个像素高，不给点击区差一个像素就点不中），上下各收回 4 点，顶栏不变高
+struct TopBarButton: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { Face(configuration: configuration) }
+
+    /// 悬停状态（不用 @State：本机只有命令行工具，State 宏插件用不了）
+    final class Hover: ObservableObject { @Published var on = false }
+
+    struct Face: View {
+        let configuration: Configuration
+        @StateObject private var hover = Hover()
+        var body: some View {
+            let lit = configuration.isPressed || hover.on
+            configuration.label
+                .foregroundStyle(lit ? Color.primary : Color.secondary)
+                .frame(width: 22, height: 22)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(configuration.isPressed ? 0.14 : hover.on ? 0.06 : 0)))
+                .contentShape(Rectangle())
+                .onHover { hover.on = $0 }
+                .animation(.easeOut(duration: 0.12), value: hover.on)
+                .padding(.vertical, -4)
+        }
+    }
+}
+
+/// 转圈：on 时一圈 0.9 秒一直转，停下回到原位
+struct Spinning<Content: View>: View {
+    let on: Bool
+    @ViewBuilder let content: Content
+    var body: some View {
+        if on {
+            TimelineView(.animation) { ctx in
+                content.rotationEffect(.degrees(ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 0.9) / 0.9 * 360))
+            }
+        } else {
+            content
+        }
+    }
+}
+
 /// 记下放某个视图的窗口：缩小键要知道自己在悬浮面板里还是菜单栏弹出的窗口里
 final class WindowBox { weak var window: NSWindow? }
 
@@ -212,17 +306,20 @@ struct HomeView: View {
 
     var body: some View {
         let t = Tone()
+        // 顶栏、切换条、页脚钉住，中间放不下就滚动：两页一样大，切换时面板不跳
         VStack(spacing: 12) {
             meta
             PanelTabs()
-            if store.tab == .memory {
-                MemoryHome()
-            } else {
-                if !store.unreadable.isEmpty { accessHint(t) }
-                HeroCard(t: t)
-                decideCard(t)
-                footer
+            Scroller(inset: 0, spacing: 12) {
+                if store.tab == .memory {
+                    MemoryHome()
+                } else {
+                    if !store.unreadable.isEmpty { accessHint(t) }
+                    HeroCard(t: t)
+                    decideCard(t)
+                }
             }
+            if store.tab == .memory { MemoryFooter() } else { footer }
         }
         .padding(14)
     }
@@ -231,14 +328,14 @@ struct HomeView: View {
         HStack {
             Text(statusLine)
             Spacer()
-            Button { if store.tab == .memory { store.refreshMemory() } else { store.scan() } } label: { Image(systemName: "arrow.clockwise") }
-                .buttonStyle(.plain).help(store.tab == .memory ? "重新看一遍" : "重新扫描")
-            // 缩小键（2026-11-18 常浩选甲「同款线条」，预览 docs/design/ui-v7-minimize.html）：收回挂件、悬浮球或菜单栏图标
-            Button { FloatingBall.shared.collapse(host.window) { dismiss() } } label: {
-                // 横线只有一两个像素高：给一块 18×18 的点击区，不然差一个像素就点不中
-                Image(systemName: "minus").frame(width: 18, height: 18).contentShape(Rectangle())
+            // 点击手感（2026-11-18 常浩选甲「系统灰底」，预览 docs/design/ui-v10-button-press.html）：平时无底，悬停淡灰底，按下灰底加深；扫描或读内存时 ↻ 一直转
+            Button { if store.tab == .memory { store.refreshMemory() } else { store.scan() } } label: {
+                Spinning(on: store.tab == .memory ? store.memReading : store.scanning) { Image(systemName: "arrow.clockwise") }
             }
-                .buttonStyle(.plain).help("缩小")
+                .buttonStyle(TopBarButton()).help(store.tab == .memory ? "重新看一遍" : "重新扫描")
+            // 缩小键（2026-11-18 常浩选甲「同款线条」，预览 docs/design/ui-v7-minimize.html）：收回挂件、悬浮球或菜单栏图标
+            Button { FloatingBall.shared.collapse(host.window) { dismiss() } } label: { Image(systemName: "minus") }
+                .buttonStyle(TopBarButton()).help("缩小")
                 .background { if !isSnapshot { WindowReader(box: host) } }
         }
         .font(.system(size: 11.5)).foregroundStyle(.secondary)
@@ -528,6 +625,26 @@ struct HeroCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .font(.system(size: 11.5)).foregroundStyle(.secondary)
                 .padding(.top, 8)
+
+                // 下半：谁占着（和内存页同一个样子）
+                let top = store.report.map { diskTop($0) } ?? []
+                if let first = top.first, first.bytes > 0 {
+                    Rectangle().fill(t.hair).frame(height: 1).padding(.top, 12)
+                    VStack(spacing: 9) {
+                        ForEach(top, id: \.label) { item in
+                            HStack(spacing: 8) {
+                                GlyphIcon(symbol: item.symbol)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(item.label).font(.system(size: 12)).lineLimit(1)
+                                    ShareBar(fraction: Double(item.bytes) / Double(first.bytes))
+                                }
+                                Text(formatBytes(item.bytes)).font(.system(size: 12)).monospacedDigit().foregroundStyle(.secondary)
+                                    .frame(minWidth: 52, alignment: .trailing)
+                            }
+                        }
+                    }
+                    .padding(.top, 12)
+                }
             }
             .padding(18)
             .background(RoundedRectangle(cornerRadius: 18).fill(t.mist))
@@ -1051,7 +1168,7 @@ struct AlertsPage: View {
                     .font(.system(size: 11.5)).foregroundStyle(Palette.bad).fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 16).padding(.bottom, 4)
             }
-            VStack(alignment: .leading, spacing: 0) {
+            Scroller(inset: 0) {
                 info("可用低于 60 GB 图标变橙、低于 30 GB 变红", free)
                 toggle(\.lowSpace, s.lowSpace, "可用低于 30 GB 时发通知", "一天最多一次")
                 toggle(\.growth, s.growth, "某个位置一天涨超过 10 GB 时发通知", "比如某个项目一天多开了几个 worktree")

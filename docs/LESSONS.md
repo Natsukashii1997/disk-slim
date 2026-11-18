@@ -122,6 +122,15 @@
 - 证据：`evidence/2026-11-18-memory/`（`snap1`～`snap3`、`snap-noicon` 对照截图；`cc-cpu-1.txt`、`cc-cpu-2.txt` 两次 CPU 时间）。
 - 升级：未升级。① 换个 SwiftUI 项目也成立，提议提升为全局 G-xx，等用户批准。
 
+
+## L-14 固定高度的面板里，中间区域被内容撑破，顶栏和页脚被挤出去（2026-11-18）
+
+- 现象：面板定成 368×810 后，离屏截图里内容多的页（磁盘页加了「谁占着」、内存页有「替你挑好的」）顶栏和页脚都不见了：整列比 810 点高，被居中裁掉上下。
+- 根因：中间区域写的是 `.frame(maxHeight: .infinity)`，没写 `minHeight`。SwiftUI 的弹性 frame 不给下限时，下限就是子视图自己的高度，内容多高它就多高，外面的固定 frame 压不住；`ScrollView` 也一样要给下限才会老实缩到剩余高度。
+- 正确做法：要「铺满剩下的、放不下就滚」的区域一律写 `.frame(minHeight: 0, maxHeight: .infinity)`（见 `Views.swift` 的 `Scroller`）；离屏截图模式下 `ScrollView` 画不出来，换成普通堆叠时同样加 `minHeight: 0` 再 `.clipped()`。验收看顶栏和页脚是否都在、所有面板截图是否同一高度。
+- 证据：`evidence/2026-11-18-fixed-size/snap1`（撑破）、`snap2`（修后 27 张面板截图都是 1620 像素高）。
+- 升级：未升级。换个 SwiftUI 项目也成立，提议提升为全局 G-xx，等用户批准。
+
 ---
 
 格式：

@@ -1,0 +1,174 @@
+<title>顶栏按钮点击手感</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 布局：上面一条三版切换，中间一块和真面板同尺寸的顶栏，下面写这一版怎么动。面板本身只有浅色，页面跟着只做浅色 */
+:root {
+  --page: #DCDCE3;
+  --panel: #ECECF0;
+  --card: #FFFFFF;
+  --ink: #1D1D1F;
+  --sub: #6E6E73;
+  --faint: #A1A1A6;
+  --blue: #0071E3;
+  --orange: #FF9500;
+  --hair: rgba(0,0,0,.08);
+  --gain: linear-gradient(90deg,#9B5CF6,#5B6CF9,#2F8FE6,#22B3A6);
+  --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { background: var(--page); color: var(--ink); font-family: var(--sans); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 40px; }
+.wrap { max-width: 720px; margin: 0 auto; display: grid; gap: 20px; }
+h1 { font-size: 20px; margin: 0; text-wrap: balance; }
+.lead { margin: 0; color: var(--sub); font-size: 13.5px; line-height: 1.6; }
+.switch { display: flex; gap: 6px; padding: 3px; background: rgba(0,0,0,.06); border-radius: 10px; width: fit-content; max-width: 100%; flex-wrap: wrap; }
+.switch button { font: 600 13px var(--sans); border: 0; background: transparent; color: var(--sub); padding: 7px 14px; border-radius: 8px; cursor: pointer; }
+.switch button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.switch button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.stage { display: grid; grid-template-columns: minmax(0, 368px) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 640px) { .stage { grid-template-columns: minmax(0,1fr); } }
+
+/* 面板：照真面板的尺寸和颜色（宽 368、内边距 14、顶栏 11.5 号灰字） */
+.panel { width: 100%; max-width: 368px; background: var(--panel); border-radius: 12px; padding: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.14), 0 0 0 .5px rgba(0,0,0,.12); display: grid; gap: 12px; transition: transform .22s ease, opacity .22s ease; transform-origin: top right; }
+.panel.gone { transform: scale(.2); opacity: 0; }
+.meta { display: flex; align-items: center; gap: 8px; padding: 0 4px; font-size: 11.5px; color: var(--sub); }
+.meta .status { flex: 1; min-width: 0; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; background: rgba(0,0,0,.06); border-radius: 8px; padding: 2px; font-size: 13px; font-weight: 600; color: var(--sub); }
+.tabs span { text-align: center; padding: 5px 0; border-radius: 7px; }
+.tabs span:first-child { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+.tabs i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--orange); margin-left: 5px; vertical-align: 2px; }
+.hero { height: 120px; border-radius: 18px; background: linear-gradient(135deg,#F1ECFF,#E8EFFE,#E3F5F2); border: 1px solid var(--hair); padding: 16px 18px; font-size: 11.5px; color: var(--sub); }
+.hero b { display: block; font-size: 40px; color: var(--orange); letter-spacing: -1px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.hero b small { font-size: 15px; color: var(--sub); letter-spacing: 0; margin-left: 4px; }
+
+/* 两个按钮：平时三版都一样（灰色细线、无底，2026-11-18 缩小键定稿「甲 同款线条」），只有悬停、按下、扫描中不同 */
+.ib { position: relative; width: 22px; height: 22px; border: 0; background: transparent; padding: 0; display: grid; place-items: center; color: var(--sub); cursor: pointer; border-radius: 6px; -webkit-tap-highlight-color: transparent; }
+.ib svg { width: 14px; height: 14px; display: block; }
+.ib:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.ib.spin svg { animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 甲 系统灰底 */
+.v-a .ib { transition: background .12s, color .12s; }
+.v-a .ib:hover { background: rgba(0,0,0,.06); color: var(--ink); }
+.v-a .ib.down { background: rgba(0,0,0,.14); color: var(--ink); }
+
+/* 乙 按下缩放 */
+.v-b .ib svg { transition: transform .32s cubic-bezier(.34,1.8,.5,1); }
+.v-b .ib { transition: color .12s; }
+.v-b .ib:hover { color: var(--ink); }
+.v-b .ib.down { color: var(--blue); }
+.v-b .ib.down svg { transform: scale(.78); transition-duration: .08s; }
+.v-b .ib.spin svg { animation: spin .9s linear infinite; }
+
+/* 丙 按下光晕 */
+.v-c .ib { transition: color .12s; }
+.v-c .ib:hover { color: var(--ink); }
+.v-c .ib.down { color: #5B6CF9; }
+.v-c .ring { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; background: radial-gradient(circle, rgba(91,108,249,.28) 0 45%, rgba(47,143,230,0) 70%); transform: scale(.4); opacity: 0; }
+.v-c .ring.go { animation: halo .45s ease-out; }
+@keyframes halo { 0% { transform: scale(.4); opacity: 1; } 100% { transform: scale(1.9); opacity: 0; } }
+.v-c .ib.spin { color: #5B6CF9; }
+
+.note { display: grid; gap: 12px; font-size: 13.5px; line-height: 1.65; }
+.note h2 { font-size: 16px; margin: 0; }
+.note dl { margin: 0; display: grid; grid-template-columns: auto minmax(0,1fr); gap: 6px 12px; }
+.note dt { color: var(--sub); white-space: nowrap; }
+.note dd { margin: 0; }
+.tip { font-size: 12.5px; color: var(--sub); background: rgba(255,255,255,.55); border-radius: 10px; padding: 10px 12px; line-height: 1.6; }
+.common { font-size: 13px; color: var(--sub); line-height: 1.65; border-top: 1px solid var(--hair); padding-top: 14px; margin: 0; }
+@media (prefers-reduced-motion: reduce) { .ib.spin svg, .v-c .ring.go { animation-duration: 2.4s; } .panel { transition: none; } }
+</style>
+
+<div class="wrap">
+  <h1>顶栏 ↻ 和 — 点下去的手感</h1>
+  <p class="lead">三版平时的样子都和现在一样（灰色细线、没有底），只改悬停、按下和扫描中的样子。在下面的面板上直接点 ↻ 和 —，按住不放能看清按下时的样子。</p>
+
+  <div class="switch" role="group" aria-label="切换方案">
+    <button id="opt-a" aria-pressed="true" data-v="a">甲 · 系统灰底</button>
+    <button id="opt-b" aria-pressed="false" data-v="b">乙 · 按下缩放</button>
+    <button id="opt-c" aria-pressed="false" data-v="c">丙 · 按下光晕</button>
+  </div>
+
+  <div class="stage">
+    <div class="panel v-a" id="panel">
+      <div class="meta">
+        <span class="status" id="status">共 460.4 GB · 20:02 扫描</span>
+        <button class="ib" id="btn-refresh" aria-label="重新扫描" title="重新扫描">
+          <span class="ring"></span>
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.2 8.6A5.2 5.2 0 1 1 11.6 4.3"/><path d="M12.4 1.9v2.9H9.5"/></svg>
+        </button>
+        <button class="ib" id="btn-min" aria-label="缩小" title="缩小">
+          <span class="ring"></span>
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 8h9"/></svg>
+        </button>
+      </div>
+      <div class="tabs"><span>磁盘</span><span>内存<i></i></span></div>
+      <div class="hero">可用空间<b>54.1<small>GB</small></b></div>
+    </div>
+
+    <div class="note" id="note"></div>
+  </div>
+
+  <p class="common">三版都会加上同一件事：点了 ↻ 以后，在「正在扫描…」或「正在看内存…」期间，图标一直转，扫描完停下。这是解决「不知道有没有点」的主要办法，因为扫描要几秒到十几秒，只靠按下那一下的变化撑不住。点「—」面板马上收起，本身就有反馈，三版只是给它同样的按下样子，保持一致。</p>
+</div>
+
+<script>
+const NOTES = {
+  a: { name: "甲 · 系统灰底", rows: [
+      ["悬停", "图标外面出现一块很淡的灰色圆角底（22×22），图标变深"],
+      ["按下", "灰底加深一倍，按住一直在，松手淡掉"],
+      ["扫描中", "↻ 一直转"],
+      ["像什么", "访达、预览这些系统应用顶栏按钮的样子，最不扎眼"]],
+    tip: "悬停这一层要靠悬浮面板收到鼠标移动；面板不在前台时 macOS 可能不给，那时只剩按下的灰底。按下这一层一定有。" },
+  b: { name: "乙 · 按下缩放", rows: [
+      ["悬停", "只是图标变深，没有底"],
+      ["按下", "图标缩小到约八成、变成蓝色，松手带一点回弹放大回去"],
+      ["扫描中", "↻ 一直转"],
+      ["像什么", "iPhone 上按图标那种「按进去」的感觉，比甲更明显"]],
+    tip: "图标只有 14 点大，缩一下变化幅度有限；靠蓝色撑住，眼睛余光也能看到。" },
+  c: { name: "丙 · 按下光晕", rows: [
+      ["悬停", "只是图标变深，没有底"],
+      ["按下", "从图标中心向外扩一圈淡紫蓝的光，约半秒散开；图标短暂变成紫蓝"],
+      ["扫描中", "↻ 一直转，颜色用「能拿回」那串渐变里的紫蓝"],
+      ["像什么", "和首页雾光顶卡同一组颜色，最有自己的味道，也最活泼"]],
+    tip: "光晕是一次性的动画：快速连点也每次都放一圈。颜色取自雾光，和面板配得上，但会是顶栏里最跳的一处。" }
+};
+const panel = document.getElementById("panel");
+const note = document.getElementById("note");
+const status = document.getElementById("status");
+const refresh = document.getElementById("btn-refresh");
+const min = document.getElementById("btn-min");
+let v = "a", busy = false;
+try { const s = localStorage.getItem("press-v"); if (s && NOTES[s]) v = s; } catch (e) {}
+
+function render() {
+  panel.className = "panel v-" + v;
+  document.querySelectorAll(".switch button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === v)));
+  const n = NOTES[v];
+  note.innerHTML = "<h2>" + n.name + "</h2><dl>" + n.rows.map(r => "<dt>" + r[0] + "</dt><dd>" + r[1] + "</dd>").join("") + "</dl><div class='tip'>" + n.tip + "</div>";
+}
+document.querySelectorAll(".switch button").forEach(b => b.addEventListener("click", () => {
+  v = b.dataset.v; try { localStorage.setItem("press-v", v); } catch (e) {} render();
+}));
+
+[refresh, min].forEach(btn => {
+  btn.addEventListener("pointerdown", () => {
+    btn.classList.add("down");
+    if (v === "c") { const r = btn.querySelector(".ring"); r.classList.remove("go"); void r.offsetWidth; r.classList.add("go"); }
+  });
+  ["pointerup", "pointerleave", "pointercancel"].forEach(t => btn.addEventListener(t, () => btn.classList.remove("down")));
+});
+
+function hm() { const d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
+refresh.addEventListener("click", () => {
+  if (busy) return;
+  busy = true; refresh.classList.add("spin"); status.textContent = "正在扫描…";
+  setTimeout(() => { busy = false; refresh.classList.remove("spin"); status.textContent = "共 460.4 GB · " + hm() + " 扫描"; }, 2600);
+});
+min.addEventListener("click", () => {
+  panel.classList.add("gone");
+  setTimeout(() => panel.classList.remove("gone"), 1100);
+});
+render();
+</script>
