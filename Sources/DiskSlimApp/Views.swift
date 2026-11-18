@@ -56,7 +56,6 @@ struct Scroller<Content: View>: View {
 
 struct PanelView: View {
     @EnvironmentObject var store: Store
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -82,41 +81,41 @@ struct PanelView: View {
         }
         .frame(width: panelWidth)
         .font(.system(size: 13))
-        .background(Tone(scheme).panel)
+        .background(Tone().panel)
+        // 只有浅色一种外观（2026-11-18 常浩定）：系统切深色也不跟
+        .environment(\.colorScheme, .light)
+        .preferredColorScheme(.light)
     }
 }
 
 // MARK: - 首页（2026-11-18 改版「替你判断」：雾光顶卡 + 白卡三段，预览 docs/design/ui-v5-hero-color.html，issue #4）
 
-/// 首页的颜色：跟着浅色 / 深色走。用 SwiftUI 的 colorScheme 取，不用动态 NSColor（离屏截图解析不了）
+/// 首页的颜色。只有浅色一种外观（2026-11-18 常浩定，删掉了深色）
 struct Tone {
-    let dark: Bool
-    init(_ scheme: ColorScheme) { dark = scheme == .dark }
-
     private func hex(_ v: UInt32) -> Color {
         Color(red: Double((v >> 16) & 0xff) / 255, green: Double((v >> 8) & 0xff) / 255, blue: Double(v & 0xff) / 255)
     }
-    private func pick(_ light: UInt32, _ dark: UInt32) -> Color { hex(self.dark ? dark : light) }
 
-    var panel: Color { pick(0xECECF0, 0x1C1C1E) }
-    var card: Color { pick(0xFFFFFF, 0x2C2C2E) }
-    var red: Color { pick(0xFF3B30, 0xFF453A) }
-    var orange: Color { pick(0xFF9500, 0xFF9F0A) }
-    var blue: Color { pick(0x0071E3, 0x0A84FF) }
-    var used: Color { pick(0xC9CBE0, 0x4A4A66) }
-    var track: Color { dark ? .white.opacity(0.08) : .black.opacity(0.06) }
-    var hair: Color { dark ? .white.opacity(0.10) : .black.opacity(0.08) }
+    var panel: Color { hex(0xECECF0) }
+    var card: Color { hex(0xFFFFFF) }
+    var red: Color { hex(0xFF3B30) }
+    var orange: Color { hex(0xFF9500) }
+    var green: Color { hex(0x34C759) }
+    var blue: Color { hex(0x0071E3) }
+    var used: Color { hex(0xC9CBE0) }
+    var track: Color { .black.opacity(0.06) }
+    var hair: Color { .black.opacity(0.08) }
     /// 顶卡底色「雾光」：很淡的紫、蓝、青，就是「能拿回」那串字的颜色调淡
     var mist: LinearGradient {
-        LinearGradient(colors: dark ? [hex(0x2A2342), hex(0x1F2846), hex(0x173532)] : [hex(0xF1ECFF), hex(0xE8EFFE), hex(0xE3F5F2)],
-                       startPoint: .topLeading, endPoint: .bottomTrailing)
+        LinearGradient(colors: [hex(0xF1ECFF), hex(0xE8EFFE), hex(0xE3F5F2)], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
     /// 「能拿回」的渐变字和色条
     var gain: LinearGradient {
-        LinearGradient(colors: dark ? [hex(0xB38BFF), hex(0x7B8BFF), hex(0x4FB0FF), hex(0x3FD6C4)]
-                                    : [hex(0x9B5CF6), hex(0x5B6CF9), hex(0x2F8FE6), hex(0x22B3A6)],
-                       startPoint: .leading, endPoint: .trailing)
+        LinearGradient(colors: [hex(0x9B5CF6), hex(0x5B6CF9), hex(0x2F8FE6), hex(0x22B3A6)], startPoint: .leading, endPoint: .trailing)
     }
+
+    /// 可用空间的颜色，和菜单栏图标同一套：低于 30 GB 红，低于 60 GB 橙，60 GB 以上绿
+    func level(_ gb: Double) -> Color { gb < 30 ? red : gb < 60 ? orange : green }
 }
 
 /// 首页大按钮：蓝底白字，圆角 12
@@ -135,9 +134,8 @@ struct BigButton: ButtonStyle {
 /// 「要你说一句」里的小按钮：第一个实心，其余描边
 struct ChipButton: ButtonStyle {
     var primary = false
-    @Environment(\.colorScheme) private var scheme
     func makeBody(configuration: Configuration) -> some View {
-        let t = Tone(scheme)
+        let t = Tone()
         configuration.label
             .font(.system(size: 12, weight: primary ? .semibold : .regular))
             .foregroundStyle(primary ? t.card : Color.primary)
@@ -184,10 +182,9 @@ func pickedLabel(_ f: Finding) -> String {
 
 struct HomeView: View {
     @EnvironmentObject var store: Store
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let t = Tone(scheme)
+        let t = Tone()
         VStack(spacing: 12) {
             meta
             if !store.unreadable.isEmpty { accessHint(t) }
@@ -238,8 +235,10 @@ struct HomeView: View {
         VStack(spacing: 0) {
             picked(t).padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 14)
             let askCount = store.askCards.count + store.askInfo.count
+            // 还没有扫描结果（刚清理完正在重扫）时不说「没有」「0 KB」，免得像真的清空了
+            let scanned = store.report != nil
             drawerRow(t, .ask, title: "要你说一句",
-                      sub: askCount == 0 ? "现在没有要问你的" : store.drawer == .ask ? "选一个就行，选错了能撤销" : askSub) {
+                      sub: !scanned ? Self.afterScan : askCount == 0 ? "现在没有要问你的" : store.drawer == .ask ? "选一个就行，选错了能撤销" : askSub) {
                 if askCount > 0 {
                     Text("\(askCount)").font(.system(size: 11.5, weight: .bold)).foregroundStyle(t.card)
                         .frame(minWidth: 20, minHeight: 20).padding(.horizontal, askCount > 9 ? 4 : 0)
@@ -248,13 +247,15 @@ struct HomeView: View {
             }
             if store.drawer == .ask { askDrawer(t) }
             let keep = store.keepList
-            drawerRow(t, .keep, title: "先不动", sub: keep.isEmpty ? "没有" : "\(keep.count) 项还在用或留着保底") {
-                Text(formatBytes(total(keep))).font(.system(size: 13, weight: .semibold)).monospacedDigit()
+            drawerRow(t, .keep, title: "先不动", sub: !scanned ? Self.afterScan : keep.isEmpty ? "没有" : "\(keep.count) 项还在用或留着保底") {
+                if scanned { Text(formatBytes(total(keep))).font(.system(size: 13, weight: .semibold)).monospacedDigit() }
             }
             if store.drawer == .keep { keepDrawer(t, keep) }
         }
         .background(RoundedRectangle(cornerRadius: 18).fill(t.card))
     }
+
+    static let afterScan = "扫描完就有"
 
     private var askSub: String {
         (store.askCards.map(\.title) + store.askInfo.map(\.title)).joined(separator: "、")
@@ -400,7 +401,7 @@ struct HomeView: View {
     private var footer: some View {
         HStack(spacing: 14) {
             let records = store.findings(.records)
-            Button("对话记录 \(formatBytes(total(records))) · 只看不删") { store.page = .records }
+            Button(store.report == nil ? "对话记录 · \(Self.afterScan)" : "对话记录 \(formatBytes(total(records))) · 只看不删") { store.page = .records }
             Spacer()
             Button("提醒") { store.page = .alerts }
             if store.canUndo { Button("撤销") { store.undo() }.disabled(store.busy) }
@@ -493,10 +494,10 @@ struct HeroCard: View {
         .buttonStyle(.plain)
     }
 
-    /// 和菜单栏图标同一套：低于 30 GB 红，低于 60 GB 橙
+    /// 低于 30 GB 红，低于 60 GB 橙，够用时就是正文色
     private func levelColor(_ gb: Double?) -> Color {
-        guard let gb else { return .primary }
-        return gb < 30 ? t.red : gb < 60 ? t.orange : .primary
+        guard let gb, gb < 60 else { return .primary }
+        return t.level(gb)
     }
 
     /// 刚清理完的头 1.4 秒，数字从清理前滚到清理后（先快后慢）；其余时候就是现在的可用空间
@@ -619,7 +620,7 @@ struct Spark: View {
     }
 }
 
-/// 一条色带：已经用掉的 / 能拿回的（渐变）/ 现在可用的（红）
+/// 一条色带：已经用掉的 / 能拿回的（渐变）/ 现在可用的（和可用空间同色：红 / 橙 / 绿）
 struct CapacityBar: View {
     let total: Int64
     let free: Int64
@@ -636,7 +637,7 @@ struct CapacityBar: View {
             HStack(spacing: gap) {
                 Rectangle().fill(t.used)
                 if gain > 0 { Rectangle().fill(t.gain).frame(width: gainW) }
-                Rectangle().fill(t.red).frame(width: freeW)
+                Rectangle().fill(t.level(Double(free) / 1_073_741_824)).frame(width: freeW)
             }
             .clipShape(RoundedRectangle(cornerRadius: 4))
         }

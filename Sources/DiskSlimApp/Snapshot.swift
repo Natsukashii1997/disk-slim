@@ -2,7 +2,7 @@ import AppKit
 import DiskSlimCore
 import SwiftUI
 
-/// `DiskSlim --snapshot <目录>`：用真实扫描结果把各页面（浅色、深色）离屏渲染成 PNG，供对照设计稿。
+/// `DiskSlim --snapshot <目录>`：用真实扫描结果把各页面离屏渲染成 PNG（只有浅色一种外观），供对照设计稿。
 /// 只读：不执行任何清理；确认框只是画出来。
 @MainActor
 enum Snapshot {
@@ -28,43 +28,49 @@ enum Snapshot {
             ("15-清理完成彩带-示例-1.3秒", { celebrate($0, at: 1.3) }),
             ("16-清理完成彩带-示例-2.4秒", { celebrate($0, at: 2.4) }),
             ("17-清理完成彩带-示例-放完", { celebrate($0, at: 3.5) }),
+            // 顶卡数字和色带可用那段同色：60 GB 以上绿、30 GB 以下红（真实磁盘碰不到时用示例数字看）
+            ("18-首页-示例-可用72GB", { freeGB($0, 72) }),
+            ("19-首页-示例-可用22GB", { freeGB($0, 22) }),
         ]
         for (name, setup) in shots {
-            for scheme in [ColorScheme.light, .dark] {
-                let store = Store(readOnly: true)
-                store.apply(report)
-                setup(store)
-                let view = PanelView()
-                    .overlay(alignment: .topTrailing) {
-                        // 假记录画出来的图要在画面上标明
-                        if name.contains("示例") {
-                            Text("示例数据，非真实记录").font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(Capsule().fill(.orange)).padding(4)
-                        }
+            let store = Store(readOnly: true)
+            store.apply(report)
+            setup(store)
+            let view = PanelView()
+                .overlay(alignment: .topTrailing) {
+                    // 假记录画出来的图要在画面上标明
+                    if name.contains("示例") {
+                        Text("示例数据，非真实记录").font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Capsule().fill(.orange)).padding(4)
                     }
-                    .environmentObject(store)
-                    .background(Color(nsColor: .windowBackgroundColor))
-                    .environment(\.colorScheme, scheme)
-                let r = ImageRenderer(content: view)
-                r.scale = 2
-                guard let cg = r.cgImage,
-                      let png = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:]) else {
-                    print("渲染失败：\(name)")
-                    continue
                 }
-                let file = dir.appendingPathComponent("\(name)-\(scheme == .dark ? "深色" : "浅色").png")
-                try? png.write(to: file)
-                print(file.path)
+                .environmentObject(store)
+            let r = ImageRenderer(content: view)
+            r.scale = 2
+            guard let cg = r.cgImage,
+                  let png = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:]) else {
+                print("渲染失败：\(name)")
+                continue
             }
+            let file = dir.appendingPathComponent("\(name).png")
+            try? png.write(to: file)
+            print(file.path)
         }
         ball(to: dir)
     }
 
-    /// 刚清理完的样子：重新扫描还没回来（report 为空），彩带定格在第 `t` 秒
+    /// 把可用空间换成示例数字，总容量不变
+    static func freeGB(_ store: Store, _ gb: Double) {
+        let total = store.disk?.totalBytes ?? Int64(460 * 1_073_741_824.0)
+        store.disk = DiskStatus(totalBytes: total, availableBytes: Int64(gb * 1_073_741_824))
+    }
+
+    /// 刚清理完的样子：正在重新扫描、结果还没回来（report 为空），彩带定格在第 `t` 秒
     static func celebrate(_ store: Store, at t: TimeInterval) {
         let gb: Double = 1_073_741_824
         store.report = nil
+        store.scanning = true
         // 清理后的数字用现在真实的可用空间；清理前固定写 5.9 GB
         let after = store.disk?.availableBytes ?? Int64(51.2 * gb)
         store.celebration = Celebration(at: Date(), fromBytes: Int64(5.9 * gb), toBytes: after,

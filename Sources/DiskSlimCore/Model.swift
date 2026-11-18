@@ -91,6 +91,11 @@ extension Finding {
 public struct DiskStatus: Codable {
     public let totalBytes: Int64
     public let availableBytes: Int64
+
+    public init(totalBytes: Int64, availableBytes: Int64) {
+        self.totalBytes = totalBytes
+        self.availableBytes = availableBytes
+    }
 }
 
 public struct ScanReport: Codable {

@@ -179,6 +179,8 @@ final class FloatingBall: NSObject {
         p.hidesOnDeactivate = false
         p.isReleasedWhenClosed = false
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        // 只有浅色一种外观（2026-11-18 常浩定）：系统切深色也不跟
+        p.appearance = NSAppearance(named: .aqua)
         p.onCancel = { [weak self] in self?.closePanel() }
         // 和菜单栏弹出面板一样的半透明底、圆角
         let fx = NSVisualEffectView(frame: p.contentLayoutRect)
