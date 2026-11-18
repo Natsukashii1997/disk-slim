@@ -81,18 +81,22 @@ public struct KnownPlacesScanner {
     let minBytes: Int64
     let sizeOf: (URL) -> Int64
     let now: Date
-    /// 一个目录最近一次变动：它和往下两层里最新的修改时间
+    /// 一个目录最近一次变动：它和往下两层里最新的修改时间（认备份的先后）
     let modifiedAt: (URL) -> Date?
+    /// 虚拟机最近一次用：往下三层（Colima 的磁盘文件在 `.colima/_lima/<名>/diffdisk`，开着不重启时只有它在变）
+    let useOf: (URL) -> Date?
 
     public init(home: URL, places: [Place] = KnownPlaces.all, minBytes: Int64 = 50 * 1_048_576,
                 sizeOf: @escaping (URL) -> Int64 = allocatedSize, now: Date = Date(),
-                modifiedAt: @escaping (URL) -> Date? = latestModification) {
+                modifiedAt: @escaping (URL) -> Date? = { latestModification($0) },
+                useOf: @escaping (URL) -> Date? = { latestModification($0, depth: 3) }) {
         self.home = home
         self.places = places
         self.minBytes = minBytes
         self.sizeOf = sizeOf
         self.now = now
         self.modifiedAt = modifiedAt
+        self.useOf = useOf
     }
 
     public func scan() -> [Finding] {
@@ -133,10 +137,12 @@ public struct KnownPlacesScanner {
                 if bytes < minBytes { continue }
                 var detail = place.detail, used: Date?
                 if place.trackUse {
-                    used = urls.compactMap(modifiedAt).max()
+                    used = urls.compactMap { useOf($0) }.max()
                     if let used {
-                        let days = Int(now.timeIntervalSince(used) / 86_400)
-                        detail = days > Finding.unusedDays ? "\(days) 天没用了。\(place.detail)" : "\(BeijingTime.monthDay(used))还用过，先留着"
+                        // 和 Finding.bucket 用同一个判断，说明和分段不会对不上
+                        let stale = now.timeIntervalSince(used) > Double(Finding.unusedDays) * 86_400
+                        detail = stale ? "\(Int(now.timeIntervalSince(used) / 86_400)) 天没用了。\(place.detail)"
+                                       : "\(BeijingTime.monthDay(used))还用过，先留着"
                     }
                 }
                 found.append(Finding(area: .hidden, category: place.category, title: place.title,
@@ -148,14 +154,14 @@ public struct KnownPlacesScanner {
     }
 }
 
-/// 目录和往下两层里最新的修改时间（虚拟机的磁盘文件、配置在第一二层；不往深处走，免得扫整个镜像）
-public func latestModification(_ url: URL) -> Date? {
+/// 目录和往下 `depth` 层里最新的修改时间（不往深处走，免得扫整个镜像）
+public func latestModification(_ url: URL, depth: Int = 2) -> Date? {
     let keys: Set<URLResourceKey> = [.contentModificationDateKey]
     var latest = (try? url.resourceValues(forKeys: keys))?.contentModificationDate
     guard let e = FileManager.default.enumerator(at: url, includingPropertiesForKeys: Array(keys), options: [],
                                                  errorHandler: { _, _ in true }) else { return latest }
     for case let u as URL in e {
-        if e.level >= 2 { e.skipDescendants() }
+        if e.level >= depth { e.skipDescendants() }
         if let d = (try? u.resourceValues(forKeys: keys))?.contentModificationDate, d > (latest ?? .distantPast) { latest = d }
     }
     return latest

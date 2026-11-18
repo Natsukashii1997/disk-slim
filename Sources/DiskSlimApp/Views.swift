@@ -347,6 +347,8 @@ struct HomeView: View {
                         Button(card.actionLabel) { store.askToClean(card.findings) }.buttonStyle(ChipButton(primary: true))
                         Button("留着") { store.keep(card) }.buttonStyle(ChipButton())
                     }
+                    // 第 5 批定的「下周再问」：首页照样列着，只是周五不再催
+                    Button("下周再问") { store.snooze(card) }.buttonStyle(ChipButton())
                 }
                 .disabled(store.busy)
             }
@@ -642,6 +644,18 @@ struct ItemRow: View {
     let f: Finding
 
     var body: some View {
+        HStack(spacing: 0) {
+            row
+            // 替你挑好的项可以「留着」：记成保留，以后不再默认勾选，归到「先不动」（涨了超过 1 GB 再问）
+            if store.bucket(f) == .picked {
+                Button("留着") { store.keep(f) }
+                    .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(Palette.accent)
+                    .padding(.trailing, 8).disabled(store.busy)
+            }
+        }
+    }
+
+    private var row: some View {
         Button { store.toggle(f) } label: {
             HStack(spacing: 8) {
                 Group {

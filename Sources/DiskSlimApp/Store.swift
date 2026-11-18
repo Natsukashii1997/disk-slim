@@ -351,6 +351,8 @@ final class Store: ObservableObject {
         guard let all = report?.findings else { return [] }
         // 「替你挑好的」页把下载里挑好的也列上，和首页按钮清的是同一批
         if page == .picked { return all.filter { bucket($0) == .picked } }
+        // 「先不动的」页和首页那一段同一批：下载里先不动的也列上，再加上清不了、要问的看不见的项
+        if page == .keep { return all.filter { bucket($0) == .keep || (bucket($0) == .ask && $0.area == .hidden) } }
         return all.filter { self.page(of: $0) == page }
     }
     func picked(_ page: Page) -> [Finding] { findings(page).filter { $0.selectable && selected.contains($0.id) } }

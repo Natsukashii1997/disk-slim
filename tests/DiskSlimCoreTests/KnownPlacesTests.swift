@@ -79,6 +79,50 @@ import Testing
         #expect(abs(got.timeIntervalSince(daysAgo(40))) < 2)
     }
 
+    /// 审查 L2：30～31 天之间说明和分段要一致
+    @Test func 虚拟机刚过30天_说明和分段一致() {
+        let t = TempDir()
+        t.file("Library/Application Support/Claude/vm_bundles/b/s.img", bytes: 60_000, modified: daysAgo(30.5))
+        let vm = KnownPlacesScanner(home: t.url, minBytes: 20_000, now: now, useOf: { _ in daysAgo(30.5) }).scan().first
+        #expect(vm?.bucket(now: now) == .ask)
+        #expect(vm?.detail.hasPrefix("30 天没用了。") == true)
+    }
+
+    /// 审查 L3：Colima 开着不重启时，只有第三层的磁盘文件在变
+    @Test func 虚拟机最近使用看到第三层的磁盘文件() {
+        let t = TempDir()
+        t.file(".colima/_lima/colima-x/diffdisk", bytes: 60_000, modified: daysAgo(1))
+        for d in [".colima/_lima/colima-x", ".colima/_lima", ".colima"] { t.setModified(t.url.appendingPathComponent(d), daysAgo(60)) }
+        let vm = KnownPlacesScanner(home: t.url, minBytes: 20_000, now: now).scan().first { $0.title == "Colima 虚拟机" }
+        #expect(vm?.bucket(now: now) == .keep)
+    }
+
+    /// 审查 L1：整次扫描用同一个时间，备份的 30 天也按它算
+    @Test func 扫描传入的时间也用在备份上() {
+        let t = TempDir()
+        let home = t.dir("home")
+        for (name, days) in [("old", 25.0), ("new", 1.0)] {
+            t.file("home/.codex/recovery/\(name)/x", bytes: 60 * 1_048_576, modified: daysAgo(days))
+            t.setModified(home.appendingPathComponent(".codex/recovery/\(name)"), daysAgo(days))
+        }
+        let scan = Scan(home: home, workRoot: home.appendingPathComponent("work"), meta: FakeMetadata(added: [:]), runner: FakeRunner())
+        let old = scan.run(now: now).findings.first { $0.title == "Codex 备份 · old" }
+        #expect(old?.suggested == false) // 按传入的时间只过了 25 天
+        let later = scan.run(now: now.addingTimeInterval(10 * 86_400)).findings.first { $0.title == "Codex 备份 · old" }
+        #expect(later?.suggested == true)
+    }
+
+    /// L-08：旧版写下的扫描结果、操作日志里没有 lastUsed 这个键，要照样读回
+    @Test func 旧格式的Finding没有lastUsed也能读回() throws {
+        let json = #"{"id":"x|/a","area":"hidden","category":"虚拟机","title":"t","detail":"d","paths":["/a"],"bytes":1,"risk":"confirm","suggested":false,"cleanup":{"none":{}}}"#
+        let f = try JSONDecoder().decode(Finding.self, from: Data(json.utf8))
+        #expect(f.lastUsed == nil && f.title == "t")
+        let back = try JSONDecoder().decode(Finding.self, from: JSONEncoder().encode(
+            Finding(area: .hidden, category: "虚拟机", title: "t", detail: "d", paths: ["/a"], bytes: 1, risk: .confirm,
+                    suggested: false, cleanup: .none, lastUsed: now)))
+        #expect(back.lastUsed == now)
+    }
+
     @Test func 多个路径合成一项() {
         let t = TempDir()
         t.file(".codex/sessions/a.jsonl", bytes: 30_000)
