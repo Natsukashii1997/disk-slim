@@ -180,8 +180,31 @@ func pickedLabel(_ f: Finding) -> String {
     return f.category
 }
 
+/// 记下放某个视图的窗口：缩小键要知道自己在悬浮面板里还是菜单栏弹出的窗口里
+final class WindowBox { weak var window: NSWindow? }
+
+struct WindowReader: NSViewRepresentable {
+    let box: WindowBox
+    func makeNSView(context: Context) -> NSView { Reader(box: box) }
+    func updateNSView(_ v: NSView, context: Context) {
+        guard let r = v as? Reader else { return }
+        r.box = box
+        box.window = r.window
+    }
+    private final class Reader: NSView {
+        var box: WindowBox
+        init(box: WindowBox) { self.box = box; super.init(frame: .zero) }
+        required init?(coder: NSCoder) { nil }
+        override func viewDidMoveToWindow() { if let window { box.window = window } }
+    }
+}
+
 struct HomeView: View {
     @EnvironmentObject var store: Store
+    /// 缩小键用：放首页的窗口（不用 @State：本机只有命令行工具，State 宏插件用不了；WindowReader 每次更新把窗口补进新盒子）
+    private let host = WindowBox()
+    /// 菜单栏弹出的面板靠它收起
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         let t = Tone()
@@ -201,6 +224,13 @@ struct HomeView: View {
             Spacer()
             Button { store.scan() } label: { Image(systemName: "arrow.clockwise") }
                 .buttonStyle(.plain).help("重新扫描")
+            // 缩小键（2026-11-18 常浩选甲「同款线条」，预览 docs/design/ui-v7-minimize.html）：收回挂件、悬浮球或菜单栏图标
+            Button { FloatingBall.shared.collapse(host.window) { dismiss() } } label: {
+                // 横线只有一两个像素高：给一块 18×18 的点击区，不然差一个像素就点不中
+                Image(systemName: "minus").frame(width: 18, height: 18).contentShape(Rectangle())
+            }
+                .buttonStyle(.plain).help("缩小")
+                .background(WindowReader(box: host))
         }
         .font(.system(size: 11.5)).foregroundStyle(.secondary)
         .padding(.horizontal, 4)

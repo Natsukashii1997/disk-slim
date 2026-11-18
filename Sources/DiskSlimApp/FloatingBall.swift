@@ -158,6 +158,12 @@ final class FloatingBall: NSObject {
         store.panelOpen = true
     }
 
+    /// 面板顶栏的缩小键：在悬浮面板（挂件或球叫开的）里点的就照常收起；在菜单栏弹出的那个里点的交给 SwiftUI 的 dismiss。
+    /// 菜单栏那个不能直接关窗口：系统以为它还开着，下次点图标第一下打不开（2026-11-18 真屏实测）
+    func collapse(_ window: NSWindow?, dismissMenu: () -> Void) {
+        if let window, window === panel { closePanel() } else { dismissMenu() }
+    }
+
     func closePanel(byOutsideClick: Bool = false) {
         guard panelOpen else { return }
         panel?.orderOut(nil)

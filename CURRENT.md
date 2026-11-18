@@ -2,7 +2,27 @@
 
 当前阶段目标：第 6 批试用一周收尾，定下 disk-space-guard 去留，之后转常态维护。（2026-11-08 常浩确认，digital-twin#114）
 
-更新：2026-11-18。第 0–9 批已合回 main（PR #1），GitHub 远端已建。第 10 批「替你判断」（issue #4）在分支 `claude/4-decide-for-me`（PR #5）：规则、首页改版、审查修复、清理彩带、只留浅色、重扫期间文案都已提交并装机。常浩 11-18 说「跳过，直接合并」：真屏彩带不看，凭离屏截图验收，PR #5 squash 合并回 main。唯一下一步：常浩在「完全磁盘访问权限」里删掉旧条目再加回；下次真实清理时顺便看一眼彩带。第 6 批的「试用一周」、`disk-space-guard` 要不要停，照旧等用户定。
+更新：2026-11-18。第 0–10 批都已合回 main（PR #1、#5）。本轮在分支 `claude/minimize-button` 给面板首页顶栏加了缩小键（常浩选甲「同款线条」），已装机、真屏验证通过，PR 待常浩说「合并」。唯一下一步：常浩在「完全磁盘访问权限」里删掉旧条目再加回（本轮重装过），然后合并缩小键 PR。第 6 批的「试用一周」、`disk-space-guard` 要不要停，照旧等用户定。
+
+## 面板顶栏加缩小键（2026-11-18，Claude，常浩在驿窗会话里提出要缩小键，三版预览选甲「同款线条」后说「选甲，按计划开工」，之后说「你现在就查」；已提交到 `claude/minimize-button`、PR 待合并、已装机、未发布）
+
+- 时间：开工 `2026-11-18 11:09`（`date '+%F %H:%M'` 记录）。★ 来由：常浩想在面板右上角刷新键旁加一个缩小键，点了面板收回去；三版预览 `docs/design/ui-v7-minimize.html`（线上 https://claude.ai/artifact/XB74D2pfX8Kb6Wn43iX91o），选甲：和 ↻ 一样的灰色细线「—」，无底。
+- 改了哪些文件：
+  - `Sources/DiskSlimApp/Views.swift`：首页顶栏 ↻ 右边加缩小键（`minus`，`.help("缩小")`，label 给 18×18 点击区）；`WindowBox` + `WindowReader` 记下按钮所在的窗口；`@Environment(\.dismiss)` 给菜单栏弹窗用。
+  - `Sources/DiskSlimApp/FloatingBall.swift`：`collapse(_:dismissMenu:)`：在悬浮面板（挂件或球叫开的）里点的就 `closePanel()`，状态文件 `panelOpen` 写回 false；在菜单栏弹出的面板里点的交给 `dismiss()`。
+  - `docs/design/ui-v7-minimize.html`（三版预览）、`docs/PRD.md` 3.4（收起方式补一句缩小键）、`docs/LESSONS.md`（L-12）、本文件。
+- 测试：`scripts/test.sh` 原样结果 `✔ Test run with 253 tests in 34 suites passed`；`node --test tests/*.test.mjs` 原样结果 `ℹ pass 4` / `ℹ fail 0`；`node scripts/check-rules.mjs` 输出「通用规则检查通过」。
+- 验证：装机后在真屏上用 CGEvent 发真实点击（L-11），每次先截图定位「—」、点前再确认窗口在屏上，窗口用 `CGWindowListCopyWindowInfo` 按进程号回读：
+  - 诊断版（临时加日志，记录点击是否送到面板、按钮是否收到、走哪一支）：挂件叫开的面板 10/10 收起（含菜单栏与挂件交替、重启应用后第一次打开），菜单栏弹出的面板 3/3 收起，日志里两条路各走各的分支。
+  - 最终版（去掉日志后重装）：菜单栏与挂件交替各 3 轮，全部收起；菜单栏面板每轮点一下图标就能再打开；`panelOpen` 跟着写回 false；只有一个进程。
+  - 过程中的失败及处理：① 第一版按鼠标位置找窗口，时灵时不灵，改成记下按钮所在窗口；② 菜单栏面板用 `window.close()` 收起后，下次点图标要点两下，`performClick`、`deactivate` 都不行，改用 `dismiss()`；③ 横线太细点不中，加点击区（L-12）；④ 加点击区后最终版挂件面板有两次没收起（其中一次是接手的子 agent 补验），诊断版在同样顺序下复现不出来；当时常浩同时在用电脑，原因未查清。
+- 截图：`~/Library/Application Support/disk-slim/evidence/2026-11-18-minimize/`（`final-A-open.png` 挂件面板、`final-B-open.png` 菜单栏面板、`snap/` 离屏截图、`final-realscreen.txt` 每轮结果、`diag-log.txt` 诊断日志、`click` `pidwins` `findmin.py` 测试脚本）。
+- 发布与回读：未发布。`scripts/install.sh` 最终一次退出码 0（`install-final-2.log`），`pgrep` 只有一个进程。本轮重装了多次，每次签名都会变，「完全磁盘访问权限」要常浩删掉旧条目再加回。
+- 与授权不一致之处、遗留问题、范围外发现：
+  - 补验时接手的子 agent 没先确认面板在屏上就点了一下 (1579,303)，落在常浩屏幕上别的窗口里，点到了什么未查。
+  - 测试中多次移动了常浩的鼠标、开关了面板。
+  - 范围外：重启应用 3 秒内发第一次挂件链接，有一次面板没出来（第二次正常），原因没查，和缩小键无关。
+- 本轮新坑：L-12。
 
 ## 第 10 批之三：删掉深色、重扫期间文案、色带跟着变色（2026-11-18，Claude，常浩看过分批计划说「按计划开工，直接删除深色模式就行，我只保留目前这一个模式」，之后说「跳过，直接合并」；已提交并随 PR #5 合并、已装机、未发布）
 
