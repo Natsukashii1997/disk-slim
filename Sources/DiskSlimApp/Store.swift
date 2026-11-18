@@ -83,6 +83,8 @@ final class Store: ObservableObject {
     @Published var memStatus: MemoryStatus?
     /// 最近一次读内存的时间（内存页顶栏「HH:mm 看过」）
     @Published var memAt: Date?
+    /// 正在读内存：顶栏 ↻ 转圈用
+    @Published var memReading = false
     @Published var memUsage: MemoryUsage?
     @Published var memPlan: MemoryPlan?
     /// memory.json：曲线、每个应用最后一次被用的时间、会话忙闲、几个「别问」

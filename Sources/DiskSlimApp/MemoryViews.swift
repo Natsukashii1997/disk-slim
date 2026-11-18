@@ -102,7 +102,6 @@ struct MemoryHome: View {
         VStack(spacing: 12) {
             MemoryHero(t: t)
             card(t)
-            footer
         }
     }
 
@@ -257,7 +256,13 @@ struct MemoryHome: View {
         .overlay(alignment: .top) { Rectangle().fill(t.hair).frame(height: 1) }
     }
 
-    private var footer: some View {
+}
+
+/// 内存页页脚：钉在面板底部，不跟着中间滚动
+struct MemoryFooter: View {
+    @EnvironmentObject var store: Store
+
+    var body: some View {
         HStack(spacing: 14) {
             Button { store.forceArmed = nil; store.page = .forceQuit } label: {
                 HStack(spacing: 4) {
@@ -331,14 +336,7 @@ struct MemoryHero: View {
                             icon(item)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(item.name).font(.system(size: 12)).lineLimit(1)
-                                GeometryReader { g in
-                                    ZStack(alignment: .leading) {
-                                        Capsule().fill(Color(red: 0.24, green: 0.24, blue: 0.35).opacity(0.16))
-                                        Capsule().fill(Color(red: 0.49, green: 0.53, blue: 0.72))
-                                            .frame(width: g.size.width * CGFloat(Double(item.bytes) / Double(first.bytes)))
-                                    }
-                                }
-                                .frame(height: 4)
+                                ShareBar(fraction: Double(item.bytes) / Double(first.bytes))
                             }
                             Text(formatBytes(item.bytes)).font(.system(size: 12)).monospacedDigit().foregroundStyle(.secondary)
                                 .frame(minWidth: 52, alignment: .trailing)
@@ -375,6 +373,7 @@ struct ForceQuitPage: View {
             Text("程序卡住、点不动时用。「退出」会先问你保存；「强制退出」立刻关掉，没保存的会丢，要点两下。也可以按 Option + Command + Esc 打开系统的同一个窗口。")
                 .font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 16)
+            Scroller(inset: 0) {
             VStack(spacing: 0) {
                 ForEach(Array(apps.enumerated()), id: \.element.app.pid) { i, a in
                     HStack(spacing: 10) {
@@ -398,6 +397,7 @@ struct ForceQuitPage: View {
             .disabled(store.memWorking)
             .background(RoundedRectangle(cornerRadius: 14).fill(t.card))
             .padding(.horizontal, 14).padding(.bottom, 14)
+            }
         }
         .onAppear { store.refreshMemory() }
     }
