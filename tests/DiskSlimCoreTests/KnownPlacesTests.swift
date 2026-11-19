@@ -42,6 +42,29 @@ import Testing
         #expect(found.filter { $0.bucket(now: now) == .picked }.count == 3)
     }
 
+    /// 2026-11-19 起（积压清单组 6）：Playwright 浏览器删了不会自动重新下载，驿窗、剪藏插件的扩展测试直接全挂（两边 L-16）。
+    /// 改成需确认、不默认勾选：归「先不动」、不进自动清理；用户自己挑了仍能删。Puppeteer 这次不动，仍是安全、默认勾选
+    @Test func Playwright浏览器_需确认_不默认勾选_不进自动清理() {
+        let t = TempDir()
+        t.file("Library/Caches/ms-playwright/chromium-1248/chrome", bytes: 50_000)
+        t.file(".cache/puppeteer/chrome/chrome", bytes: 50_000)
+        let found = KnownPlacesScanner(home: t.url, minBytes: 20_000, now: now).scan()
+        let pw = found.first { $0.title == "Playwright 浏览器" }
+        #expect(pw?.risk == .confirm)
+        #expect(pw?.suggested == false)
+        #expect(pw?.cleanup == .remove)
+        #expect(pw?.detail.contains("不会自动重新下载") == true)
+        #expect(pw?.bucket(now: now) == .keep)
+        #expect(Alerts.autoCleanPicks(found).allSatisfy { $0.title != "Playwright 浏览器" })
+        // 用户自己勾了还能删：安全门照样放行
+        let guardian = SafetyGuard(home: t.url, workRoot: t.url.appendingPathComponent("work"))
+        #expect(pw.map { guardian.refusal(for: $0) } == .some(nil))
+
+        let pp = found.first { $0.title == "Puppeteer 浏览器" }
+        #expect(pp?.risk == .safe && pp?.suggested == true)
+        #expect(Alerts.autoCleanPicks(found).contains { $0.title == "Puppeteer 浏览器" })
+    }
+
     @Test func Codex备份_一个月内做的除了最新一份也先留着() {
         let t = TempDir()
         for (name, days) in [("a", 10.0), ("b", 2.0)] {
