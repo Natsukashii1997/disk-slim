@@ -24,3 +24,28 @@ test('通用规则能抓到违规样本，合规样本不误报', () => {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('LESSONS 每条要有以层级词开头的「升级」行：缺行和不带层级词都报错，合规条目和格式样例不误报', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'check-rules-'));
+  // L-03 摘自本项目 docs/LESSONS.md 补层级词之前（b742c26）的真实升级行；L-15 缺升级行是构造样本（本项目历史上没有缺行的条目）
+  const lessons = [
+    '# 开发实录与坑', '', '## 怎么写', '', '---', '',
+    '## L-03 macOS 不区分大小写：只差大小写的目录、目标、可执行文件会撞在一起（2026-11-05）', '', '- 现象：略。',
+    '- 升级：同类第 2 次，已写进 AGENTS.md「规则」。换个项目也成立，提议提升为全局 G-xx（待用户批准）。', '',
+    '## L-15 构造样本：没有升级行（2026-11-19）', '', '- 现象：略。', '- 正确做法：略。', '',
+    '## L-16 合规：未升级的也要带层级词（2026-11-19）', '', '- 现象：略。', '- 升级：〔提醒〕未升级（待批：积压清单组 16）。', '',
+    '## L-17 合规：已升级写明去处（2026-11-19）', '', '- 现象：略。', '- 升级：〔文字〕已升级：AGENTS.md「规则」。', '',
+    '---', '', '格式：', '', '```markdown', '## L-01 <一句话现象>（<YYYY-MM-DD>）', '', '- 升级：未升级。', '```', '',
+  ].join('\n');
+  try {
+    fs.mkdirSync(path.join(root, 'docs'));
+    fs.writeFileSync(path.join(root, 'docs/LESSONS.md'), lessons);
+    assert.deepEqual(checkRules(root).map(v => `${v.file}:${v.line} ${v.kind} ${v.text}`), [
+      'docs/LESSONS.md:10 lessons L-03 的「升级」没以层级词开头：- 升级：同类第 2 次，已写进 AGENTS.md「规则」。换个项目也成立，提议提升为全局 G-xx（待用户批准）。',
+      'docs/LESSONS.md:12 lessons L-15 缺「- 升级：」一行',
+    ]);
+    assert.match(checkRules(root)[0].rule, /〔提醒〕未升级/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
