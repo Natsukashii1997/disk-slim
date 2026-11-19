@@ -33,7 +33,7 @@
 - 正确做法：拿路径和外部输出做字符串比较时，同时比原路径和 `resolvingSymlinksInPath()` 后的路径（`WorktreeScanner.blockers`）。
 - 证据：第 1 批 `swift test` 首跑失败记录（本会话）；修复后 12/12 通过。
 - 升级：〔提醒〕未升级（已批：积压清单组 10，与 L-03、L-09 合并提升为全局 G-38）。原记录：未升级。
-- 提升：已提升为全局 G-38（2026-11-19，agent-kit 第二批）。
+- 提升：已提升为全局 G-38（2026-11-19，agent-kit#83）。
 
 ## L-03 macOS 不区分大小写：只差大小写的目录、目标、可执行文件会撞在一起（2026-11-05）
 
@@ -42,7 +42,7 @@
 - 正确做法：目录名、SwiftPM 目标名、可执行文件名之间不能只差大小写。现在命令行在 `Sources/DiskSlimCLI`（目标 `diskslim`），应用在 `Sources/DiskSlimApp`（目标 `DiskSlimApp`），测试路径在 `Package.swift` 写明。撞名后要 `rm -rf .build` 清掉旧产物。
 - 证据：提交 `44d4bb2`（测试目录）；第 3 批编译错误「invalid redeclaration of 'total'」「no such file or directory ... diskslim-p.build/.../main.o」。
 - 升级：〔文字〕已升级：AGENTS.md「规则」（目录名、目标名、可执行文件名不能只差大小写）。另已批：积压清单组 10，并入全局 G-38。原记录：同类第 2 次，已写进 AGENTS.md「规则」。换个项目也成立，提议提升为全局 G-xx（待用户批准）。
-- 提升：已提升为全局 G-38（2026-11-19，agent-kit 第二批）。
+- 提升：已提升为全局 G-38（2026-11-19，agent-kit#83）。
 
 ## L-04 `swift test` 偶发「plugin for module 'TestingMacros' not found」（2026-11-05）
 
@@ -75,7 +75,7 @@
 - 正确做法：大小读不全就记「没量到」（`allocatedSizeIfReadable` 返回 nil）；对比两天时只单列两边都有的位置，只在一边出现的不到 1 GB 归进「其他」、下载文件夹一律归进「其他」；按北京日期（`BeijingTime.dayNumber`）切窗口；写入前文件在但读不了就报错不写；差值一律用不会溢出的加减。
 - 证据：`tests/DiskSlimCoreTests/GrowthAdversarialTests.swift`（对抗测试员写的 46 项，修复前 13 项失败）、`UsageTests.swift` 新增 5 项；沙盒输出 `evidence/2026-11-05-growth-sandbox/growth-output-after-review.txt`。
 - 升级：〔提醒〕部分升级（已写测试 `GrowthAdversarialTests`、`UsageTests`，未接进必经检查；已批：积压清单组 11，与 L-08 合并提升为全局 G-39）。原记录：未升级。「缺测值不能当 0、按日期展示就按日期切」换个项目也成立，提议提升为全局 G-xx，等用户批准。
-- 提升：已提升为全局 G-39（2026-11-19，agent-kit 第二批）。
+- 提升：已提升为全局 G-39（2026-11-19，agent-kit#83）。
 
 ## L-08 Swift 自动生成的 Codable 不用属性默认值：缺一个键整份读不出来（2026-11-05）
 
@@ -84,7 +84,7 @@
 - 正确做法：用户数据文件的结构体手写 `init(from:)`，逐个字段 `decodeIfPresent ?? 默认值`；字典里逐条宽松解码（坏一条丢一条，见 `Weekly.swift` 的 `Lenient`）；整份读不出来时先改名留底再写。
 - 证据：`tests/DiskSlimCoreTests/AlertsAdversarialTests.swift` 里 `autoClean字段缺失_…`、`sent字段缺失_…`、`某个开关缺失_…`、`某个下周再问的日期坏了_…`、`缺snoozed字段_…`，修复前失败、修复后通过。
 - 升级：〔提醒〕部分升级（已写测试 `AlertsAdversarialTests`，未接进必经检查；已批：积压清单组 11，已并入全局 G-39）。原记录：未升级。换个项目也成立，提议提升为全局 G-xx，等用户批准。
-- 提升：已提升为全局 G-39（2026-11-19，agent-kit 第二批）。
+- 提升：已提升为全局 G-39（2026-11-19，agent-kit#83）。
 
 ## L-09 安装脚本认不出自己的进程：`ps` 在 C 区域设置下把路径里的中文转义成 `M-dM-8…`（2026-11-05）
 
@@ -94,7 +94,7 @@
 - 补充（全面审查 B1）：Swift 里起子进程同样要设。菜单栏应用从访达 / 登录项启动时环境里根本没有 LANG / LC_*，`ProcessRunner` 跑 `ps` 也会转义，导致「有进程在用这个构建产物」永远认不出；已在 `ProcessRunner` 里统一设 `LC_ALL=en_US.UTF-8`，测试 `FullReviewTests` 覆盖。
 - 证据：`evidence/2026-11-05-install.txt`（两份并存）、`evidence/2026-11-05-install-2.txt`（修复后只剩新装的一份）。
 - 升级：〔提醒〕部分升级（已写测试 `FullReviewProcessTests` 的 `没有区域设置时_正在使用的构建产物不该被删`，只管 `ProcessRunner`，`scripts/install.sh` 没有测试；未接进必经检查；已批：积压清单组 10，已并入全局 G-38）。原记录：未升级。路径带中文的项目都会踩，提议提升为全局 G-xx，等用户批准。
-- 提升：已提升为全局 G-38（2026-11-19，agent-kit 第二批）。
+- 提升：已提升为全局 G-38（2026-11-19，agent-kit#83）。
 
 ## L-10 安全门只管「要清的路径」，工具自己新加的工作目录（暂存目录）漏了符号链接检查（2026-11-05）
 
@@ -103,7 +103,7 @@
 - 正确做法：工具自己会删东西的任何目录，同样要 `lstat` 确认它和上一层不是符号链接、确实是目录；补删只删自己放进去的（名字是 UUID、放了一小时以上）；挪动只用 `rename(2)`，跨卷（EXDEV）不复制，改为原地删。
 - 证据：`tests/DiskSlimCoreTests/Batch7ReviewTests.swift` 的 `暂存目录是符号链接时_…`，修复前失败、修复后通过；审查员沙盒演练 `evidence/review-batch7-20261105/clean-symlink-staging.txt`。
 - 升级：〔提醒〕部分升级（已写测试 `Batch7ReviewTests` 的 `暂存目录是符号链接时_…`，未接进必经检查；已批：积压清单组 14，已提升为全局 G-41）。原记录：未升级。「新加的删除路径也要过安全门」换个项目也成立，提议提升为全局 G-xx，等用户批准。
-- 提升：已提升为全局 G-41（2026-11-19，agent-kit 第二批）。
+- 提升：已提升为全局 G-41（2026-11-19，agent-kit#83）。
 
 ## L-11 用 computer-use 点自绘的悬浮球，结果不能当真（2026-11-06）
 
@@ -112,7 +112,7 @@
 - 正确做法：测自绘的点击、拖动控件和焦点时，先退出全屏控制，用 CGEvent 往 `.cghidEventTap` 发按下、拖动、松开和按键（脚本见 `evidence/2026-11-06-floating-ball-realscreen/click.swift`）；窗口位置和是否在屏上用 `CGWindowListCopyWindowInfo` 回读，前台应用用 `lsappinfo front` 回读，不靠截图判断状态；截图只留作证据。
 - 证据：`evidence/2026-11-06-floating-ball-realscreen/`（截图与脚本）；CURRENT.md 第 8 批「真屏实测」一条。
 - 升级：〔提醒〕未升级（已批：积压清单组 9，与驿窗 L-09、L-11 合并提升为全局 G-37）。原记录：未升级。「computer-use 的点击不能代表真实鼠标」换个项目也成立，提议提升为全局 G-xx，等用户批准。
-- 提升：已提升为全局 G-37（2026-11-19，agent-kit 第二批）。
+- 提升：已提升为全局 G-37（2026-11-19，agent-kit#83）。
 
 ## L-12 SwiftUI 细线图标按钮点不中、菜单栏弹窗不能直接关窗口（2026-11-18）
 
@@ -121,7 +121,7 @@
 - 正确做法：细线、小图标做按钮时给 label 加 `.frame(...)` 和 `.contentShape(Rectangle())`；菜单栏弹窗里要收起就用 `@Environment(\.dismiss)`，不要自己关窗口；真屏点击前先截图定位目标（`evidence/2026-11-18-minimize/findmin.py`），点之前再确认窗口还在屏上，否则会点到用户屏幕上别的窗口。
 - 证据：`evidence/2026-11-18-minimize/`（`final-realscreen.txt`、`diag-log.txt` 诊断日志、截图与脚本）；CURRENT.md「面板顶栏加缩小键」一节。
 - 升级：〔提醒〕未升级（已批：积压清单组 9，第③点并入全局 G-37；①② 是 SwiftUI 专属，不提升）。原记录：未升级。「细线图标按钮要放大点击区」「MenuBarExtra 用 dismiss 收起」换个 SwiftUI 项目也成立，提议提升为全局 G-xx，等用户批准。
-- 提升：已提升为全局 G-37（2026-11-19，agent-kit 第二批）：只提升第③点。
+- 提升：已提升为全局 G-37（2026-11-19，agent-kit#83）：只提升第③点。
 
 ## L-13 内存页离屏截图整张发灰；读进程环境变量会看到登录凭据；闲着的 Claude 会话也一直用 CPU（2026-11-18）
 
@@ -129,8 +129,8 @@
 - 根因：① 系统给的应用图标（`NSWorkspace.icon(forFile:)`）不论直接交给 `Image(nsImage:)` 还是先 `cgImage(forProposedRect:)` 再画，`ImageRenderer` 出来的整张图都变灰；关掉图标对照（`DS_NOICON`）就正常，推断是图标位图的色彩空间带歪了整张渲染（未查到文档）。② 桌面版把登录令牌放在子进程环境变量里。③ 会话进程空闲时也有固定的后台开销（约 2%）。
 - 正确做法：① 图标先画进自己建的 sRGB 位图（`CGContext` + `NSGraphicsContext`）再用，见 `MemoryViews.swift` 的 `AppIcon.bitmap`。② 不读别的进程的环境变量；要对应会话只用命令行参数或桌面版自己的会话记录，而且这两样也对不准（一半会话命令行里没有编号，有编号的常指向父会话），本应用最终不做对应。③ 忙闲按整棵进程树每 5 分钟采样、CPU 用到 5% 以上才算忙，12 小时没忙算闲（`MemoryRecord.sample`）。
 - 证据：`evidence/2026-11-18-memory/`（`snap1`～`snap3`、`snap-noicon` 对照截图；`cc-cpu-1.txt`、`cc-cpu-2.txt` 两次 CPU 时间）。
-- 升级：〔提醒〕未升级（已批：积压清单组 14，第②点提升为全局 G-42，agent-kit 第二批另在 Bash 预检里拦读别的进程环境变量的命令；①③ 不提升）。原记录：未升级。① 换个 SwiftUI 项目也成立，提议提升为全局 G-xx，等用户批准。
-- 提升：已提升为全局 G-42（2026-11-19，agent-kit 第二批）：只提升第②点。
+- 升级：〔提醒〕未升级（已批：积压清单组 14，第②点提升为全局 G-42，agent-kit#83另在 Bash 预检里拦读别的进程环境变量的命令；①③ 不提升）。原记录：未升级。① 换个 SwiftUI 项目也成立，提议提升为全局 G-xx，等用户批准。
+- 提升：已提升为全局 G-42（2026-11-19，agent-kit#83）：只提升第②点。
 
 
 ## L-14 固定高度的面板里，中间区域被内容撑破，顶栏和页脚被挤出去（2026-11-18）
