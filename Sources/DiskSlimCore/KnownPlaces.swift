@@ -52,14 +52,16 @@ public enum KnownPlaces {
               cleanup: .remove, detail: "下次安装时会重新下载", busyWhen: ["Homebrew/brew.rb"]),
         Place("包管理器缓存", "pip 缓存", ["Library/Caches/pip"], risk: .safe, suggested: true,
               cleanup: .command(["pip3", "cache", "purge"]), detail: "下次安装时会重新下载"),
-        Place("测试用浏览器", "Playwright 浏览器", ["Library/Caches/ms-playwright"], risk: .safe, suggested: true,
-              cleanup: .remove, detail: "下次跑测试时会自动重新下载"),
         Place("测试用浏览器", "Puppeteer 浏览器", [".cache/puppeteer"], risk: .safe, suggested: true,
               cleanup: .remove, detail: "下次跑测试时会自动重新下载"),
 
         // 需确认：不默认勾选
         Place("包管理器缓存", "npx 运行过的工具", [".npm/_npx"], risk: .confirm, cleanup: .trash,
               detail: "下次运行会重新下载；有些 MCP 服务正靠它运行，先关掉 Claude、Codex 再清"),
+        // 驿窗、剪藏插件的扩展测试靠它跑；Playwright 1.64 跑测试、装依赖都不会自动补下载，删了测试直接全挂
+        // （11-17、11-18 删过 3 次，驿窗 L-16、剪藏插件 L-16），所以不默认勾选、不进自动清理（2026-11-19 常浩批）
+        Place("测试用浏览器", "Playwright 浏览器", ["Library/Caches/ms-playwright"], risk: .confirm, cleanup: .remove,
+              detail: "驿窗、剪藏插件的扩展测试要用；删了测试直接失败，不会自动重新下载，要在项目里手动 playwright install 装回"),
         Place("备份快照", "Codex 备份", [".codex/recovery"], risk: .confirm,
               cleanup: .trash, detail: "你自己做的备份", perChild: true, keepNewest: true),
         Place("虚拟机", "Colima 虚拟机", [".colima"], risk: .confirm,
