@@ -49,9 +49,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     func sendExamples() {
         guard available else { print("要用打包版运行：dist/DiskSlim.app/Contents/MacOS/DiskSlimApp --test-notify"); return }
         let examples: [(String, String)] = [
-            ("【示例】磁盘只剩 28.4 GB", "低于 30 GB 了。点菜单栏的磁盘瘦身看看能清什么。（这是测试通知）"),
-            ("【示例】postpane · worktree 构建产物 一天涨了 12.3 GB", "点菜单栏的磁盘瘦身 › 涨幅，看看是谁。（这是测试通知）"),
-            ("【示例】本周瘦身：4 件待决定", "一共能腾出 3.2 GB。点菜单栏的磁盘瘦身，逐件决定。（这是测试通知）"),
+            ("【示例】磁盘只剩 28.4 GB", "低于 30 GB 了。点侧边的扫帚浮游兽，看看能清什么。（这是测试通知）"),
+            ("【示例】postpane · worktree 构建产物 一天涨了 12.3 GB", "点侧边的扫帚浮游兽 › 涨幅，看看是谁。（这是测试通知）"),
+            ("【示例】本周瘦身：4 件待决定", "一共能腾出 3.2 GB。点侧边的扫帚浮游兽，逐件决定。（这是测试通知）"),
             ("【示例】自动清理腾出了 1.4 GB", "清了 3 项缓存。（这是测试通知，没有清理任何东西）"),
         ]
         let done = DispatchSemaphore(value: 0)

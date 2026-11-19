@@ -3,7 +3,7 @@ import Combine
 import DiskSlimCore
 import SwiftUI
 
-/// 第 8 批：桌面悬浮球。贴在屏幕左右边上，点一下在旁边打开和菜单栏同一个面板（同一个 Store）。
+/// 第 8 批：桌面悬浮球。贴在屏幕左右边上，点一下在旁边打开和驿窗挂件同一个面板（同一个 Store）。
 /// 做法照随手记的悬浮球（digiworld/desktop/floating-notes）：无边框浮动小窗、拖完贴边、按显示器记位置。
 @MainActor
 final class FloatingBall: NSObject {
@@ -29,7 +29,7 @@ final class FloatingBall: NSObject {
 
     var panelOpen: Bool { panel?.isVisible == true }
 
-    /// 应用启动后调一次（菜单栏图标的 .task 里）。开关和可用空间变了自动跟着变
+    /// 应用启动后调一次（AppDelegate 启动完时）。开关和可用空间变了自动跟着变
     func start(store: Store) {
         guard self.store == nil else { return }
         self.store = store
@@ -146,7 +146,7 @@ final class FloatingBall: NSObject {
         guard let store, anchor != nil || ballWindow != nil else { return }
         self.anchor = anchor
         if panel == nil { makePanel(store) }
-        // 和菜单栏面板打开时一样：回首页、收起确认框、结果旧了就重扫
+        // 每次打开：回首页、收起确认框、结果旧了就重扫
         store.page = .home
         store.drawer = nil
         store.confirming = nil
@@ -160,12 +160,6 @@ final class FloatingBall: NSObject {
         ballView?.expanded = anchor == nil
         installMonitors()
         store.panelOpen = true
-    }
-
-    /// 面板顶栏的缩小键：在悬浮面板（挂件或球叫开的）里点的就照常收起；在菜单栏弹出的那个里点的交给 SwiftUI 的 dismiss。
-    /// 菜单栏那个不能直接关窗口：系统以为它还开着，下次点图标第一下打不开（2026-11-18 真屏实测）
-    func collapse(_ window: NSWindow?, dismissMenu: () -> Void) {
-        if let window, window === panel { closePanel() } else { dismissMenu() }
     }
 
     func closePanel(byOutsideClick: Bool = false) {
@@ -192,7 +186,7 @@ final class FloatingBall: NSObject {
         // 只有浅色一种外观（2026-11-18 常浩定）：系统切深色也不跟
         p.appearance = NSAppearance(named: .aqua)
         p.onCancel = { [weak self] in self?.closePanel() }
-        // 和菜单栏弹出面板一样的半透明底、圆角
+        // 半透明底、圆角（和系统弹出面板一样）
         let fx = NSVisualEffectView(frame: p.contentLayoutRect)
         fx.material = .popover
         fx.blendingMode = .behindWindow

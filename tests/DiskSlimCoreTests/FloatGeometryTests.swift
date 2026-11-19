@@ -74,7 +74,7 @@ import Testing
         #expect(FloatGeometry.panel(size: CGSize(width: 368, height: 400), ball: b, screen: s).maxY == b.maxY)
     }
 
-    @Test func 空间三档和菜单栏同阈值() {
+    @Test func 空间三档和驿窗号码牌同阈值() {
         let gb: Int64 = 1_073_741_824
         #expect(SpaceLevel(freeBytes: nil) == .ok)
         #expect(SpaceLevel(freeBytes: 60 * gb) == .ok)

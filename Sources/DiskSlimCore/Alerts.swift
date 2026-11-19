@@ -105,7 +105,7 @@ public enum Alerts {
 
         if s.lowSpace, let free, free < lowSpaceBytes, state.sent["lowSpace"] != today {
             list.append(Alert(key: "lowSpace", day: today, title: "磁盘只剩 \(formatBytes(free))",
-                              body: "低于 30 GB 了。点菜单栏的磁盘瘦身看看能清什么。"))
+                              body: "低于 30 GB 了。点侧边的扫帚浮游兽，看看能清什么。"))
         }
 
         // 今天的记录和昨天的比；位置变化超过 10 GB 才提醒。「其他」不是被跟踪的位置；
@@ -117,7 +117,7 @@ public enum Alerts {
                 let key = "growth|" + c.name
                 if state.sent[key] == today { continue }
                 list.append(Alert(key: key, day: today, title: "\(c.name) 一天涨了 \(formatBytes(c.delta))",
-                                  body: "点菜单栏的磁盘瘦身 › 涨幅，看看是谁。"))
+                                  body: "点侧边的扫帚浮游兽 › 涨幅，看看是谁。"))
             }
         }
 

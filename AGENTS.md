@@ -1,6 +1,6 @@
 # 磁盘瘦身（disk-slim） 协作约定（Codex / Claude 必读）
 
-macOS 菜单栏小工具，帮常浩批量清理下载文件夹和看不见的缓存、构建产物，并在空间变少或突然暴涨时提醒；第 11 批起也看内存，替他挑出闲着又占内存的程序一键退出。进入顺序：本文件 → [CURRENT.md](CURRENT.md)（当前状态与唯一下一步）。需求以 [docs/PRD.md](docs/PRD.md) 为准。所有面向用户的文字用简体中文。本文件只放怎么开始和做什么事之前读哪份；操作细节在 [docs/OPERATIONS.md](docs/OPERATIONS.md)，按需读对应一节。
+macOS 小工具（2026-11-19 起不在菜单栏显示，入口是驿窗侧栏的扫帚浮游兽挂件），帮常浩批量清理下载文件夹和看不见的缓存、构建产物，并在空间变少或突然暴涨时提醒；第 11 批起也看内存，替他挑出闲着又占内存的程序一键退出。进入顺序：本文件 → [CURRENT.md](CURRENT.md)（当前状态与唯一下一步）。需求以 [docs/PRD.md](docs/PRD.md) 为准。所有面向用户的文字用简体中文。本文件只放怎么开始和做什么事之前读哪份；操作细节在 [docs/OPERATIONS.md](docs/OPERATIONS.md)，按需读对应一节。
 
 ## 做什么事之前读哪份
 
@@ -37,7 +37,7 @@ swift build -c release                       # 编译
 .build/release/diskslim growth               # 最近 7 天可用空间和谁涨了多少；只读每日记录 usage.json，不扫描
 .build/release/diskslim memory               # 内存压力、谁占着、替你判断的三段；只读，不退出任何程序
 # 自测一律用沙盒：加 --home <沙盒>/home --work <沙盒>/home/work，沙盒放在证据目录下
-scripts/bundle.sh                            # 打包菜单栏应用到 dist/DiskSlim.app（本机签名，不安装、不启动）
+scripts/bundle.sh                            # 打包应用到 dist/DiskSlim.app（本机签名，不安装、不启动）
 scripts/install.sh                           # 打包并装到 /Applications/DiskSlim.app 后启动；先复制后替换、失败回滚；应用正在清理时不替换
 .build/debug/DiskSlimApp --snapshot <目录>    # 用真实扫描离屏渲染各页面 PNG（只有浅色），只读，不清理
 dist/DiskSlim.app/Contents/MacOS/DiskSlimApp --test-notify   # 用示例数据把每种提醒各发一条系统通知，标题带「示例」；只发通知，不扫描、不清理
@@ -51,14 +51,14 @@ dist/DiskSlim.app/Contents/MacOS/DiskSlimApp --test-notify   # 用示例数据�
 AGENTS.md            入口（本文件）
 CURRENT.md           当前状态与唯一下一步；每轮交接写在顶部
 docs/PRD.md          需求（含调研结论、规则、分批计划）
-Package.swift        SwiftPM：DiskSlimCore（规则与模型）、diskslim（命令行）、DiskSlimApp（菜单栏应用）、DiskSlimCoreTests
+Package.swift        SwiftPM：DiskSlimCore（规则与模型）、diskslim（命令行）、DiskSlimApp（桌面应用）、DiskSlimCoreTests
 Sources/
   DiskSlimCore/      Model（Finding、风险等级、清理方式）、System（元数据、大小、命令、格式）、
                      DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、History（按上次实际释放校正清理命令）、Usage（每日记录、7 天曲线、谁涨了多少）、Alerts（提醒开关与规则、自动清理挑项）、Weekly（每周卡片只问「要你说一句」、保留 / 下周再问）、Scan（总入口、执行前复核）、
                      SafetyGuard（执行前重新核对路径和命令的白名单）、Cleaner（执行、操作记录、撤销）、FloatGeometry（悬浮球与面板位置、空间三档）、Pendant（给驿窗挂件的状态文件、diskslim:// 链接解析、点挂件防抖）、
                      Memory（读内存压力、交换、进程，按应用和 Claude Code 会话合计）、MemoryPlan（内存三段规则、memory.json、动手前核对）、RunningApps（读运行中的普通应用）
   DiskSlimCLI/       命令行 `diskslim`（scan / clean / undo）
-  DiskSlimApp/       菜单栏应用：Store（扫描、勾选、清理、撤销、提醒、自动清理）、Views（首页「替你判断」：雾光顶卡 + 替你挑好的 / 要你说一句 / 先不动；下钻页、涨幅页、提醒设置、确认、提示）、Notifier（系统通知，只在打包版）、Snapshot（离屏截图）、FloatingBall（桌面悬浮球：贴边小窗、点开面板、拖动贴边）、
+  DiskSlimApp/       桌面应用（AppKit 启动，没有 SwiftUI 场景，L-15）：Store（扫描、勾选、清理、撤销、提醒、自动清理）、Views（首页「替你判断」：雾光顶卡 + 替你挑好的 / 要你说一句 / 先不动；下钻页、涨幅页、提醒设置、确认、提示）、Notifier（系统通知，只在打包版）、Snapshot（离屏截图）、FloatingBall（桌面悬浮球：贴边小窗、点开面板、拖动贴边）、
                      MemoryStore（内存读数、采样、一键退出、收会话、强制退出、重启提醒）、MemoryViews（「磁盘 | 内存」切换、内存页、强制退出页）
 tests/DiskSlimCoreTests/  各条规则的单元测试（Swift；和 Node 测试同在 tests/）
 assets/floating-ball.png  悬浮球图标（打包时复制成 Contents/Resources/ball.png）

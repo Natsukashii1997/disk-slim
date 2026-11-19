@@ -122,7 +122,7 @@ struct Tone {
         LinearGradient(colors: [hex(0x9B5CF6), hex(0x5B6CF9), hex(0x2F8FE6), hex(0x22B3A6)], startPoint: .leading, endPoint: .trailing)
     }
 
-    /// 可用空间的颜色，和菜单栏图标同一套：低于 30 GB 红，低于 60 GB 橙，60 GB 以上绿
+    /// 可用空间的颜色，和驿窗号码牌同一套：低于 30 GB 红，低于 60 GB 橙，60 GB 以上绿
     func level(_ gb: Double) -> Color { gb < 30 ? red : gb < 60 ? orange : green }
 }
 
@@ -278,31 +278,8 @@ struct Spinning<Content: View>: View {
     }
 }
 
-/// 记下放某个视图的窗口：缩小键要知道自己在悬浮面板里还是菜单栏弹出的窗口里
-final class WindowBox { weak var window: NSWindow? }
-
-struct WindowReader: NSViewRepresentable {
-    let box: WindowBox
-    func makeNSView(context: Context) -> NSView { Reader(box: box) }
-    func updateNSView(_ v: NSView, context: Context) {
-        guard let r = v as? Reader else { return }
-        r.box = box
-        box.window = r.window
-    }
-    private final class Reader: NSView {
-        var box: WindowBox
-        init(box: WindowBox) { self.box = box; super.init(frame: .zero) }
-        required init?(coder: NSCoder) { nil }
-        override func viewDidMoveToWindow() { if let window { box.window = window } }
-    }
-}
-
 struct HomeView: View {
     @EnvironmentObject var store: Store
-    /// 缩小键用：放首页的窗口（不用 @State：本机只有命令行工具，State 宏插件用不了；WindowReader 每次更新把窗口补进新盒子）
-    private let host = WindowBox()
-    /// 菜单栏弹出的面板靠它收起
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         let t = Tone()
@@ -333,10 +310,9 @@ struct HomeView: View {
                 Spinning(on: store.tab == .memory ? store.memReading : store.scanning) { Image(systemName: "arrow.clockwise") }
             }
                 .buttonStyle(TopBarButton()).help(store.tab == .memory ? "重新看一遍" : "重新扫描")
-            // 缩小键（2026-11-18 常浩选甲「同款线条」，预览 docs/design/ui-v7-minimize.html）：收回挂件、悬浮球或菜单栏图标
-            Button { FloatingBall.shared.collapse(host.window) { dismiss() } } label: { Image(systemName: "minus") }
+            // 缩小键（2026-11-18 常浩选甲「同款线条」，预览 docs/design/ui-v7-minimize.html）：收回挂件或悬浮球
+            Button { FloatingBall.shared.closePanel() } label: { Image(systemName: "minus") }
                 .buttonStyle(TopBarButton()).help("缩小")
-                .background { if !isSnapshot { WindowReader(box: host) } }
         }
         .font(.system(size: 11.5)).foregroundStyle(.secondary)
         .padding(.horizontal, 4)
@@ -1169,18 +1145,18 @@ struct AlertsPage: View {
                     .padding(.horizontal, 16).padding(.bottom, 4)
             }
             Scroller(inset: 0) {
-                info("可用低于 60 GB 图标变橙、低于 30 GB 变红", free)
+                info("可用低于 60 GB 变橙、低于 30 GB 变红", free)
                 toggle(\.lowSpace, s.lowSpace, "可用低于 30 GB 时发通知", "一天最多一次")
                 toggle(\.growth, s.growth, "某个位置一天涨超过 10 GB 时发通知", "比如某个项目一天多开了几个 worktree")
                 toggle(\.weekly, s.weekly, "每周五 18:00 发周报", "有待决定的事才发；那时没开着应用，之后打开会补发")
                 toggle(\.autoClean, s.autoClean, "自动清理缓存和构建产物",
                        "默认关。打开后只在可用低于 60 GB 时、每天最多一次，只清「缓存与构建产物」里默认勾选的项，下载文件夹不动。运行清理命令和直接删除的不能撤销。")
                 switchRow(store.floatingBallOn, "显示桌面悬浮球",
-                          "贴在屏幕边上，点一下打开这个面板；拖到左边或右边会自动贴边。可用低于 60 GB 时左上角亮橙点，低于 30 GB 亮红点。关掉后从菜单栏图标还能打开") {
+                          "贴在屏幕边上，点一下打开这个面板；拖到左边或右边会自动贴边。可用低于 60 GB 时左上角亮橙点，低于 30 GB 亮红点。关掉后从驿窗侧栏的扫帚浮游兽打开") {
                     store.floatingBallOn.toggle()
                 }
                 switchRow(store.loginItemOn, "开机自动打开",
-                          store.loginItemError ?? (store.installedInApplications ? "登录后自动出现在菜单栏" : "装进「应用程序」后才能打开（运行 scripts/install.sh）"),
+                          store.loginItemError ?? (store.installedInApplications ? "登录后自动在后台运行，从驿窗侧栏打开" : "装进「应用程序」后才能打开（运行 scripts/install.sh）"),
                           enabled: store.installedInApplications) { store.setLoginItem(!store.loginItemOn) }
             }
             .padding(.horizontal, 10).padding(.bottom, 12)

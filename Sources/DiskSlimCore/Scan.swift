@@ -52,7 +52,7 @@ public struct Scan {
         return nil
     }
 
-    /// 命令行和菜单栏应用共用的清理器。`sandbox` 为 true 时不运行清理命令（它们作用在真实电脑上）。
+    /// 命令行和桌面应用共用的清理器。`sandbox` 为 true 时不运行清理命令（它们作用在真实电脑上）。
     public func cleaner(sandbox: Bool = false) -> Cleaner {
         Cleaner(safety: SafetyGuard(home: home, workRoot: workRoot), runner: runner, log: .standard(home: home),
                 recheck: { self.recheck($0) }, allowCommands: !sandbox)

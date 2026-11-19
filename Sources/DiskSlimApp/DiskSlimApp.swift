@@ -4,38 +4,29 @@ import SwiftUI
 
 let isTestNotify = CommandLine.arguments.contains("--test-notify")
 
+/// 2026-11-19 常浩定：不要菜单栏图标，入口只留驿窗侧栏的扫帚浮游兽挂件（和默认关着的桌面悬浮球）。
+/// 不用 SwiftUI 的 App：它至少要一个场景，放个空的设置场景占位，启动时会自己弹出一个透明的「Settings」窗口挡在屏幕中间（2026-11-19 真屏实测）
 @main
-struct DiskSlimApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    @StateObject private var store = Store(readOnly: isTestNotify)
+enum DiskSlimMain {
+    /// NSApplication 只弱引用 delegate，这里留住
+    private static let delegate = AppDelegate()
 
-    init() {
+    @MainActor static func main() {
+        let app = NSApplication.shared
         // 自测用：离屏把每个页面渲染成 PNG，然后退出，不弹任何窗口
         if let i = CommandLine.arguments.firstIndex(of: "--snapshot"), i + 1 < CommandLine.arguments.count {
             Snapshot.run(to: URL(fileURLWithPath: CommandLine.arguments[i + 1]))
             exit(0)
         }
-    }
-
-    var body: some Scene {
-        MenuBarExtra {
-            PanelView()
-                .environmentObject(store)
-                .onAppear { store.page = .home; store.drawer = nil; store.confirming = nil; store.tab = .disk; store.memDrawer = nil; store.scanIfStale(); store.refreshMemory() }
-        } label: {
-            MenuBarLabel(disk: store.disk)
-                .task {
-                    // 桌面悬浮球（第 8 批）：示例通知自测时不出现
-                    if !isTestNotify { FloatingBall.shared.start(store: store) }
-                    await store.dailyLoop()
-                }
-        }
-        .menuBarExtraStyle(.window)
+        app.delegate = delegate
+        app.run()
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var termSource: DispatchSourceSignal?
+    /// 应用唯一的数据（面板、悬浮球、驿窗挂件共用）。启动完才建：离屏截图在 App.init 里就退出了，不该碰真实记录
+    private var store: Store?
 
     /// 正在清理时不退出：操作记录要等整批做完才写，半途退出会丢掉撤销记录
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -70,30 +61,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 不在程序坞显示（打包后 Info.plist 的 LSUIElement 也会保证这一点）
         NSApp.setActivationPolicy(.accessory)
         // 自测用：用示例数据把每种提醒各发一条系统通知，然后退出（要用打包版运行）。
-        // 放在应用启动后、后台线程里等授权，不卡主线程；这时 Store 是只读的，不扫描、不写记录
+        // 放在应用启动后、后台线程里等授权，不卡主线程；不建 Store，不扫描、不写记录
         if isTestNotify {
             DispatchQueue.global().async {
                 Notifier.shared.sendExamples()
                 DispatchQueue.main.async { exit(0) }
             }
+            return
         }
-    }
-}
-
-/// 菜单栏上的图标和剩余 GB。低于 60 GB 换成提醒图标，低于 30 GB 换成警告图标。
-struct MenuBarLabel: View {
-    let disk: DiskStatus?
-
-    var body: some View {
-        let gb = disk.map { Double($0.availableBytes) / 1_073_741_824 }
-        HStack(spacing: 3) {
-            Image(systemName: icon(gb))
-            Text(gb.map { "\(Int($0))G" } ?? "—").monospacedDigit()
+        MainActor.assumeIsolated {
+            let store = Store(readOnly: false)
+            self.store = store
+            // 桌面悬浮球（第 8 批）和驿窗挂件叫开的面板都挂在这里；链接比这里先到时由 FloatingBall 先记下
+            FloatingBall.shared.start(store: store)
+            Task { @MainActor in await store.dailyLoop() }
         }
-    }
-
-    private func icon(_ gb: Double?) -> String {
-        guard let gb else { return "internaldrive" }
-        return gb < 30 ? "exclamationmark.triangle.fill" : gb < 60 ? "exclamationmark.circle" : "internaldrive"
     }
 }
