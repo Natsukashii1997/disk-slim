@@ -107,7 +107,7 @@ case "growth":
     let days = Usage.daily(log.load(readOnly: true), now: Date())
     if days.isEmpty {
         let exists = FileManager.default.fileExists(atPath: log.url.path)
-        print(exists ? "记录文件读不出来或最近 7 天没有记录：\(log.url.path)" : "还没有记录。菜单栏应用每次扫描完会记一次，每天至少一次。")
+        print(exists ? "记录文件读不出来或最近 7 天没有记录：\(log.url.path)" : "还没有记录。磁盘瘦身应用每次扫描完会记一次，每天至少一次。")
         break
     }
     print("最近 7 天可用空间（每天最后一份记录，北京时间）：")
@@ -130,7 +130,7 @@ case "growth":
     print("\n本命令只读记录，不扫描、不删除。")
 
 case "memory":
-    // 「最后使用」只有菜单栏应用常驻时才记得到；这里只读 memory.json，不写
+    // 「最后使用」只有磁盘瘦身应用常驻时才记得到；这里只读 memory.json，不写
     let record = MemoryLog.standard(home: home).load(now: Date(), readOnly: true)
     let status = readMemoryStatus()
     let usage = MemoryAttribution.usage(listProcesses(), apps: RunningApps.current())

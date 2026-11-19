@@ -132,6 +132,14 @@
 - 证据：`evidence/2026-11-18-fixed-size/snap1`（撑破）、`snap2`（修后 27 张面板截图都是 1620 像素高）。
 - 升级：〔提醒〕未升级（待批：积压清单组 16，建议保持提醒、不提升）。原记录：未升级。换个 SwiftUI 项目也成立，提议提升为全局 G-xx，等用户批准。
 
+## L-15 SwiftUI 应用拿空的设置场景占位，启动时自己弹出一个透明窗口挡在屏幕中间（2026-11-19）
+
+- 现象：去掉 `MenuBarExtra` 后，SwiftUI 的 `App` 至少要一个场景，放了 `Settings { EmptyView() }` 占位。装机后多出一个「磁盘瘦身 Settings」窗口（900×450，第 0 层，在屏幕上），内容是空的、截图看不见，但它确实盖在屏幕中间。
+- 根因：只剩设置场景时，SwiftUI 启动会把它当主窗口打开；`LSUIElement` 和 `.accessory` 只管不进程序坞，不拦窗口。
+- 正确做法：应用不需要 SwiftUI 场景时（只有自己管的 NSPanel、悬浮窗），不用 `App`，改成 `@main enum` + `NSApplication.shared.run()`，`AppDelegate` 用静态常量留住（`NSApplication.delegate` 是弱引用）。验收时按进程号列它的全部窗口（`CGWindowListCopyWindowInfo` 加 `.optionAll`），不只看截图。
+- 证据：`evidence/2026-11-19-no-menubar/winfo.swift` 的输出（修前有「磁盘瘦身 Settings」窗口，修后刚启动时一个窗口都没有）。
+- 升级：〔提醒〕未升级。换个 SwiftUI 项目也成立，提议提升为全局 G-xx，等用户批准。
+
 ---
 
 格式：

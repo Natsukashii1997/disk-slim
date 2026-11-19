@@ -2,7 +2,30 @@
 
 当前阶段目标：第 6 批试用一周收尾，定下 disk-space-guard 去留，之后转常态维护。（2026-11-08 常浩确认，digital-twin#114）
 
-更新：2026-11-18。第 0–11 批、缩小键、面板尺寸固定和按钮手感都已合回 main（PR #1、#5、#6、#7、#8）。第 11 批「内存」：「磁盘 | 内存」切换、内存页（定稿一二结合）、一键退出、要你说一句（Claude 会话 / 浏览器 / 重启）、强制退出页，已装机。11-18 19:12 交接会话补做了真屏验收：内存页、强制退出页「退出」和「强制退出」点两下都通过；验收中发现面板切到内存页会长出屏幕底边，已修（`FloatingBall.swift`）并重装复验。常浩看过截图说「开 PR」，开了 PR #7，常浩说「合并」后已 squash 合回 main（`e862639`，2026-11-18 20:00）。20:00 后在新分支 `claude/panel-fixed-size` 做了「面板尺寸固定 + 磁盘顶卡谁占着」和「顶栏按钮点击手感」，已随 PR #8 squash 合回 main（`af6f2a2`，2026-11-18 20:58；PR #7 合并后才做，所以单开了 #8）。唯一下一步：第 6 批的「试用一周」收尾、`disk-space-guard` 要不要停，等常浩定。
+更新：2026-11-19。菜单栏图标已去掉（分支 `claude/no-menubar`，未提交，已装机），入口只留驿窗侧栏挂件。之前：2026-11-18。第 0–11 批、缩小键、面板尺寸固定和按钮手感都已合回 main（PR #1、#5、#6、#7、#8）。第 11 批「内存」：「磁盘 | 内存」切换、内存页（定稿一二结合）、一键退出、要你说一句（Claude 会话 / 浏览器 / 重启）、强制退出页，已装机。11-18 19:12 交接会话补做了真屏验收：内存页、强制退出页「退出」和「强制退出」点两下都通过；验收中发现面板切到内存页会长出屏幕底边，已修（`FloatingBall.swift`）并重装复验。常浩看过截图说「开 PR」，开了 PR #7，常浩说「合并」后已 squash 合回 main（`e862639`，2026-11-18 20:00）。20:00 后在新分支 `claude/panel-fixed-size` 做了「面板尺寸固定 + 磁盘顶卡谁占着」和「顶栏按钮点击手感」，已随 PR #8 squash 合回 main（`af6f2a2`，2026-11-18 20:58；PR #7 合并后才做，所以单开了 #8）。唯一下一步：第 6 批的「试用一周」收尾、`disk-space-guard` 要不要停，等常浩定。
+
+## 去掉菜单栏图标，入口只留驿窗侧栏挂件（2026-11-19，Claude，常浩发截图说「取消上面这个，不用呈现，只保留我侧边的按钮一个入口就行」；未提交（分支 `claude/no-menubar`）、已装机、未发布）
+
+- 时间：开工 `2026-11-19 11:45`（按会话记录；写交接时 `date '+%F %H:%M'` 为 12:01）。★ 来由：菜单栏上的「57G」和侧栏挂件重复，常浩只要侧边的扫帚浮游兽一个入口。
+- 改了哪些文件：
+  - `Sources/DiskSlimApp/DiskSlimApp.swift`：去掉 `MenuBarExtra` 和 `MenuBarLabel`；不再用 SwiftUI `App`，改成 `@main enum DiskSlimMain` 直接跑 `NSApplication`（用空设置场景占位会弹出透明的「Settings」窗口，L-15）；`Store`、悬浮球、每日循环改在 `AppDelegate` 启动完时建。
+  - `Sources/DiskSlimApp/FloatingBall.swift`、`Views.swift`：删掉只给菜单栏弹窗用的收起代码（`collapse`、`WindowBox`、`WindowReader`、`dismiss`），缩小键直接 `closePanel()`；提醒设置页三处说明改掉菜单栏说法。
+  - `Sources/DiskSlimCore/Alerts.swift`、`Sources/DiskSlimApp/Notifier.swift`：通知文字「点菜单栏的磁盘瘦身」改成「点侧边的扫帚浮游兽」。
+  - 注释、命令行提示、一个测试名里的「菜单栏」：`FloatGeometry.swift`、`System.swift`、`Scan.swift`、`DiskSlimCLI/main.swift`、`FloatGeometryTests.swift`。
+  - `docs/PRD.md`（第 3 节开头、3.1、3.4、3.5）、`AGENTS.md`、`docs/LESSONS.md`（L-15）、本文件。
+- 测试：`scripts/test.sh` 原样结果 `✔ Test run with 290 tests in 37 suites passed`（`test-2.log`）；`node --test tests/*.test.mjs` 原样结果 `ℹ pass 5` / `ℹ fail 0`；`node scripts/check-rules.mjs` 输出「通用规则检查通过」；`--snapshot` 离屏截图照常出 31 张、退出码 0。
+- 验证（装机后真屏）：
+  - 菜单栏：辅助功能查进程的菜单栏条数，磁盘瘦身为 0（对照：菜单栏有图标的微信是 2）。截图对比不可靠：常浩的菜单栏有收纳工具，装前「57G」被收在「«」里。
+  - 第一次装机发现多了「磁盘瘦身 Settings」透明窗口（900×450），改成 AppKit 启动后重装，刚启动时按进程号列全部窗口为空。
+  - 用挂件发的同一种链接 `diskslim://panel/toggle` 连发 3 次，`status.json` 的 `panelOpen` 按 true → false → true 交替；面板开在 x=70 y=60、368×810，扫描结果正常（`panel-open.png`）。中途两次对不上，是采样那几秒常浩在点别处，面板按「点了外面」收起。
+  - 真实鼠标点顶栏「—」：悬停有淡灰底（`minus-zone.png`），点下 `panelOpen` true → false。
+  - 没在驿窗里亲手点挂件验，只用了它发的同一条链接。
+- 截图：`~/Library/Application Support/disk-slim/evidence/2026-11-19-no-menubar/`。
+- 发布与回读：未发布。`scripts/install.sh` 两次退出码 0（`install-1.log`、`install-2.log`），只有一个进程。签名又变了，「完全磁盘访问权限」要删旧条目再加。
+- 与授权不一致之处、遗留问题、范围外发现：
+  - 驿窗没开、悬浮球又关着时，面板没有入口（以前还能点菜单栏）。没加别的补救入口，等常浩定。
+  - 没有 `docs/DECIDED.md`；菜单栏图标原是 PRD 3.1 定的，这次按常浩本轮点名去掉。
+- 本轮新坑：L-15。
 
 ## 顶栏 ↻ 和 — 加点击手感（2026-11-18，Claude，常浩说「右上角按钮点击要有点击的质感，现在都不知道有没有点」，看过三版预览说「选甲 系统灰底」，之后说「看过了，提交」「开新 PR」「合并」；已随 PR #8 squash 合并（`af6f2a2`）、已装机、未发布）
 

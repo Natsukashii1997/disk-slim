@@ -12,7 +12,7 @@ public struct BallPosition: Codable, Equatable, Sendable {
     }
 }
 
-/// 可用空间的三档：和菜单栏图标同一套阈值（低于 60 GB 提醒，低于 30 GB 警告）
+/// 可用空间的三档：和驿窗号码牌同一套阈值（低于 60 GB 提醒，低于 30 GB 警告）
 public enum SpaceLevel: Sendable {
     case ok, low, critical
 
