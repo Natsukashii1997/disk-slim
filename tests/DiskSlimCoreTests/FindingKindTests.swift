@@ -55,6 +55,9 @@ import Testing
         #expect(friendlyName(f(.hidden, Category.backup, "Codex 备份 · session-20260916-180223")) == "Codex 备份")
         #expect(friendlyName(f(.hidden, Category.packageCache, "npm 缓存")) == "npm 缓存")
         #expect(friendlyName(f(.downloads, Category.installer, "a.dmg")) == "a.dmg")
+        // 只有 Codex 备份那几项才缩成「Codex 备份」。下载文件夹里碰巧叫这个名字的文件照显示真名
+        // （issue #20 之前按标题开头判断，会把它也缩掉；独立审查指出后保留新的判断）
+        #expect(friendlyName(f(.downloads, Category.recentBigDownload, "Codex 备份 · 导出.zip")) == "Codex 备份 · 导出.zip")
     }
 
     @Test func 替你挑好的按用途合并的名字不变() {

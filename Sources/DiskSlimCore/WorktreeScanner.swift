@@ -48,7 +48,7 @@ public struct WorktreeScanner {
                 let landed = landedReason(wt, merged: merged)
                 // 只靠「当前提交已在主分支里」认出来的（可能是刚切出来还没动、或常驻跟着 main 的），静置 24 小时才清
                 if case .inMain? = landed, let last = Self.lastBuilt(target), now.timeIntervalSince(last) < 86_400,
-                   !Self.recentlyBuilt(target, now: now) {
+                   !reasons.contains(Self.recentlyBuiltReason) {
                     reasons.append("刚从主分支切出来或一直跟着主分支，24 小时内编译过")
                 }
                 // 没提交的改动在代码里，不在 target/ 里：不挡清理，只决定能不能进自动清理
@@ -89,6 +89,9 @@ public struct WorktreeScanner {
     }
 
     static let dirtyReason = "有未提交的改动"
+    /// `inUse` 给出的原因之一。扫描里还要按它判断，用的是 `inUse` 当时读到的结果，不再读一次文件系统
+    /// （中间隔着几条 git 命令，再读一次可能刚好赶上开始编译，两次结果对不上）
+    static let recentlyBuiltReason = "2 小时内编译过"
 
     /// 静置窗口：这么久内编译过就不清（第 7 批从 24 小时缩到 2 小时，换来的是下面三道「正在用」的判断）
     public static let quietSeconds: TimeInterval = 2 * 3600
@@ -109,7 +112,7 @@ public struct WorktreeScanner {
         if openPaths.contains(where: { p in prefixes.contains { p == $0 || p.hasPrefix($0 + "/") } }) || busy(wt, processes: processes) {
             reasons.append("有程序在里面运行")
         }
-        if recentlyBuilt(target, now: now) { reasons.append("2 小时内编译过") }
+        if recentlyBuilt(target, now: now) { reasons.append(recentlyBuiltReason) }
         return reasons
     }
 
