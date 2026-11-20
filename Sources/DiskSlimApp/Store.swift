@@ -480,8 +480,8 @@ final class Store: ObservableObject {
         Task.detached {
             let lines = cleaner.undoLast()
             await MainActor.run {
-                let placed = lines.filter { $0.hasPrefix("已放回") }.count
-                let others = lines.filter { !$0.hasPrefix("已放回") }
+                let placed = lines.filter { $0.hasPrefix(Cleaner.restoredPrefix) }.count
+                let others = lines.filter { !$0.hasPrefix(Cleaner.restoredPrefix) }
                 var text = placed > 0 ? "已放回 \(placed) 项" : ""
                 if !others.isEmpty { text += (text.isEmpty ? "" : "；") + others.joined(separator: "；") }
                 self.working = false

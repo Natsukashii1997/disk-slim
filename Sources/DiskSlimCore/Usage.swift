@@ -113,12 +113,8 @@ public enum Usage {
 
     /// 同类的合成一个位置：同一项目的 worktree 构建产物合起来，多份 Codex 备份合起来
     public static func partName(_ f: Finding) -> String {
-        if f.category.contains("构建产物") {
-            // 标题是「项目 · worktree」，项目名里也可能带「 · 」，所以按最后一个切
-            let project = f.title.range(of: " · ", options: .backwards).map { String(f.title[..<$0.lowerBound]) } ?? f.title
-            return "\(project) · worktree 构建产物"
-        }
-        if f.title.hasPrefix("Codex 备份") { return "Codex 备份" }
+        if f.kind == .worktreeBuild { return "\(f.worktreeProject) · worktree 构建产物" }
+        if f.kind == .backup { return "Codex 备份" }
         return f.title
     }
 

@@ -53,7 +53,7 @@ public struct DownloadsScanner {
         let isFile = (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true
 
         if installerExts.contains(url.pathExtension.lowercased()), days(since: added) > rules.installerDays {
-            return finding("安装包", "\(BeijingTime.monthDay(added)) 下载，装完就用不上了", suggested: true)
+            return finding(Category.installer, "\(BeijingTime.monthDay(added)) 下载，装完就用不上了", suggested: true)
         }
 
         // 只认普通文件：名字以 .zip 结尾的文件夹不是压缩包
@@ -61,21 +61,21 @@ public struct DownloadsScanner {
             var isDir: ObjCBool = false
             let sibling = root.appendingPathComponent(stem)
             if FileManager.default.fileExists(atPath: sibling.path, isDirectory: &isDir), isDir.boolValue {
-                return finding("已解压的压缩包", "旁边已有解压好的文件夹「\(stem)」", suggested: true)
+                return finding(Category.extractedArchive, "旁边已有解压好的文件夹「\(stem)」", suggested: true)
             }
         }
 
         if days(since: opened ?? added) > rules.staleDays {
             let detail = opened.map { "上次打开 \(BeijingTime.monthDay($0))" }
                 ?? "\(BeijingTime.monthDay(added)) 下载，没打开过"
-            return finding("久未打开", detail, suggested: false)
+            return finding(Category.staleDownload, detail, suggested: false)
         }
 
         if days(since: added) <= rules.recentDays {
             let bytes = allocatedSize(url)
             if bytes > rules.bigBytes {
                 // PRD 4.1：只提示，不能勾选；要删请自己判断
-                return finding("最近下载的大文件", "\(BeijingTime.monthDay(added)) 下载，只提示，要删请自己判断",
+                return finding(Category.recentBigDownload, "\(BeijingTime.monthDay(added)) 下载，只提示，要删请自己判断",
                                suggested: false, bytes: bytes, cleanup: .none)
             }
         }

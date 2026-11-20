@@ -171,32 +171,6 @@ func splitBytes(_ bytes: Int64) -> (String, String) {
     return (String(s[..<space]), String(s[s.index(after: space)...]))
 }
 
-/// 首页列表里给人看的名字：worktree 编译文件写成「AI 编译文件 · 项目」
-func friendlyName(_ f: Finding) -> String {
-    if f.category.contains("构建产物") {
-        let project = f.title.range(of: " · ", options: .backwards).map { String(f.title[..<$0.lowerBound]) } ?? f.title
-        return "AI 编译文件 · \(project)"
-    }
-    // 备份文件夹名很长，日期已经写在说明里
-    if f.title.hasPrefix("Codex 备份 · ") { return "Codex 备份" }
-    return f.title
-}
-
-/// 「替你挑好的」按用途合并成几行
-func pickedLabel(_ f: Finding) -> String {
-    if f.area == .downloads {
-        switch f.category {
-        case "安装包": return "下载里装好的安装包"
-        case "已解压的压缩包": return "下载里解压过的压缩包"
-        default: return "下载里的\(f.category)"
-        }
-    }
-    if f.category.contains("构建产物") { return "AI 写代码编出来的文件" }
-    if f.category == "备份快照" { return "Codex 旧备份" }
-    if f.category == "包管理器缓存" { return "下载缓存" }
-    return f.category
-}
-
 /// 磁盘顶卡「谁占着」的一行
 struct DiskTopItem {
     let label: String
@@ -212,16 +186,15 @@ func diskTop(_ r: ScanReport, limit: Int = 5) -> [DiskTopItem] {
     }
     for f in r.findings where f.area == .hidden {
         if f.risk == .readOnly { add("对话记录", "bubble.left.and.bubble.right", f.bytes); continue }
-        let label = pickedLabel(f)
-        let symbol = switch label {
-        case "AI 写代码编出来的文件": "hammer"
-        case "虚拟机": "desktopcomputer"
-        case "Codex 旧备份": "clock.arrow.circlepath"
-        case "下载缓存": "shippingbox"
-        case "测试用浏览器": "globe"
+        let symbol = switch f.kind {
+        case .worktreeBuild: "hammer"
+        case .vm: "desktopcomputer"
+        case .backup: "clock.arrow.circlepath"
+        case .packageCache: "shippingbox"
+        case .testBrowser: "globe"
         default: "folder"
         }
-        add(label, symbol, f.bytes)
+        add(pickedLabel(f), symbol, f.bytes)
     }
     let downloads = r.downloadsBytes ?? r.findings.filter { $0.area == .downloads }.reduce(0) { $0 + $1.bytes }
     if downloads > 0 { add("下载文件夹", "arrow.down.circle", downloads) }

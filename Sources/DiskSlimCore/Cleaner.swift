@@ -267,6 +267,9 @@ public struct Cleaner {
         }
     }
 
+    /// 撤销结果里「放回成功」那几行的开头；应用靠它数放回了几项
+    public static let restoredPrefix = "已放回"
+
     /// 还有没有能放回的（应用里常驻「撤销上一次」用）
     public func canUndo() -> Bool { log.load(readOnly: true).contains { !$0.undone && !$0.pending.isEmpty } }
 
@@ -302,7 +305,7 @@ public struct Cleaner {
                 do {
                     try fm.createDirectory(at: URL(fileURLWithPath: orig).deletingLastPathComponent(), withIntermediateDirectories: true)
                     try fm.moveItem(atPath: inTrash, toPath: orig)
-                    lines.append("已放回：\(name)")
+                    lines.append("\(Self.restoredPrefix)：\(name)")
                     restored.append(orig)
                 } catch {
                     lines.append("没有放回：\(name)（\(error.localizedDescription)）")

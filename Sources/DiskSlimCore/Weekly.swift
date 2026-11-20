@@ -33,9 +33,9 @@ public enum Weekly {
 
     /// 每张卡为什么能删（下载分组）
     static let downloadsWhy: [String: String] = [
-        "安装包": "装好之后安装包就没用了，要重装再去官网下。",
-        "已解压的压缩包": "旁边已经有解压好的文件夹，压缩包留着是重复占空间。",
-        "久未打开": "很久没打开过了。确认用不上再移走，移到废纸篓后还能放回。",
+        Category.installer: "装好之后安装包就没用了，要重装再去官网下。",
+        Category.extractedArchive: "旁边已经有解压好的文件夹，压缩包留着是重复占空间。",
+        Category.staleDownload: "很久没打开过了。确认用不上再移走，移到废纸篓后还能放回。",
     ]
 
     /// 这次扫描里还要问的卡片，大的在前
@@ -49,7 +49,7 @@ public enum Weekly {
         for category in Set(downloads.map(\.category)) {
             let items = downloads.filter { $0.category == category }.sorted { $0.bytes > $1.bytes }
             cards.append(WeeklyCard(id: "downloads|" + category, tag: category,
-                                    title: "下载文件夹里 \(items.count) 个\(category == "久未打开" ? "很久没打开的文件" : category)",
+                                    title: "下载文件夹里 \(items.count) 个\(category == Category.staleDownload ? "很久没打开的文件" : category)",
                                     why: downloadsWhy[category] ?? items[0].detail, findings: items))
         }
         for f in open where f.area == .hidden {
