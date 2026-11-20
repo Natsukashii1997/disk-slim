@@ -4,7 +4,7 @@ import Testing
 
 // 第 11 批独立审查的对抗测试（2026-11-18，原稿在 evidence/2026-11-18-memory/review/）：
 // A 组是审查找到的问题，按修好后的规则断言；B 组是边界回归。
-@Suite struct MemoryReviewTests {
+@Suite struct MemoryAdversarialTests {
     let gb: Int64 = 1_073_741_824
     let mb: Int64 = 1_048_576
     let now = Date(timeIntervalSince1970: 1_800_000_000)

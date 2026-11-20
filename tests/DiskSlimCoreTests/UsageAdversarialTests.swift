@@ -31,7 +31,7 @@ private func writeLog(_ url: URL, _ samples: [UsageSample]) throws {
 
 // MARK: - 北京时间与格式
 
-@Suite struct GrowthTimeAndFormatTests {
+@Suite struct UsageTimeAndFormatTests {
     @Test func dayKey_UTC前一天16点半是北京时间第二天() {
         // 期望：2026-11-04 16:30 UTC = 北京 11-05 00:30，归到 11-05
         #expect(BeijingTime.dayKey(utcTime("2026-11-04T16:30:00")) == "2026-11-05")
@@ -80,7 +80,7 @@ private func writeLog(_ url: URL, _ samples: [UsageSample]) throws {
 
 // MARK: - usage.json 读写
 
-@Suite struct GrowthLogTests {
+@Suite struct UsageLogTests {
     @Test func 只读加载坏文件_不挪动也不留底() throws {
         // 期望：readOnly 时文件原样留着，目录里没有 usage-damaged-*.bak
         let t = TempDir()
@@ -226,7 +226,7 @@ private func writeLog(_ url: URL, _ samples: [UsageSample]) throws {
 
 // MARK: - 曲线与对比的取数
 
-@Suite struct GrowthDailyTests {
+@Suite struct UsageDailyTests {
     @Test func 七天曲线不应出现八个日历日() {
         // 期望：「最近 7 天」最多 7 个点。现在是 11-05 12:00，每天 13:00 记一份，今天 11:00 记一份；
         // 10-29 13:00 距现在 167 小时，按滚动 168 小时窗口会被算进来，变成 10-29…11-05 共 8 天
@@ -281,7 +281,7 @@ private func writeLog(_ url: URL, _ samples: [UsageSample]) throws {
 
 // MARK: - 谁涨的
 
-@Suite struct GrowthChangesTests {
+@Suite struct UsageChangesTests {
     @Test func 只在新一天出现的位置按整个大小算涨() {
         // 期望：新出现的 postpane 构建产物 +3 GB，已用也涨 3 GB，「其他」为 0 不列
         let old = rec(bjTime("2026-11-04T10:00:00"), free: 80, ["下载文件夹": 5])
@@ -348,7 +348,7 @@ private func writeLog(_ url: URL, _ samples: [UsageSample]) throws {
 
 // MARK: - 首页那一句
 
-@Suite struct GrowthHeadlineTests {
+@Suite struct UsageHeadlineTests {
     @Test func 跨UTC日界仍算昨天() {
         // 期望：北京 11-04 07:59（UTC 11-03）对北京 11-05 08:01，是「昨天」
         let a = rec(bjTime("2026-11-04T07:59:00"), free: 80, ["下载文件夹": 5])
@@ -404,7 +404,7 @@ private func writeLog(_ url: URL, _ samples: [UsageSample]) throws {
 
 // MARK: - 从扫描结果生成记录
 
-@Suite struct GrowthSampleTests {
+@Suite struct UsageSampleTests {
     @Test func 同项目多个worktree合并_不同项目分开() {
         // 期望：postpane 两个 worktree 合计 14 GB；disk-slim 单独 2 GB
         let r = ScanReport(scannedAt: bjTime("2026-11-05T10:00:00"), seconds: 1,

@@ -68,3 +68,9 @@ func healthyRunner(_ run: FakeRunner = FakeRunner(), branch: String = "feat-x", 
     run.on(0, "") { a, _ in a.first == "ps" }
     return run
 }
+
+/// 下载区的一项，移到废纸篓
+func downloadsItem(_ url: URL, category: String = "安装包", suggested: Bool = true) -> Finding {
+    Finding(area: .downloads, category: category, title: url.lastPathComponent, detail: "",
+            paths: [url.path], bytes: 1, risk: .safe, suggested: suggested, cleanup: .trash)
+}

@@ -234,3 +234,118 @@ final class SpyRunner: CommandRunner {
     func run(_ args: [String], cwd: URL?) -> (status: Int32, output: String) { record(args); return inner.run(args, cwd: cwd) }
 }
 
+/// 独立测试员的对抗用例（2026-11-05 第 2 批审查）。断言写的是「期望的安全行为」：失败的用例就是发现的 bug。
+@Suite struct WorktreeBuildTimeAdversarialTests {
+    let t = TempDir()
+    var home: URL { t.url.appendingPathComponent("home") }
+    var work: URL { t.url.appendingPathComponent("home/work") }
+    var trash: URL { t.url.appendingPathComponent("Trash") }
+    let fm = FileManager.default
+
+    func cleaner(_ run: FakeRunner = FakeRunner()) -> Cleaner {
+        Cleaner(safety: SafetyGuard(home: home, workRoot: work), runner: run, trasher: FakeTrasher(dir: trash),
+                log: .standard(home: home))
+    }
+
+    func finding(_ paths: [String], _ cleanup: Cleanup, risk: Risk = .safe) -> Finding {
+        Finding(area: .hidden, category: "测试", title: "x", detail: "", paths: paths, bytes: 1,
+                risk: risk, suggested: true, cleanup: cleanup)
+    }
+
+    // MARK: - WorktreeScanner 24 小时
+
+    /// cargo 增量编译改的是 target/debug/deps/ 里的文件，target/ 和 target/debug 的修改时间不变。
+    @Test func worktree_深层文件刚编译过_应算24小时内编译过() {
+        t.file("home/work/p/.claude/worktrees/wt/Cargo.toml") // 其余条件都满足，只有「刚编译过」这一条
+        t.file("home/work/p/.claude/worktrees/wt/target/debug/deps/libx.rlib", modified: now.addingTimeInterval(-600))
+        t.setModified(work.appendingPathComponent("p/.claude/worktrees/wt/target/debug/deps"), daysAgo(3))
+        t.setModified(work.appendingPathComponent("p/.claude/worktrees/wt/target/debug"), daysAgo(3))
+        t.setModified(work.appendingPathComponent("p/.claude/worktrees/wt/target"), daysAgo(3))
+        let found = WorktreeScanner(workRoot: work, now: now, runner: healthyRunner(), sizeOf: { _ in 1 }).scan()
+        #expect(found.first?.suggested == false, "10 分钟前刚编译过的 target 被建议删除")
+        #expect(found.first?.detail == "2 小时内编译过")
+    }
+}
+
+/// 第 7 批（worktree 构建产物直接删除 + 自动清理）的独立审查对抗用例。每个用例只测一件事，注释写期望。
+@Suite struct WorktreeInUseAdversarialTests {
+    /// 一个已合并、静置一天的 worktree：p/.claude/worktrees/<name>/target
+    func worktree(_ t: TempDir, _ name: String = "w") -> URL {
+        let built = daysAgo(1)
+        t.file("p/.claude/worktrees/\(name)/Cargo.toml")
+        t.file("p/.claude/worktrees/\(name)/target/debug/app", bytes: 10, modified: built)
+        t.setModified(t.url.appendingPathComponent("p/.claude/worktrees/\(name)/target/debug"), built)
+        t.setModified(t.url.appendingPathComponent("p/.claude/worktrees/\(name)/target"), built)
+        return t.url.appendingPathComponent("p/.claude/worktrees/\(name)")
+    }
+
+    func scan(_ t: TempDir, _ run: FakeRunner) -> [Finding] {
+        WorktreeScanner(workRoot: t.url, now: now, runner: run, sizeOf: { _ in 1 }).scan()
+    }
+
+    // MARK: 「没在用」的判断
+
+    /// 期望：另一个 worktree 名字以这个为前缀（wt 与 wt-building）时，它的编译进程不算这个 worktree 在用。
+    /// 沙盒演练里 wt-building 在编译，wt 被误标「有程序在里面运行」（ps 的命令行按子串比较）。
+    @Test func 名字是前缀的另一个worktree在编译_不算这个在用() {
+        let t = TempDir()
+        let wt = worktree(t, "wt")
+        _ = worktree(t, "wt-building")
+        let run = FakeRunner()
+        let other = wt.deletingLastPathComponent().appendingPathComponent("wt-building").path
+        run.on(0, "/usr/bin/login\ncargo build --manifest-path \(other)/Cargo.toml\n") { a, _ in a.first == "ps" }
+        healthyRunner(run)
+        let f = scan(t, run).first { $0.title == "p · wt" }
+        #expect(f?.detail.contains("有程序在里面运行") == false)
+        #expect(f?.suggested == true)
+    }
+
+    /// 期望：锁的原因里有中文时，git 会输出带引号的八进制转义（"\346\265\213..."），界面上应显示解码后的中文。
+    /// 沙盒演练实际显示为：worktree 被锁住了（"\346\265\213\350\257\225 \351\224\201"）
+    @Test func 锁的原因带中文时_显示解码后的文字() {
+        let t = TempDir()
+        let wt = worktree(t)
+        let run = FakeRunner()
+        run.on(0, "worktree \(wt.path)\nHEAD abc\nlocked \"\\346\\265\\213\\350\\257\\225\"\n\n") { a, _ in a.contains("worktree") && a.contains("list") }
+        healthyRunner(run)
+        #expect(scan(t, run).first?.detail.contains("worktree 被锁住了（测试）") == true)
+    }
+}
+
+/// worktree 构建产物执行前复核：扫描之后 worktree 可能已经不是当初那个 Rust 项目（issue #18）。
+@Suite struct WorktreeRecheckTests {
+    let t = TempDir()
+
+    func fixture(cargo: Bool = true) -> (Scan, Finding, FakeRunner) {
+        let home = t.dir("home"), work = t.dir("home/work")
+        let old = daysAgo(1)
+        if cargo { t.file("home/work/proj/.claude/worktrees/wt/Cargo.toml") }
+        t.file("home/work/proj/.claude/worktrees/wt/target/debug/app", bytes: 100, modified: old)
+        for sub in ["target/debug", "target"] {
+            t.setModified(work.appendingPathComponent("proj/.claude/worktrees/wt/\(sub)"), old)
+        }
+        let run = FakeRunner()
+        let target = work.appendingPathComponent("proj/.claude/worktrees/wt/target").path
+        let f = Finding(area: .hidden, category: "已合并 worktree 的构建产物", title: "proj · wt", detail: "",
+                        paths: [target], bytes: 100, risk: .safe, suggested: true, cleanup: .remove)
+        return (Scan(home: home, workRoot: work, meta: FakeMetadata(), runner: run), f, run)
+    }
+
+    @Test func 仍是Rust构建目录_照常清() {
+        let (scan, f, run) = fixture()
+        run.on(0, "") { a, _ in a.contains("check-ignore") }
+        #expect(scan.recheck(f, now: now) == nil)
+    }
+
+    @Test func 扫描后Cargo_toml没了_这次不删() {
+        let (scan, f, run) = fixture(cargo: false)
+        run.on(0, "") { a, _ in a.contains("check-ignore") }
+        #expect(scan.recheck(f, now: now) == "扫描后情况变了（不是 Rust 项目），这次不删")
+    }
+
+    @Test func 扫描后target不再被git忽略_这次不删() {
+        let (scan, f, run) = fixture()
+        run.on(1, "") { a, _ in a.contains("check-ignore") }
+        #expect(scan.recheck(f, now: now) == "扫描后情况变了（target 没被 git 忽略），这次不删")
+    }
+}

@@ -67,3 +67,49 @@ import Testing
         #expect(r.isEmpty)
     }
 }
+
+/// 独立测试员的对抗用例（2026-11-05 第 2 批审查）。断言写的是「期望的安全行为」：失败的用例就是发现的 bug。
+@Suite struct DownloadsAdversarialTests {
+    let t = TempDir()
+    var home: URL { t.url.appendingPathComponent("home") }
+    var work: URL { t.url.appendingPathComponent("home/work") }
+    var trash: URL { t.url.appendingPathComponent("Trash") }
+    let fm = FileManager.default
+
+    func cleaner(_ run: FakeRunner = FakeRunner()) -> Cleaner {
+        Cleaner(safety: SafetyGuard(home: home, workRoot: work), runner: run, trasher: FakeTrasher(dir: trash),
+                log: .standard(home: home))
+    }
+
+    func finding(_ paths: [String], _ cleanup: Cleanup, risk: Risk = .safe) -> Finding {
+        Finding(area: .hidden, category: "测试", title: "x", detail: "", paths: paths, bytes: 1,
+                risk: risk, suggested: true, cleanup: cleanup)
+    }
+
+    // MARK: - 下载区边界
+
+    @Test func 下载区边界() throws {
+        let dl = home.appendingPathComponent("Downloads")
+        t.file("home/Downloads/seven.dmg")
+        t.file("home/Downloads/eight.dmg")
+        t.file("home/Downloads/thirty.txt")
+        t.file("home/Downloads/x.tar.gz")
+        t.dir("home/Downloads/x")
+        t.file("home/Downloads/kept.dmg")
+        t.dir("home/Downloads/folder.zip")
+        t.dir("home/Downloads/folder")
+        var meta = FakeMetadata()
+        meta.added = ["seven.dmg": daysAgo(7), "eight.dmg": daysAgo(7.01), "thirty.txt": daysAgo(30),
+                      "x.tar.gz": daysAgo(1), "x": daysAgo(1), "kept.dmg": daysAgo(90),
+                      "folder.zip": daysAgo(1), "folder": daysAgo(1)]
+        meta.tagged = ["kept.dmg": ["保留"]]
+        let found = DownloadsScanner(root: dl, now: now, meta: meta).scan()
+        func cat(_ n: String) -> String? { found.first { $0.title == n }?.category }
+        #expect(cat("seven.dmg") == nil)          // 恰好 7 天：不算「超过」
+        #expect(cat("eight.dmg") == "安装包")
+        #expect(cat("thirty.txt") == nil)         // 恰好 30 天：不算
+        #expect(cat("x.tar.gz") == "已解压的压缩包")
+        #expect(cat("kept.dmg") == nil)
+        #expect(cat("folder.zip") == nil, "名字以 .zip 结尾的文件夹被当成已解压的压缩包建议清理")
+    }
+}
