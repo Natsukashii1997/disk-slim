@@ -94,13 +94,13 @@ enum Snapshot {
         for i in 0..<43 {
             let s = SessionMemory(pid: Int32(100 + i), startedAt: 1, bytes: Int64((i < 20 ? 11.7 / 20 : 6.8 / 23) * gb), cpuNanos: 0)
             sessions.append(s)
-            record.sessions[s.key] = SessionTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(i < 20 ? -20 * 3600 : -600))
+            record.sessions[s.key] = ActivityTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(i < 20 ? -20 * 3600 : -600))
         }
         for (a, _) in apps where a.bundleID != "com.apple.Preview" {
             record.activated(a.bundleID, at: now.addingTimeInterval(a.bundleID == "com.google.Chrome" ? -2 * 3600 : -300))
         }
         record.activated("com.apple.Preview", at: now.addingTimeInterval(-2 * 86_400 - 3600))
-        record.apps["com.apple.Preview@6"] = SessionTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-2 * 86_400))
+        record.apps["com.apple.Preview@6"] = ActivityTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-2 * 86_400))
         let curve = [38, 40, 36, 42, 48, 55, 52, 58, 61, 57, 63, 66, 70, 64, 68, 72, 75, 71, 74, 78, 76, 79, 77, 78]
         record.pressure = curve.enumerated().map { PressurePoint(at: now.addingTimeInterval(Double($0.offset - 23) * 3600), usedPercent: $0.element, level: .tight) }
         store.memRecord = record

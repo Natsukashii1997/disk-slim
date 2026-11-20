@@ -83,9 +83,9 @@ public struct Alert: Equatable {
 }
 
 public enum Alerts {
-    public static let lowSpaceBytes: Int64 = 30 * 1_073_741_824
+    public static let lowSpaceBytes = SpaceLevel.criticalBytes
     public static let growthBytes: Int64 = 10 * 1_073_741_824
-    public static let autoCleanBelow: Int64 = 60 * 1_073_741_824
+    public static let autoCleanBelow = SpaceLevel.lowBytes
     /// 每 5 分钟读一次可用空间；比上次扫描时掉了这么多、且离上次扫描至少 30 分钟，就马上扫描（扫描完会按需自动清理）
     public static let dropRescanBytes: Int64 = 8 * 1_073_741_824
     public static let dropRescanGap: TimeInterval = 30 * 60

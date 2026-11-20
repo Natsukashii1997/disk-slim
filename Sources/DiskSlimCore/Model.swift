@@ -109,16 +109,28 @@ extension Finding {
     }
 }
 
-/// 可用空间的三档：和驿窗号码牌同一套阈值（低于 60 GB 提醒，低于 30 GB 警告）
+/// 可用空间的三档：和驿窗号码牌同一套阈值（低于 60 GB 提醒，低于 30 GB 警告）。
+/// 这两个数只写在这里：提醒规则（`Alerts`）、状态文件、悬浮球、面板和图表的颜色都从这里取
 public enum SpaceLevel: Sendable {
     case ok, low, critical
 
+    public static let lowBytes: Int64 = 60 * 1_073_741_824
+    public static let criticalBytes: Int64 = 30 * 1_073_741_824
+
     public init(freeBytes: Int64?) {
         guard let freeBytes else { self = .ok; return }
-        let gb = Double(freeBytes) / 1_073_741_824
-        self = gb < 30 ? .critical : gb < 60 ? .low : .ok
+        self = freeBytes < Self.criticalBytes ? .critical : freeBytes < Self.lowBytes ? .low : .ok
+    }
+
+    /// 界面上按 GB 小数画的地方用（图表上的点、清理后滚动中的数字）
+    public init(freeGB: Double) {
+        let gib = 1_073_741_824.0
+        self = freeGB < Double(Self.criticalBytes) / gib ? .critical : freeGB < Double(Self.lowBytes) / gib ? .low : .ok
     }
 }
+
+/// 一组项合计多大
+public func total(_ list: [Finding]) -> Int64 { list.reduce(0) { $0 + $1.bytes } }
 
 public struct DiskStatus: Codable {
     public let totalBytes: Int64
@@ -153,7 +165,13 @@ public struct ScanReport: Codable {
         self.needsAccess = needsAccess
     }
 
+    /// 同一次扫描换一组项（按用户的决定调整勾选后用）；时间、磁盘、各处大小不变
+    public func with(findings: [Finding]) -> ScanReport {
+        ScanReport(scannedAt: scannedAt, seconds: seconds, disk: disk, findings: findings,
+                   downloadsBytes: downloadsBytes, trashBytes: trashBytes, needsAccess: needsAccess)
+    }
+
     public var suggestedBytes: Int64 {
-        findings.filter(\.suggested).reduce(0) { $0 + $1.bytes }
+        total(findings.filter(\.suggested))
     }
 }

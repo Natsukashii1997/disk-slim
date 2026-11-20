@@ -123,7 +123,13 @@ struct Tone {
     }
 
     /// 可用空间的颜色，和驿窗号码牌同一套：低于 30 GB 红，低于 60 GB 橙，60 GB 以上绿
-    func level(_ gb: Double) -> Color { gb < 30 ? red : gb < 60 ? orange : green }
+    func level(_ gb: Double) -> Color {
+        switch SpaceLevel(freeGB: gb) {
+        case .critical: red
+        case .low: orange
+        case .ok: green
+        }
+    }
 }
 
 /// 首页大按钮：蓝底白字，圆角 12
@@ -632,7 +638,7 @@ struct HeroCard: View {
 
     /// 低于 30 GB 红，低于 60 GB 橙，够用时就是正文色
     private func levelColor(_ gb: Double?) -> Color {
-        guard let gb, gb < 60 else { return .primary }
+        guard let gb, SpaceLevel(freeGB: gb) != .ok else { return .primary }
         return t.level(gb)
     }
 
@@ -1029,10 +1035,11 @@ struct FreeChart: View {
     var body: some View {
         Chart(days, id: \.at) { s in
             let gb = Double(s.freeBytes) / 1_073_741_824
+            let level = SpaceLevel(freeBytes: s.freeBytes)
             LineMark(x: .value("第几天", x(s)), y: .value("可用 GB", gb))
                 .foregroundStyle(Palette.accent)
             PointMark(x: .value("第几天", x(s)), y: .value("可用 GB", gb))
-                .foregroundStyle(gb < 30 ? Palette.bad : gb < 60 ? Palette.warn : Palette.accent)
+                .foregroundStyle(level == .critical ? Palette.bad : level == .low ? Palette.warn : Palette.accent)
                 .symbolSize(showDates ? 28 : 16)
         }
         // 两头各留小半天，第一天和最后一天的点和日期不会被裁掉

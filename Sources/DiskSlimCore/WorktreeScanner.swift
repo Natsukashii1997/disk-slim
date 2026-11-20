@@ -249,17 +249,5 @@ public struct WorktreeScanner {
     }
 
     /// `target/` 往下三层里最新的修改时间。cargo 增量编译改的是 `target/debug/deps/*` 这一层的文件（L-06）。
-    static func lastBuilt(_ target: URL) -> Date? {
-        let keys: [URLResourceKey] = [.contentModificationDateKey]
-        var latest = (try? target.resourceValues(forKeys: Set(keys)))?.contentModificationDate
-        guard let e = FileManager.default.enumerator(at: target, includingPropertiesForKeys: keys, options: [],
-                                                     errorHandler: { _, _ in true }) else { return latest }
-        for case let u as URL in e {
-            if e.level >= 3 { e.skipDescendants() }
-            if let d = (try? u.resourceValues(forKeys: Set(keys)))?.contentModificationDate, d > (latest ?? .distantPast) {
-                latest = d
-            }
-        }
-        return latest
-    }
+    static func lastBuilt(_ target: URL) -> Date? { latestModification(target, depth: 3) }
 }

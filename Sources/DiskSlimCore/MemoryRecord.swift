@@ -15,8 +15,8 @@ public struct PressurePoint: Codable, Equatable {
     }
 }
 
-/// 一个 Claude Code 会话最近一次「忙」是什么时候：整棵进程树在一个采样间隔里 CPU 用到 5% 以上就算忙
-public struct SessionTrack: Codable, Equatable {
+/// 一个 Claude Code 会话或一个普通应用最近一次「忙」是什么时候（`MemoryRecord.sessions`、`.apps` 都用它）：整棵进程树在一个采样间隔里 CPU 用到 5% 以上就算忙
+public struct ActivityTrack: Codable, Equatable {
     public var cpuNanos: UInt64
     public var at: Date
     public var busyAt: Date
@@ -43,7 +43,7 @@ public struct MemoryRecord: Codable, Equatable {
     public var trackingSince: Date
     public var pressure: [PressurePoint] = []
     public var lastActive: [String: Date] = [:]
-    public var sessions: [String: SessionTrack] = [:]
+    public var sessions: [String: ActivityTrack] = [:]
     /// 「今晚提醒我」重启：到点发一条通知
     public var restartRemindAt: Date?
     /// 「这周别问」重启
@@ -53,7 +53,7 @@ public struct MemoryRecord: Codable, Equatable {
     /// 浏览器选了「还在用」：bundle id → 到这个时间前不再问
     public var browserQuietUntil: [String: Date] = [:]
     /// 普通应用的忙闲（整棵进程树的 CPU）：4 小时内在后台干过活的不挑（审查高 2、中 7）
-    public var apps: [String: SessionTrack] = [:]
+    public var apps: [String: ActivityTrack] = [:]
 
     public init(trackingSince: Date) { self.trackingSince = trackingSince }
 
@@ -63,26 +63,26 @@ public struct MemoryRecord: Codable, Equatable {
         trackingSince = try c.decode(Date.self, forKey: .trackingSince)
         pressure = try c.decodeIfPresent([PressurePoint].self, forKey: .pressure) ?? []
         lastActive = try c.decodeIfPresent([String: Date].self, forKey: .lastActive) ?? [:]
-        sessions = try c.decodeIfPresent([String: SessionTrack].self, forKey: .sessions) ?? [:]
+        sessions = try c.decodeIfPresent([String: ActivityTrack].self, forKey: .sessions) ?? [:]
         restartRemindAt = try c.decodeIfPresent(Date.self, forKey: .restartRemindAt)
         restartQuietUntil = try c.decodeIfPresent(Date.self, forKey: .restartQuietUntil)
         sessionsQuietUntil = try c.decodeIfPresent(Date.self, forKey: .sessionsQuietUntil)
         browserQuietUntil = try c.decodeIfPresent([String: Date].self, forKey: .browserQuietUntil) ?? [:]
-        apps = try c.decodeIfPresent([String: SessionTrack].self, forKey: .apps) ?? [:]
+        apps = try c.decodeIfPresent([String: ActivityTrack].self, forKey: .apps) ?? [:]
     }
 
     /// 应用每次启动时调：停机这段时间里谁用过记不到，从现在重新看满 4 小时（审查中 3）
     public mutating func restarted(at: Date) { trackingSince = max(trackingSince, at) }
 
     /// 一段 CPU 用量算不算忙：间隔太长（睡眠、应用没开）或合计变小（子进程退出），都看不准，一律当忙过（审查中 4、中 5）
-    static func busy(from t: SessionTrack, cpu: UInt64, at: Date) -> Bool {
+    static func busy(from t: ActivityTrack, cpu: UInt64, at: Date) -> Bool {
         let seconds = at.timeIntervalSince(t.at)
         if seconds <= 0 || seconds > MemoryRules.longGap || cpu < t.cpuNanos { return true }
         return Double(cpu - t.cpuNanos) / 1e9 / seconds >= MemoryRules.busyCPU
     }
 
-    private static func track(_ old: [String: SessionTrack], _ now: [(String, UInt64)], at: Date) -> [String: SessionTrack] {
-        var next: [String: SessionTrack] = [:]
+    private static func track(_ old: [String: ActivityTrack], _ now: [(String, UInt64)], at: Date) -> [String: ActivityTrack] {
+        var next: [String: ActivityTrack] = [:]
         for (key, cpu) in now {
             if var t = old[key], at > t.at {
                 if busy(from: t, cpu: cpu, at: at) { t.busyAt = at }
@@ -93,7 +93,7 @@ public struct MemoryRecord: Codable, Equatable {
                 next[key] = t
             } else {
                 // 第一次见到：先当它刚忙过，看满一段时间才算闲
-                next[key] = SessionTrack(cpuNanos: cpu, at: at, busyAt: at, since: at)
+                next[key] = ActivityTrack(cpuNanos: cpu, at: at, busyAt: at, since: at)
             }
         }
         return next

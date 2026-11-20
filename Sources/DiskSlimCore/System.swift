@@ -63,6 +63,19 @@ public func allocatedSizeIfReadable(_ url: URL) -> Int64? {
     return failed ? nil : size
 }
 
+/// 目录和往下 `depth` 层里最新的修改时间（不往深处走，免得扫整个镜像）
+public func latestModification(_ url: URL, depth: Int = 2) -> Date? {
+    let keys: Set<URLResourceKey> = [.contentModificationDateKey]
+    var latest = (try? url.resourceValues(forKeys: keys))?.contentModificationDate
+    guard let e = FileManager.default.enumerator(at: url, includingPropertiesForKeys: Array(keys), options: [],
+                                                 errorHandler: { _, _ in true }) else { return latest }
+    for case let u as URL in e {
+        if e.level >= depth { e.skipDescendants() }
+        if let d = (try? u.resourceValues(forKeys: keys))?.contentModificationDate, d > (latest ?? .distantPast) { latest = d }
+    }
+    return latest
+}
+
 /// 目录在、但被系统隐私保护拦住（EPERM，要「完全磁盘访问权限」）。不存在、普通的权限位读不了（EACCES）都不算
 public func blockedByPrivacy(_ url: URL) -> Bool {
     do {
