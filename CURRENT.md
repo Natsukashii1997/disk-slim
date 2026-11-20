@@ -2,11 +2,11 @@
 
 当前阶段目标：常态维护。第 6 批已收尾：2026-11-19 常浩定 `disk-space-guard` 停用（原目标「第 6 批试用一周收尾，定下 disk-space-guard 去留，之后转常态维护」，2026-11-08 常浩确认，digital-twin#114）。
 
-更新：2026-11-20。整体评估后的第一批整改（issue #18）在分支 `claude/18-batch1-fixes`：找不到清理命令的项不再默认勾选、清理命令加「正在装依赖就不清」、构建产物执行前复核补查 Rust 构建目录、文档收口。同一天查实：已装版本的通知权限是「已拒绝」，11-05 以来一条提醒都没发出去；06:03 重启后应用没起来，19:34 已手动启动。钩子的三个 PR（#14、#15、#16）都已合并，`core.hooksPath` 已装回 `scripts/hooks`；#16（commit-msg 钩子换 project-starter 0.5.0，`ccff96c`）当时没写交接节，以 PR 描述为准。Puppeteer 经改动确认后也照 Playwright 改成了需确认。唯一下一步：常浩说「合并」后合并 PR #19 并装机；另请常浩在「系统设置 › 通知 › 磁盘瘦身」里打开通知。
+更新：2026-11-20。整体评估后的第一批整改（issue #18）已随 PR #19 squash 合回 main（`e35d96a`），未装机：找不到清理命令的项不再默认勾选、清理命令加「正在装依赖就不清」、构建产物执行前复核补查 Rust 构建目录、文档收口。同一天查实：已装版本的通知权限是「已拒绝」，11-05 以来一条提醒都没发出去；06:03 重启后应用没起来，19:34 已手动启动。钩子的三个 PR（#14、#15、#16）都已合并，`core.hooksPath` 已装回 `scripts/hooks`；#16（commit-msg 钩子换 project-starter 0.5.0，`ccff96c`）当时没写交接节，以 PR 描述为准。Puppeteer 经改动确认后也照 Playwright 改成了需确认。唯一下一步：常浩点头后跑 `scripts/install.sh` 装机，在面板「先不动」里看 uv、pnpm 两项的说明；另请常浩在「系统设置 › 通知 › 磁盘瘦身」里打开通知，打开后重跑 `--test-notify`，最后一行要是「已允许」。
 
 之前：2026-11-19。`disk-space-guard` 定为停用（任务保持关闭、不删）。菜单栏图标已去掉，入口只留驿窗侧栏挂件，已随 PR #12 squash 合回 main（`8deed49`）、已装机。之前：2026-11-18。第 0–11 批、缩小键、面板尺寸固定和按钮手感都已合回 main（PR #1、#5、#6、#7、#8）。第 11 批「内存」：「磁盘 | 内存」切换、内存页（定稿一二结合）、一键退出、要你说一句（Claude 会话 / 浏览器 / 重启）、强制退出页，已装机。11-18 19:12 交接会话补做了真屏验收：内存页、强制退出页「退出」和「强制退出」点两下都通过；验收中发现面板切到内存页会长出屏幕底边，已修（`FloatingBall.swift`）并重装复验。常浩看过截图说「开 PR」，开了 PR #7，常浩说「合并」后已 squash 合回 main（`e862639`，2026-11-18 20:00）。20:00 后在新分支 `claude/panel-fixed-size` 做了「面板尺寸固定 + 磁盘顶卡谁占着」和「顶栏按钮点击手感」，已随 PR #8 squash 合回 main（`af6f2a2`，2026-11-18 20:58；PR #7 合并后才做，所以单开了 #8）。（当时的唯一下一步「`disk-space-guard` 要不要停」已在 2026-11-19 定为停用，见下面对应一节。）
 
-## 第一批整改：清不掉却默认勾选的项、三处安全缺口、文档收口（2026-11-20，Claude，常浩看过两份评估后回「做第一批」；已提交到 `claude/18-batch1-fixes`、PR 待合并、未装机、未发布）
+## 第一批整改：清不掉却默认勾选的项、三处安全缺口、文档收口（2026-11-20，Claude，常浩看过两份评估后回「做第一批」，Puppeteer 一项单独确认后回「改」，之后回「合并」（经 Agent HUD 送达）；已随 PR #19 squash 合并（`e35d96a`）、未装机、未发布）
 
 - 时间：开工 `2026-11-20 19:33`。★ 来由：当天做了接手成本评估和 Fable 5.2 High 的整体方案评估，合并成三批整改，常浩选先做第一批（issue #18）。
 - 改了哪些文件：`Sources/DiskSlimCore/KnownPlaces.swift`（Puppeteer 改成需确认；`applyAvailability`：清理命令找不到的项不勾选、不能勾，说明写去终端怎么清；四条清理命令加 `busyWhen`；新类型 `Busy` 按词解析进程命令行）、`Scan.swift`（扫描接上 `applyAvailability`；执行前复核补查 Rust 构建目录）、`WorktreeScanner.swift`（抽出 `notRustBuild`，扫描和复核共用）、`Cleaner.swift`、`SafetyGuard.swift`（在用特征改用 `Busy`）、`Model.swift`（`Finding.revised`，`History.swift`、`Weekly.swift` 两处重复的重建改用它）、`tests/DiskSlimCoreTests/CleanupCommandTests.swift`（新增 9 项）；文档：`GLOSSARY.md`（新建）、`AGENTS.md`、`docs/PRD.md`、`docs/LESSONS.md`（L-16）、本文件（旧节归档到 `docs/history/CURRENT-2026-11-05至11-07.md`、修正三处过期状态）；过期注释和文案：`Alerts.swift`、`Store.swift`、`System.swift`、`Notifier.swift`（示例通知文案对齐真实文案）、`Package.swift`、`scripts/bundle.sh`。
