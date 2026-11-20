@@ -62,8 +62,6 @@ public enum KnownPlaces {
         Place("包管理器缓存", "pip 缓存", ["Library/Caches/pip"], risk: .safe, suggested: true,
               cleanup: .command(["pip3", "cache", "purge"]), detail: "下次安装时会重新下载",
               busyWhen: [Busy("pip", ["install", "download", "wheel"])]),
-        Place("测试用浏览器", "Puppeteer 浏览器", [".cache/puppeteer"], risk: .safe, suggested: true,
-              cleanup: .remove, detail: "下次跑测试时会自动重新下载"),
 
         // 需确认：不默认勾选
         Place("包管理器缓存", "npx 运行过的工具", [".npm/_npx"], risk: .confirm, cleanup: .trash,
@@ -72,6 +70,11 @@ public enum KnownPlaces {
         // （11-17、11-18 删过 3 次，驿窗 L-16、剪藏插件 L-16），所以不默认勾选、不进自动清理（2026-11-19 常浩批）
         Place("测试用浏览器", "Playwright 浏览器", ["Library/Caches/ms-playwright"], risk: .confirm, cleanup: .remove,
               detail: "驿窗、剪藏插件的扩展测试要用；删了测试直接失败，不会自动重新下载，要在项目里手动 playwright install 装回"),
+        // 和 Playwright 同类：浏览器是装依赖时下载的，启动时不会自动补，原来写的「下次跑测试时会自动重新下载」不对
+        // （按 Puppeteer 的已知行为判断，本机没有这个目录，没实测）。2026-11-20 常浩确认照 Playwright 改（issue #18），
+        // 11-19 那次定的是「这次不动」
+        Place("测试用浏览器", "Puppeteer 浏览器", [".cache/puppeteer"], risk: .confirm, cleanup: .remove,
+              detail: "用 Puppeteer 的项目跑测试要用；删了不会自动重新下载，要在项目里运行 npx puppeteer browsers install 装回"),
         Place("备份快照", "Codex 备份", [".codex/recovery"], risk: .confirm,
               cleanup: .trash, detail: "你自己做的备份", perChild: true, keepNewest: true),
         Place("虚拟机", "Colima 虚拟机", [".colima"], risk: .confirm,
