@@ -12,16 +12,15 @@ public struct Place {
     public let detail: String
     /// 每个子目录各算一项（如 Codex 的多份备份）
     public let perChild: Bool
-    /// 进程命令行里出现这些命令时先不清（例如 Homebrew 正在下载、npm 正在装依赖）。
-    /// 按完整的词比：前面得是行首、空格或「/」，后面得是行尾或空格，所以 `pnpm install` 不算 `npm install`（`commandLine(_:mentions:)`）
-    public let busyWhen: [String]
+    /// 有这些程序在干活时先不清（例如 Homebrew 正在下载、npm 正在装依赖）
+    public let busyWhen: [Busy]
     /// 按份的备份：最新一份留着保底，超过 `Finding.unusedDays` 天的旧份默认勾选（2026-11-18 常浩定，issue #4）
     public let keepNewest: Bool
     /// 记最近一次用过的时间（虚拟机）：一个月没用才问用户
     public let trackUse: Bool
 
     public init(_ category: String, _ title: String, _ paths: [String], risk: Risk, suggested: Bool = false,
-                cleanup: Cleanup = .none, detail: String, perChild: Bool = false, busyWhen: [String] = [],
+                cleanup: Cleanup = .none, detail: String, perChild: Bool = false, busyWhen: [Busy] = [],
                 keepNewest: Bool = false, trackUse: Bool = false) {
         self.category = category
         self.title = title
@@ -40,25 +39,29 @@ public struct Place {
 public enum KnownPlaces {
     public static let all: [Place] = [
         // 安全：可再生，默认勾选
-        // 清理命令的 busyWhen 只写「正在装依赖」的命令：本机常年挂着几十个 `npm exec …`、`uv tool uvx …` 起的 MCP 服务，
-        // 写成「npm 在跑就不清」等于永远清不了。`uv run` 也不算（多半是常驻的脚本）
+        // npm、pnpm、pip 的 busyWhen 只认「正在装依赖」的子命令（含别名）：本机常年挂着几十个 `npm exec …` 起的 MCP 服务，
+        // 写成「npm 在跑就不清」等于永远清不了；`pnpm dlx` 同理不列。
+        // uv 不一样：任何 uv 进程（含常驻的 `uv run`、uvx 服务）都占着缓存锁，这时 `uv cache clean` 会一直等到超时
+        // （2026-11-20 用隔离缓存目录实测，uv 0.11.7），所以只要有 uv 在跑就先不清；不加 `--force`，它会删掉正在用的环境
         // `npm cache clean` 只清 _cacache；_npx 另列在下面
         Place("包管理器缓存", "npm 缓存", [".npm/_cacache"], risk: .safe, suggested: true,
               cleanup: .command(["npm", "cache", "clean", "--force"]), detail: "下次安装时会重新下载",
-              busyWhen: ["npm install", "npm ci", "npm i", "npm update"]),
+              busyWhen: [Busy("npm", ["install", "add", "i", "in", "ins", "inst", "insta", "instal", "isnt", "isnta", "isntal", "isntall",
+                                    "ci", "clean-install", "ic", "install-clean", "it", "install-test", "cit", "install-ci-test",
+                                    "update", "up", "upgrade", "udpate", "dedupe", "ddp"])]),
         Place("包管理器缓存", "uv 缓存", [".cache/uv"], risk: .safe, suggested: true,
               cleanup: .command(["uv", "cache", "clean"]), detail: "下次安装时会重新下载",
-              busyWhen: ["uv sync", "uv pip", "uv add", "uv lock", "uv venv", "uv tool install"]),
+              busyWhen: [Busy("uv"), Busy("uvx")]),
         Place("包管理器缓存", "pnpm 存储", ["Library/pnpm/store"], risk: .safe, suggested: true,
               cleanup: .command(["pnpm", "store", "prune"]), detail: "只删没有项目引用的包",
-              busyWhen: ["pnpm install", "pnpm i", "pnpm add", "pnpm update", "pnpm dlx"]),
+              busyWhen: [Busy("pnpm", ["install", "i", "add", "update", "up", "upgrade", "fetch", "import", "dedupe"])]),
         // 不用 `brew cleanup`：它还会删已安装软件的旧版本、自动卸载没人依赖的软件，都不能撤销（L-06）。
         // 只删下载缓存，下次安装时重新下载
         Place("包管理器缓存", "Homebrew 下载缓存", ["Library/Caches/Homebrew/downloads"], risk: .safe, suggested: true,
-              cleanup: .remove, detail: "下次安装时会重新下载", busyWhen: ["Homebrew/brew.rb"]),
+              cleanup: .remove, detail: "下次安装时会重新下载", busyWhen: [Busy("Homebrew/brew.rb")]),
         Place("包管理器缓存", "pip 缓存", ["Library/Caches/pip"], risk: .safe, suggested: true,
               cleanup: .command(["pip3", "cache", "purge"]), detail: "下次安装时会重新下载",
-              busyWhen: ["pip install", "pip3 install", "pip download", "pip3 download"]),
+              busyWhen: [Busy("pip", ["install", "download", "wheel"])]),
         Place("测试用浏览器", "Puppeteer 浏览器", [".cache/puppeteer"], risk: .safe, suggested: true,
               cleanup: .remove, detail: "下次跑测试时会自动重新下载"),
 
@@ -94,22 +97,39 @@ public func applyAvailability(_ findings: [Finding], runner: CommandRunner) -> [
         let available = known[tool] ?? (runner.run(["which", tool], cwd: nil).status == 0)
         known[tool] = available
         if available { return f }
-        return f.revised(detail: "这台电脑上没找到 \(tool) 命令，清不了；可以在终端里运行 \(args.joined(separator: " "))",
-                         suggested: false, cleanup: Cleanup.none)
+        return f.revised(detail: "没找到 \(tool) 命令，这里清不了；装了的话可以在终端里运行 \(args.joined(separator: " "))",
+                         suggested: false, cleanup: .none)
     }
 }
 
-/// 进程命令行里有没有在跑这条命令：`marker` 前面得是行首、空格或「/」，后面得是行尾或空格。
-/// `/x/bin/pnpm install` 算 `pnpm install`，不算 `npm install`；`npm i` 不算 `npm init`
-public func commandLine(_ line: Substring, mentions marker: String) -> Bool {
-    var from = line.startIndex
-    while let r = line.range(of: marker, range: from..<line.endIndex) {
-        let startsWord = r.lowerBound == line.startIndex || [" ", "/"].contains(line[line.index(before: r.lowerBound)])
-        let endsWord = r.upperBound == line.endIndex || line[r.upperBound] == " "
-        if startsWord && endsWord { return true }
-        from = line.index(after: r.lowerBound)
+/// 「对应的工具正在干活」的特征：进程命令行里有 `tool` 这个程序，而且它后面的词里有 `subcommands` 之一（空表示只要在跑就算）。
+/// 按词比，不按子串比：`pnpm install` 不算 npm 在装；带全局选项的 `pnpm --filter web install`、`python -m pip -q install`、
+/// 带版本号的 `pip3.12 install` 都认得。宁可多拦：命令行里只是提到这些词（`sh -c "npm install && vite"`）也算，这次跳过、下次再清
+public struct Busy: Equatable {
+    /// 可执行文件的名字，或路径的结尾（`Homebrew/brew.rb`）
+    public let tool: String
+    public let subcommands: Set<String>
+
+    public init(_ tool: String, _ subcommands: Set<String> = []) {
+        self.tool = tool
+        self.subcommands = subcommands
     }
-    return false
+
+    /// `ps -axo command` 的一行里有没有它
+    public func running(in line: Substring) -> Bool {
+        let words = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
+        for (i, word) in words.enumerated() where isTool(word) {
+            if subcommands.isEmpty || words[(i + 1)...].contains(where: { subcommands.contains(String($0)) }) { return true }
+        }
+        return false
+    }
+
+    private func isTool(_ word: Substring) -> Bool {
+        if word == tool || word.hasSuffix("/" + tool) { return true }
+        // 带版本号的名字：pip3、pip3.12
+        let base = word.split(separator: "/").last ?? word
+        return base.hasPrefix(tool) && base.count > tool.count && base.dropFirst(tool.count).allSatisfy { $0.isNumber || $0 == "." }
+    }
 }
 
 public struct KnownPlacesScanner {

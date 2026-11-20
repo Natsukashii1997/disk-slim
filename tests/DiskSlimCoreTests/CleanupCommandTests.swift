@@ -25,7 +25,7 @@ import Testing
         #expect(out[0].cleanup == .command(["npm", "cache", "clean", "--force"]))
         #expect(out[1].suggested == false)
         #expect(out[1].cleanup == Cleanup.none)
-        #expect(out[1].detail == "这台电脑上没找到 uv 命令，清不了；可以在终端里运行 uv cache clean")
+        #expect(out[1].detail == "没找到 uv 命令，这里清不了；装了的话可以在终端里运行 uv cache clean")
         #expect(out[1].bucket(now: now) == .keep)
         #expect(Alerts.autoCleanPicks(out).map(\.title) == ["npm 缓存"])
         // 大小、路径、分组照旧，涨幅记录里的名字不变
@@ -74,6 +74,18 @@ import Testing
         (".npm/_cacache", ["npm", "cache", "clean", "--force"], "npm install left-pad"),
         (".npm/_cacache", ["npm", "cache", "clean", "--force"], "npm ci"),
         (".npm/_cacache", ["npm", "cache", "clean", "--force"], "npm i"),
+        (".npm/_cacache", ["npm", "cache", "clean", "--force"], "npm add zod"),
+        (".npm/_cacache", ["npm", "cache", "clean", "--force"], "npm clean-install"),
+        ("Library/pnpm/store", ["pnpm", "store", "prune"], "node /Users/x/bin/pnpm --filter web install"),
+        ("Library/pnpm/store", ["pnpm", "store", "prune"], "pnpm -r up"),
+        (".cache/uv", ["uv", "cache", "clean"], "uv --project api sync"),
+        // 常驻的 uv run、uvx 服务占着缓存锁，这时 `uv cache clean` 会一直等到超时（实测），所以也先不清
+        (".cache/uv", ["uv", "cache", "clean"], "uv tool uvx mcp-server-fetch"),
+        (".cache/uv", ["uv", "cache", "clean"], "/Users/x/.local/bin/uvx mcp-server-fetch"),
+        (".cache/uv", ["uv", "cache", "clean"], "uv run server.py"),
+        ("Library/Caches/pip", ["pip3", "cache", "purge"], "pip3.12 install requests"),
+        ("Library/Caches/pip", ["pip3", "cache", "purge"], "python -m pip -q install requests"),
+        ("Library/Caches/pip", ["pip3", "cache", "purge"], "pip wheel ."),
         ("Library/pnpm/store", ["pnpm", "store", "prune"], "node /Users/x/.nvm/versions/node/v24/bin/pnpm install --frozen-lockfile"),
         (".cache/uv", ["uv", "cache", "clean"], "/Users/x/.local/bin/uv sync"),
         (".cache/uv", ["uv", "cache", "clean"], "uv pip install requests"),
@@ -91,13 +103,15 @@ import Testing
         #expect(called == false)
     }
 
-    /// 本机常年挂着几十个 `npm exec …`、`uv tool uvx …` 起的 MCP 服务：它们不算在装依赖，不能因此永远清不了
+    /// 本机常年挂着几十个 `npm exec …` 起的 MCP 服务：它们不算在装依赖，不能因此永远清不了
     @Test(arguments: [
         (".npm/_cacache", ["npm", "cache", "clean", "--force"], "npm exec @modelcontextprotocol/server-pdf --stdio"),
         (".npm/_cacache", ["npm", "cache", "clean", "--force"], "npm run test:nightly"),
         (".npm/_cacache", ["npm", "cache", "clean", "--force"], "npm init -y"),
         (".npm/_cacache", ["npm", "cache", "clean", "--force"], "node /x/bin/pnpm install"),
-        (".cache/uv", ["uv", "cache", "clean"], "uv tool uvx mcp-server-fetch"),
+        ("Library/pnpm/store", ["pnpm", "store", "prune"], "node /x/bin/pnpm dlx some-server"),
+        ("Library/pnpm/store", ["pnpm", "store", "prune"], "node /x/bin/pnpm test"),
+        (".cache/uv", ["uv", "cache", "clean"], "/usr/bin/python3 uvicorn_app.py"),
         ("Library/Caches/pip", ["pip3", "cache", "purge"], "/usr/bin/python3 server.py --pipeline install"),
     ])
     func 常驻的服务和别的工具在跑_照常清(path: String, args: [String], running: String) {
@@ -109,6 +123,13 @@ import Testing
         let item = cleaner(run).clean([place(path, args)]).items[0]
         #expect(item.outcome == .done)
         #expect(called)
+    }
+
+    /// `which` 真的经 `ProcessRunner` 跑一次：装了的找得到，没装的找不到（替身测不出 PATH 和退出码对不对）
+    @Test func 真实的which_装了的照常_没装的清不了() {
+        let out = applyAvailability([found("有", ["ls", "-l"]), found("没有", ["disk-slim-no-such-tool-7f3a", "clean"])], runner: ProcessRunner())
+        #expect(out[0].suggested == true && out[0].cleanup == .command(["ls", "-l"]))
+        #expect(out[1].suggested == false && out[1].cleanup == Cleanup.none)
     }
 
     /// 四条清理命令都要有「正在运行」的特征，漏一条就等于没拦

@@ -61,9 +61,13 @@ public struct Finding: Codable, Identifiable {
     }
 
     /// 同一项换个说明、勾选状态或清理方式（按历史、按用户的决定、按命令在不在调整时用）；路径、大小、分组不变，`id` 也就不变
-    public func revised(detail: String, suggested: Bool, cleanup: Cleanup? = nil) -> Finding {
+    public func revised(detail: String, suggested: Bool) -> Finding {
+        revised(detail: detail, suggested: suggested, cleanup: cleanup)
+    }
+
+    public func revised(detail: String, suggested: Bool, cleanup: Cleanup) -> Finding {
         Finding(area: area, category: category, title: title, detail: detail, paths: paths, bytes: bytes, risk: risk,
-                suggested: suggested, cleanup: cleanup ?? self.cleanup, lastUsed: lastUsed)
+                suggested: suggested, cleanup: cleanup, lastUsed: lastUsed)
     }
 }
 

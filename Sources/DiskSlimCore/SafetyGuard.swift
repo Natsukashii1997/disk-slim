@@ -56,7 +56,7 @@ public struct SafetyGuard {
     }
 
     /// 有这些进程在跑时，这一项先不删（例如 Homebrew 正在下载时不删它的下载缓存）。
-    public func busyMarkers(for f: Finding) -> [String] {
+    public func busyMarkers(for f: Finding) -> [Busy] {
         places.filter { place in
             place.cleanup == f.cleanup && place.paths.contains { root in
                 f.paths.contains { parts($0) == parts(home.appendingPathComponent(root).path) }
