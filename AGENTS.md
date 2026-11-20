@@ -56,14 +56,14 @@ GLOSSARY.md          词汇表：代码里的词和界面上的词怎么对应
 docs/PRD.md          需求（含调研结论、规则、分批计划）
 Package.swift        SwiftPM：DiskSlimCore（规则与模型）、diskslim（命令行）、DiskSlimApp（桌面应用）、DiskSlimCoreTests
 Sources/
-  DiskSlimCore/      Model（Finding、风险等级、清理方式）、System（元数据、大小、命令、格式）、
-                     DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、History（按上次实际释放校正清理命令）、Usage（每日记录、7 天曲线、谁涨了多少）、Alerts（提醒开关与规则、自动清理挑项）、Weekly（每周卡片只问「要你说一句」、保留 / 下周再问）、Scan（总入口、执行前复核）、
-                     SafetyGuard（执行前重新核对路径和命令的白名单）、Cleaner（执行、操作记录、撤销）、FloatGeometry（悬浮球与面板位置、空间三档）、Pendant（给驿窗挂件的状态文件、diskslim:// 链接解析、点挂件防抖）、
-                     Memory（读内存压力、交换、进程，按应用和 Claude Code 会话合计）、MemoryPlan（内存三段规则、memory.json、动手前核对）、RunningApps（读运行中的普通应用）
+  DiskSlimCore/      Model（Finding、风险等级、清理方式、空间三档和 30 / 60 GB 阈值）、Kind（分组名常量、每一项的类型、给人看的名字）、System（元数据、大小、命令、格式）、
+                     DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、History（按上次实际释放校正清理命令）、Usage（每日记录、7 天曲线、谁涨了多少）、Alerts（提醒开关与规则、自动清理挑项）、Weekly（每周卡片只问「要你说一句」、周报时间）、Decisions（保留 / 下周再问和 decisions.json）、Persistence（记录文件读写共用的小工具）、Scan（总入口、执行前复核）、
+                     SafetyGuard（执行前重新核对路径和命令的白名单）、Cleaner（执行、操作记录、撤销）、FloatGeometry（悬浮球与面板位置）、Pendant（给驿窗挂件的状态文件、diskslim:// 链接解析、点挂件防抖）、
+                     Memory（读内存压力、交换、进程，按应用和 Claude Code 会话合计）、MemoryRecord（memory.json：曲线、最后使用、忙闲）、MemoryRules（阈值和应用名单）、MemoryPlan（内存三段）、MemoryGuard（动手前核对）、RunningApps（读运行中的普通应用）
   DiskSlimCLI/       命令行 `diskslim`（scan / clean / undo / growth / memory）
   DiskSlimApp/       桌面应用（AppKit 启动，没有 SwiftUI 场景，L-15）：Store（扫描、勾选、清理、撤销、提醒、自动清理）、Views（首页「替你判断」：雾光顶卡 + 替你挑好的 / 要你说一句 / 先不动；下钻页、涨幅页、提醒设置、确认、提示）、Notifier（系统通知，只在打包版）、Snapshot（离屏截图）、FloatingBall（桌面悬浮球：贴边小窗、点开面板、拖动贴边）、
-                     MemoryStore.swift（是 `extension Store`，没有单独的类：内存读数、采样、一键退出、收会话、强制退出、重启提醒）、MemoryViews（「磁盘 | 内存」切换、内存页、强制退出页）
-tests/DiskSlimCoreTests/  各条规则的单元测试（Swift；和 Node 测试同在 tests/）
+                     Store+Memory.swift（`extension Store`：内存读数、采样、一键退出、收会话、强制退出、重启提醒）、MemoryViews（「磁盘 | 内存」切换、内存页、强制退出页）
+tests/DiskSlimCoreTests/  各条规则的单元测试（Swift；和 Node 测试同在 tests/）。文件按被测对象命名，`…AdversarialTests` 和带 Adversarial 的套件是独立审查留下的对抗用例
 assets/floating-ball.png  悬浮球图标（打包时复制成 Contents/Resources/ball.png）
 design/fuyou-icon/   悬浮球定稿图与生图需求（中间稿和参考图只留本机，不进仓库）
 docs/

@@ -93,7 +93,7 @@
 - 正确做法：取进程路径时加 `LC_ALL=en_US.UTF-8`；装完用 `pgrep -fl` 核对只剩一份，不能只看脚本的成功提示。
 - 补充（全面审查 B1）：Swift 里起子进程同样要设。菜单栏应用从访达 / 登录项启动时环境里根本没有 LANG / LC_*，`ProcessRunner` 跑 `ps` 也会转义，导致「有进程在用这个构建产物」永远认不出；已在 `ProcessRunner` 里统一设 `LC_ALL=en_US.UTF-8`，测试 `FullReviewTests` 覆盖。
 - 证据：`evidence/2026-11-05-install.txt`（两份并存）、`evidence/2026-11-05-install-2.txt`（修复后只剩新装的一份）。
-- 升级：〔提醒〕部分升级（已写测试 `FullReviewProcessTests` 的 `没有区域设置时_正在使用的构建产物不该被删`，只管 `ProcessRunner`，`scripts/install.sh` 没有测试；未接进必经检查；已批：积压清单组 10，已并入全局 G-38）。原记录：未升级。路径带中文的项目都会踩，提议提升为全局 G-xx，等用户批准。
+- 升级：〔提醒〕部分升级（已写测试 `ProcessRunnerLocaleTests`（原 `FullReviewProcessTests`，2026-11-20 测试重组时改名） 的 `没有区域设置时_正在使用的构建产物不该被删`，只管 `ProcessRunner`，`scripts/install.sh` 没有测试；未接进必经检查；已批：积压清单组 10，已并入全局 G-38）。原记录：未升级。路径带中文的项目都会踩，提议提升为全局 G-xx，等用户批准。
 - 提升：已提升为全局 G-38（2026-11-19，agent-kit#83）。
 
 ## L-10 安全门只管「要清的路径」，工具自己新加的工作目录（暂存目录）漏了符号链接检查（2026-11-05）
