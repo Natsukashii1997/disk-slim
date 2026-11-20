@@ -28,6 +28,17 @@ public enum Cleanup: Codable, Equatable {
     case none
 }
 
+extension Cleanup {
+    /// 真能执行：不是「不能清」，也不是空命令
+    public var runnable: Bool {
+        switch self {
+        case .none: return false
+        case .command(let args): return !args.isEmpty
+        default: return true
+        }
+    }
+}
+
 public struct Finding: Codable, Identifiable {
     public let id: String
     public let area: Area
@@ -95,6 +106,17 @@ extension Finding {
         if area == .downloads && cleanup.runnable { return .ask }
         if let used = lastUsed, now.timeIntervalSince(used) > Double(Self.unusedDays) * 86_400 { return .ask }
         return .keep
+    }
+}
+
+/// 可用空间的三档：和驿窗号码牌同一套阈值（低于 60 GB 提醒，低于 30 GB 警告）
+public enum SpaceLevel: Sendable {
+    case ok, low, critical
+
+    public init(freeBytes: Int64?) {
+        guard let freeBytes else { self = .ok; return }
+        let gb = Double(freeBytes) / 1_073_741_824
+        self = gb < 30 ? .critical : gb < 60 ? .low : .ok
     }
 }
 

@@ -12,17 +12,6 @@ public struct BallPosition: Codable, Equatable, Sendable {
     }
 }
 
-/// 可用空间的三档：和驿窗号码牌同一套阈值（低于 60 GB 提醒，低于 30 GB 警告）
-public enum SpaceLevel: Sendable {
-    case ok, low, critical
-
-    public init(freeBytes: Int64?) {
-        guard let freeBytes else { self = .ok; return }
-        let gb = Double(freeBytes) / 1_073_741_824
-        self = gb < 30 ? .critical : gb < 60 ? .low : .ok
-    }
-}
-
 /// 悬浮球和它旁边那个面板的位置计算（屏幕坐标，原点在左下）。
 /// 做法照随手记的悬浮球（digiworld/desktop/floating-notes/Geometry.swift）：48 点、离屏幕边 8 点、拖完贴最近的左右边。
 public enum FloatGeometry {
