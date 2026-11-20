@@ -51,7 +51,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         let examples: [(String, String)] = [
             ("【示例】磁盘只剩 28.4 GB", "低于 30 GB 了。点侧边的扫帚浮游兽，看看能清什么。（这是测试通知）"),
             ("【示例】postpane · worktree 构建产物 一天涨了 12.3 GB", "点侧边的扫帚浮游兽 › 涨幅，看看是谁。（这是测试通知）"),
-            ("【示例】本周瘦身：4 件待决定", "一共能腾出 3.2 GB。点侧边的扫帚浮游兽，逐件决定。（这是测试通知）"),
+            ("【示例】本周瘦身：4 件要你说一句", "一共能腾出 3.2 GB。打开磁盘瘦身，在「要你说一句」里点一下就行。（这是测试通知）"),
             ("【示例】自动清理腾出了 1.4 GB", "清了 3 项缓存。（这是测试通知，没有清理任何东西）"),
         ]
         let done = DispatchSemaphore(value: 0)

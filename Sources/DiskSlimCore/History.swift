@@ -14,8 +14,6 @@ public func applyHistory(_ findings: [Finding], history: [Batch], now: Date,
             .compactMap { b in b.items.first { $0.cleanup == f.cleanup && $0.outcome == .done }.map { (b.at, $0) } }
             .first
         guard let (at, item) = last, item.freedBytes < minFreed else { return f }
-        return Finding(area: f.area, category: f.category, title: f.title,
-                       detail: "\(BeijingTime.monthDay(at))清理过，只释放了 \(formatBytes(item.freedBytes))，剩下的都还在用",
-                       paths: f.paths, bytes: f.bytes, risk: f.risk, suggested: false, cleanup: f.cleanup, lastUsed: f.lastUsed)
+        return f.revised(detail: "\(BeijingTime.monthDay(at))清理过，只释放了 \(formatBytes(item.freedBytes))，剩下的都还在用", suggested: false)
     }
 }

@@ -1,5 +1,5 @@
 #!/bin/zsh
-# 把菜单栏应用打包成 dist/DiskSlim.app，并做本机签名（ad-hoc）。不安装、不启动。
+# 把桌面应用打包成 dist/DiskSlim.app，并做本机签名（ad-hoc）。不安装、不启动。
 # 用法：scripts/bundle.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."

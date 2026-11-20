@@ -8,7 +8,7 @@ public struct AlertSettings: Codable, Equatable {
     public var growth = true
     /// 每周五 18:00 发周报（只问首页「要你说一句」里的事）
     public var weekly = true
-    /// 自动清理「安全」的缓存和构建产物：默认关闭；打开后只在可用低于 60 GB 时执行，每天最多一次
+    /// 自动清理「安全」的缓存和构建产物：默认关闭；打开后只在可用低于 60 GB 时执行，两次之间至少隔 2 小时（`Alerts.autoCleanGap`）
     public var autoClean = false
 
     public init() {}
@@ -28,7 +28,6 @@ public struct AlertState: Codable, Equatable {
     public var settings = AlertSettings()
     /// 提醒的键 → 发过的北京日期（周报记的是那个周五的日期）
     public var sent: [String: String] = [:]
-    /// 自动清理上次执行的北京日期
     /// 自动清理上次执行的时间（第 7 批起：两次之间至少隔 `autoCleanGap`，不再是每天一次）
     public var autoCleanAt: Date?
 

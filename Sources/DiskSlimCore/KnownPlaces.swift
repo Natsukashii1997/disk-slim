@@ -12,7 +12,8 @@ public struct Place {
     public let detail: String
     /// 每个子目录各算一项（如 Codex 的多份备份）
     public let perChild: Bool
-    /// 进程命令行里出现这些字样时先不清（例如 Homebrew 正在下载）
+    /// 进程命令行里出现这些命令时先不清（例如 Homebrew 正在下载、npm 正在装依赖）。
+    /// 按完整的词比：前面得是行首、空格或「/」，后面得是行尾或空格，所以 `pnpm install` 不算 `npm install`（`commandLine(_:mentions:)`）
     public let busyWhen: [String]
     /// 按份的备份：最新一份留着保底，超过 `Finding.unusedDays` 天的旧份默认勾选（2026-11-18 常浩定，issue #4）
     public let keepNewest: Bool
@@ -39,19 +40,25 @@ public struct Place {
 public enum KnownPlaces {
     public static let all: [Place] = [
         // 安全：可再生，默认勾选
+        // 清理命令的 busyWhen 只写「正在装依赖」的命令：本机常年挂着几十个 `npm exec …`、`uv tool uvx …` 起的 MCP 服务，
+        // 写成「npm 在跑就不清」等于永远清不了。`uv run` 也不算（多半是常驻的脚本）
         // `npm cache clean` 只清 _cacache；_npx 另列在下面
         Place("包管理器缓存", "npm 缓存", [".npm/_cacache"], risk: .safe, suggested: true,
-              cleanup: .command(["npm", "cache", "clean", "--force"]), detail: "下次安装时会重新下载"),
+              cleanup: .command(["npm", "cache", "clean", "--force"]), detail: "下次安装时会重新下载",
+              busyWhen: ["npm install", "npm ci", "npm i", "npm update"]),
         Place("包管理器缓存", "uv 缓存", [".cache/uv"], risk: .safe, suggested: true,
-              cleanup: .command(["uv", "cache", "clean"]), detail: "下次安装时会重新下载"),
+              cleanup: .command(["uv", "cache", "clean"]), detail: "下次安装时会重新下载",
+              busyWhen: ["uv sync", "uv pip", "uv add", "uv lock", "uv venv", "uv tool install"]),
         Place("包管理器缓存", "pnpm 存储", ["Library/pnpm/store"], risk: .safe, suggested: true,
-              cleanup: .command(["pnpm", "store", "prune"]), detail: "只删没有项目引用的包"),
+              cleanup: .command(["pnpm", "store", "prune"]), detail: "只删没有项目引用的包",
+              busyWhen: ["pnpm install", "pnpm i", "pnpm add", "pnpm update", "pnpm dlx"]),
         // 不用 `brew cleanup`：它还会删已安装软件的旧版本、自动卸载没人依赖的软件，都不能撤销（L-06）。
         // 只删下载缓存，下次安装时重新下载
         Place("包管理器缓存", "Homebrew 下载缓存", ["Library/Caches/Homebrew/downloads"], risk: .safe, suggested: true,
               cleanup: .remove, detail: "下次安装时会重新下载", busyWhen: ["Homebrew/brew.rb"]),
         Place("包管理器缓存", "pip 缓存", ["Library/Caches/pip"], risk: .safe, suggested: true,
-              cleanup: .command(["pip3", "cache", "purge"]), detail: "下次安装时会重新下载"),
+              cleanup: .command(["pip3", "cache", "purge"]), detail: "下次安装时会重新下载",
+              busyWhen: ["pip install", "pip3 install", "pip download", "pip3 download"]),
         Place("测试用浏览器", "Puppeteer 浏览器", [".cache/puppeteer"], risk: .safe, suggested: true,
               cleanup: .remove, detail: "下次跑测试时会自动重新下载"),
 
@@ -74,6 +81,35 @@ public enum KnownPlaces {
         Place("对话记录", "Codex 对话记录", [".codex/sessions", ".codex/archived_sessions"], risk: .readOnly,
               detail: "删了就找不回；要清请在 Codex 里操作"),
     ]
+}
+
+/// 清理命令在这台电脑上找不到的项：不勾选、不能勾，说明里写去终端怎么清。
+/// 应用从「应用程序」或登录项启动时 PATH 很短（`ProcessRunner` 只补了 Homebrew），装在 `~/.local/bin`、nvm 目录下的
+/// uv、pnpm 找不到，点了只会被跳过；在终端里跑命令行时找得到，照常勾选（L-16）。
+/// 用和执行时同一个 `runner` 查（`which`），两边看到的 PATH 一致。
+public func applyAvailability(_ findings: [Finding], runner: CommandRunner) -> [Finding] {
+    var known: [String: Bool] = [:]
+    return findings.map { f in
+        guard case .command(let args) = f.cleanup, let tool = args.first else { return f }
+        let available = known[tool] ?? (runner.run(["which", tool], cwd: nil).status == 0)
+        known[tool] = available
+        if available { return f }
+        return f.revised(detail: "这台电脑上没找到 \(tool) 命令，清不了；可以在终端里运行 \(args.joined(separator: " "))",
+                         suggested: false, cleanup: Cleanup.none)
+    }
+}
+
+/// 进程命令行里有没有在跑这条命令：`marker` 前面得是行首、空格或「/」，后面得是行尾或空格。
+/// `/x/bin/pnpm install` 算 `pnpm install`，不算 `npm install`；`npm i` 不算 `npm init`
+public func commandLine(_ line: Substring, mentions marker: String) -> Bool {
+    var from = line.startIndex
+    while let r = line.range(of: marker, range: from..<line.endIndex) {
+        let startsWord = r.lowerBound == line.startIndex || [" ", "/"].contains(line[line.index(before: r.lowerBound)])
+        let endsWord = r.upperBound == line.endIndex || line[r.upperBound] == " "
+        if startsWord && endsWord { return true }
+        from = line.index(after: r.lowerBound)
+    }
+    return false
 }
 
 public struct KnownPlacesScanner {

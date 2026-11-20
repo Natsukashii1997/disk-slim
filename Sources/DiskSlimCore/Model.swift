@@ -16,7 +16,7 @@ public enum Risk: String, Codable {
     case readOnly
 }
 
-/// 这一项要怎么清。第 1 批只记录，第 2 批执行。
+/// 这一项要怎么清。
 public enum Cleanup: Codable, Equatable {
     /// 移到废纸篓（用户文件一律走这条）
     case trash
@@ -58,6 +58,12 @@ public struct Finding: Codable, Identifiable {
         self.suggested = risk == .readOnly ? false : suggested
         self.cleanup = risk == .readOnly ? .none : cleanup
         self.lastUsed = lastUsed
+    }
+
+    /// 同一项换个说明、勾选状态或清理方式（按历史、按用户的决定、按命令在不在调整时用）；路径、大小、分组不变，`id` 也就不变
+    public func revised(detail: String, suggested: Bool, cleanup: Cleanup? = nil) -> Finding {
+        Finding(area: area, category: category, title: title, detail: detail, paths: paths, bytes: bytes, risk: risk,
+                suggested: suggested, cleanup: cleanup ?? self.cleanup, lastUsed: lastUsed)
     }
 }
 
