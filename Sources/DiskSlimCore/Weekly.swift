@@ -114,8 +114,7 @@ public struct DecisionLog {
 public func applyDecisions(_ findings: [Finding], _ decisions: Decisions) -> [Finding] {
     findings.map { f in
         guard f.suggested, decisions.isKept(f) else { return f }
-        return Finding(area: f.area, category: f.category, title: f.title, detail: "你选过保留 · " + f.detail,
-                       paths: f.paths, bytes: f.bytes, risk: f.risk, suggested: false, cleanup: f.cleanup, lastUsed: f.lastUsed)
+        return f.revised(detail: "你选过保留 · " + f.detail, suggested: false)
     }
 }
 

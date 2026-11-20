@@ -196,7 +196,7 @@ public struct Cleaner {
         if let reason = recheck(f) { return result(.skipped, reason) }
         let lines = processes.split(separator: "\n")
         let markers = safety.busyMarkers(for: f)
-        if !markers.isEmpty, lines.contains(where: { line in markers.contains { line.contains($0) } }) {
+        if !markers.isEmpty, lines.contains(where: { line in markers.contains { $0.running(in: line) } }) {
             return result(.skipped, "相关程序正在运行，这次先不清")
         }
         let fm = FileManager.default

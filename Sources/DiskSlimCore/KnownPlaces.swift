@@ -12,15 +12,15 @@ public struct Place {
     public let detail: String
     /// 每个子目录各算一项（如 Codex 的多份备份）
     public let perChild: Bool
-    /// 进程命令行里出现这些字样时先不清（例如 Homebrew 正在下载）
-    public let busyWhen: [String]
+    /// 有这些程序在干活时先不清（例如 Homebrew 正在下载、npm 正在装依赖）
+    public let busyWhen: [Busy]
     /// 按份的备份：最新一份留着保底，超过 `Finding.unusedDays` 天的旧份默认勾选（2026-11-18 常浩定，issue #4）
     public let keepNewest: Bool
     /// 记最近一次用过的时间（虚拟机）：一个月没用才问用户
     public let trackUse: Bool
 
     public init(_ category: String, _ title: String, _ paths: [String], risk: Risk, suggested: Bool = false,
-                cleanup: Cleanup = .none, detail: String, perChild: Bool = false, busyWhen: [String] = [],
+                cleanup: Cleanup = .none, detail: String, perChild: Bool = false, busyWhen: [Busy] = [],
                 keepNewest: Bool = false, trackUse: Bool = false) {
         self.category = category
         self.title = title
@@ -39,21 +39,29 @@ public struct Place {
 public enum KnownPlaces {
     public static let all: [Place] = [
         // 安全：可再生，默认勾选
+        // npm、pnpm、pip 的 busyWhen 只认「正在装依赖」的子命令（含别名）：本机常年挂着几十个 `npm exec …` 起的 MCP 服务，
+        // 写成「npm 在跑就不清」等于永远清不了；`pnpm dlx` 同理不列。
+        // uv 不一样：任何 uv 进程（含常驻的 `uv run`、uvx 服务）都占着缓存锁，这时 `uv cache clean` 会一直等到超时
+        // （2026-11-20 用隔离缓存目录实测，uv 0.11.7），所以只要有 uv 在跑就先不清；不加 `--force`，它会删掉正在用的环境
         // `npm cache clean` 只清 _cacache；_npx 另列在下面
         Place("包管理器缓存", "npm 缓存", [".npm/_cacache"], risk: .safe, suggested: true,
-              cleanup: .command(["npm", "cache", "clean", "--force"]), detail: "下次安装时会重新下载"),
+              cleanup: .command(["npm", "cache", "clean", "--force"]), detail: "下次安装时会重新下载",
+              busyWhen: [Busy("npm", ["install", "add", "i", "in", "ins", "inst", "insta", "instal", "isnt", "isnta", "isntal", "isntall",
+                                    "ci", "clean-install", "ic", "install-clean", "it", "install-test", "cit", "install-ci-test",
+                                    "update", "up", "upgrade", "udpate", "dedupe", "ddp"])]),
         Place("包管理器缓存", "uv 缓存", [".cache/uv"], risk: .safe, suggested: true,
-              cleanup: .command(["uv", "cache", "clean"]), detail: "下次安装时会重新下载"),
+              cleanup: .command(["uv", "cache", "clean"]), detail: "下次安装时会重新下载",
+              busyWhen: [Busy("uv"), Busy("uvx")]),
         Place("包管理器缓存", "pnpm 存储", ["Library/pnpm/store"], risk: .safe, suggested: true,
-              cleanup: .command(["pnpm", "store", "prune"]), detail: "只删没有项目引用的包"),
+              cleanup: .command(["pnpm", "store", "prune"]), detail: "只删没有项目引用的包",
+              busyWhen: [Busy("pnpm", ["install", "i", "add", "update", "up", "upgrade", "fetch", "import", "dedupe"])]),
         // 不用 `brew cleanup`：它还会删已安装软件的旧版本、自动卸载没人依赖的软件，都不能撤销（L-06）。
         // 只删下载缓存，下次安装时重新下载
         Place("包管理器缓存", "Homebrew 下载缓存", ["Library/Caches/Homebrew/downloads"], risk: .safe, suggested: true,
-              cleanup: .remove, detail: "下次安装时会重新下载", busyWhen: ["Homebrew/brew.rb"]),
+              cleanup: .remove, detail: "下次安装时会重新下载", busyWhen: [Busy("Homebrew/brew.rb")]),
         Place("包管理器缓存", "pip 缓存", ["Library/Caches/pip"], risk: .safe, suggested: true,
-              cleanup: .command(["pip3", "cache", "purge"]), detail: "下次安装时会重新下载"),
-        Place("测试用浏览器", "Puppeteer 浏览器", [".cache/puppeteer"], risk: .safe, suggested: true,
-              cleanup: .remove, detail: "下次跑测试时会自动重新下载"),
+              cleanup: .command(["pip3", "cache", "purge"]), detail: "下次安装时会重新下载",
+              busyWhen: [Busy("pip", ["install", "download", "wheel"])]),
 
         // 需确认：不默认勾选
         Place("包管理器缓存", "npx 运行过的工具", [".npm/_npx"], risk: .confirm, cleanup: .trash,
@@ -62,6 +70,11 @@ public enum KnownPlaces {
         // （11-17、11-18 删过 3 次，驿窗 L-16、剪藏插件 L-16），所以不默认勾选、不进自动清理（2026-11-19 常浩批）
         Place("测试用浏览器", "Playwright 浏览器", ["Library/Caches/ms-playwright"], risk: .confirm, cleanup: .remove,
               detail: "驿窗、剪藏插件的扩展测试要用；删了测试直接失败，不会自动重新下载，要在项目里手动 playwright install 装回"),
+        // 和 Playwright 同类：浏览器是装依赖时下载的，启动时不会自动补，原来写的「下次跑测试时会自动重新下载」不对
+        // （按 Puppeteer 的已知行为判断，本机没有这个目录，没实测）。2026-11-20 常浩确认照 Playwright 改（issue #18），
+        // 11-19 那次定的是「这次不动」
+        Place("测试用浏览器", "Puppeteer 浏览器", [".cache/puppeteer"], risk: .confirm, cleanup: .remove,
+              detail: "用 Puppeteer 的项目跑测试要用；删了不会自动重新下载，要在项目里运行 npx puppeteer browsers install 装回"),
         Place("备份快照", "Codex 备份", [".codex/recovery"], risk: .confirm,
               cleanup: .trash, detail: "你自己做的备份", perChild: true, keepNewest: true),
         Place("虚拟机", "Colima 虚拟机", [".colima"], risk: .confirm,
@@ -74,6 +87,52 @@ public enum KnownPlaces {
         Place("对话记录", "Codex 对话记录", [".codex/sessions", ".codex/archived_sessions"], risk: .readOnly,
               detail: "删了就找不回；要清请在 Codex 里操作"),
     ]
+}
+
+/// 清理命令在这台电脑上找不到的项：不勾选、不能勾，说明里写去终端怎么清。
+/// 应用从「应用程序」或登录项启动时 PATH 很短（`ProcessRunner` 只补了 Homebrew），装在 `~/.local/bin`、nvm 目录下的
+/// uv、pnpm 找不到，点了只会被跳过；在终端里跑命令行时找得到，照常勾选（L-16）。
+/// 用和执行时同一个 `runner` 查（`which`），两边看到的 PATH 一致。
+public func applyAvailability(_ findings: [Finding], runner: CommandRunner) -> [Finding] {
+    var known: [String: Bool] = [:]
+    return findings.map { f in
+        guard case .command(let args) = f.cleanup, let tool = args.first else { return f }
+        let available = known[tool] ?? (runner.run(["which", tool], cwd: nil).status == 0)
+        known[tool] = available
+        if available { return f }
+        return f.revised(detail: "没找到 \(tool) 命令，这里清不了；装了的话可以在终端里运行 \(args.joined(separator: " "))",
+                         suggested: false, cleanup: .none)
+    }
+}
+
+/// 「对应的工具正在干活」的特征：进程命令行里有 `tool` 这个程序，而且它后面的词里有 `subcommands` 之一（空表示只要在跑就算）。
+/// 按词比，不按子串比：`pnpm install` 不算 npm 在装；带全局选项的 `pnpm --filter web install`、`python -m pip -q install`、
+/// 带版本号的 `pip3.12 install` 都认得。宁可多拦：命令行里只是提到这些词（`sh -c "npm install && vite"`）也算，这次跳过、下次再清
+public struct Busy: Equatable {
+    /// 可执行文件的名字，或路径的结尾（`Homebrew/brew.rb`）
+    public let tool: String
+    public let subcommands: Set<String>
+
+    public init(_ tool: String, _ subcommands: Set<String> = []) {
+        self.tool = tool
+        self.subcommands = subcommands
+    }
+
+    /// `ps -axo command` 的一行里有没有它
+    public func running(in line: Substring) -> Bool {
+        let words = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
+        for (i, word) in words.enumerated() where isTool(word) {
+            if subcommands.isEmpty || words[(i + 1)...].contains(where: { subcommands.contains(String($0)) }) { return true }
+        }
+        return false
+    }
+
+    private func isTool(_ word: Substring) -> Bool {
+        if word == tool || word.hasSuffix("/" + tool) { return true }
+        // 带版本号的名字：pip3、pip3.12
+        let base = word.split(separator: "/").last ?? word
+        return base.hasPrefix(tool) && base.count > tool.count && base.dropFirst(tool.count).allSatisfy { $0.isNumber || $0 == "." }
+    }
 }
 
 public struct KnownPlacesScanner {

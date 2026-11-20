@@ -198,7 +198,7 @@ public enum BeijingTime {
     public static func hourMinute(_ date: Date) -> String { timeFormatter.string(from: date) }
 }
 
-/// 按 1024 进位，和 `du -h`、访达一致的写法：「43 MB」「6.2 GB」。
+/// 按 1024 进位，和 `du -h` 一致（访达按 1000 进位，同一块盘在访达里的数更大）：「43 MB」「6.2 GB」。
 public func formatBytes(_ bytes: Int64) -> String {
     let mb = Double(bytes) / 1_048_576
     if mb < 1 { return "\(max(bytes / 1024, bytes > 0 ? 1 : 0)) KB" }

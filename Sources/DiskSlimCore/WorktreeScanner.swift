@@ -210,15 +210,19 @@ public struct WorktreeScanner {
         runner.run(["git", "--no-optional-locks", "-C", wt.path] + args, cwd: nil).output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func blockers(wt: URL, target: URL) -> [String] {
+    /// 不是 Rust 的构建目录（例如别的项目里被 git 跟踪的 target/ 源码）就不碰。扫描时和执行前复核都用，返回原因，空表示是。
+    /// 查 `target/`（带斜杠）：忽略规则写成 `target/` 而目录已经不在时，查 `target` 会被当成没忽略（2026-11-20 临时仓库实测）
+    public static func notRustBuild(_ wt: URL, runner: CommandRunner) -> [String] {
         var reasons: [String] = []
-        let fm = FileManager.default
-
-        // 不是 Rust 的构建目录（例如别的项目里被 git 跟踪的 target/ 源码）就不碰
-        if !fm.fileExists(atPath: wt.appendingPathComponent("Cargo.toml").path) { reasons.append("不是 Rust 项目") }
-        if runner.run(["git", "--no-optional-locks", "-C", wt.path, "check-ignore", "-q", "target"], cwd: nil).status != 0 {
+        if !FileManager.default.fileExists(atPath: wt.appendingPathComponent("Cargo.toml").path) { reasons.append("不是 Rust 项目") }
+        if runner.run(["git", "--no-optional-locks", "-C", wt.path, "check-ignore", "-q", "target/"], cwd: nil).status != 0 {
             reasons.append("target 没被 git 忽略")
         }
+        return reasons
+    }
+
+    private func blockers(wt: URL, target: URL) -> [String] {
+        var reasons = Self.notRustBuild(wt, runner: runner)
 
         let status = runner.run(["git", "--no-optional-locks", "-C", wt.path, "status", "--porcelain"], cwd: nil)
         let dirty = status.output.split(separator: "\n").contains { !$0.hasPrefix("??") }

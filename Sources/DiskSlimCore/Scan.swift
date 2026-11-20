@@ -22,7 +22,8 @@ public struct Scan {
         let findings = applyDecisions(
             DownloadsScanner(root: home.appendingPathComponent("Downloads"), now: now, meta: meta).scan()
             + WorktreeScanner(workRoot: workRoot, now: now, runner: runner).scan()
-            + applyHistory(KnownPlacesScanner(home: home, now: now).scan(), history: OperationLog.standard(home: home).load(readOnly: true), now: now),
+            + applyHistory(applyAvailability(KnownPlacesScanner(home: home, now: now).scan(), runner: runner),
+                           history: OperationLog.standard(home: home).load(readOnly: true), now: now),
             DecisionLog.standard(home: home).load(readOnly: true))
         let downloads = home.appendingPathComponent("Downloads")
         return ScanReport(scannedAt: now, seconds: Date().timeIntervalSince(start),
@@ -33,18 +34,18 @@ public struct Scan {
                             .filter { blockedByPrivacy($0.1) }.map(\.0))
     }
 
-    /// 执行前复核会随时间变化的规则：扫描后又标了「保留」的下载项、扫描后又编译过的构建产物。
+    /// 执行前复核会随时间变化的规则：扫描后又标了「保留」的下载项、扫描后又编译过或已经不是 Rust 构建目录的构建产物。
     public func recheck(_ f: Finding, now: Date = Date()) -> String? {
         let urls = f.paths.map { URL(fileURLWithPath: $0) }
         if f.area == .downloads, urls.contains(where: { meta.tags($0).contains(DownloadsRules().keepTag) }) {
             return "扫描后标了「保留」，这次不清"
         }
-        // worktree 构建产物：执行前把「正在用」再判一遍（扫描和清理之间可能过了很久）
+        // worktree 构建产物：执行前把「是 Rust 构建目录」「正在用」再判一遍（扫描和清理之间可能过了很久，自动清理用的结果最长 1 小时前）
         if f.cleanup == .remove {
             for target in urls where target.path.hasPrefix(workRoot.path + "/") && target.lastPathComponent == "target" {
                 let wt = target.deletingLastPathComponent()
                 let project = wt.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-                let reasons = WorktreeScanner.inUse(wt, target: target, locked: WorktreeScanner.lockedWorktrees(project, runner: runner),
+                let reasons = WorktreeScanner.notRustBuild(wt, runner: runner) + WorktreeScanner.inUse(wt, target: target, locked: WorktreeScanner.lockedWorktrees(project, runner: runner),
                                                     openPaths: WorktreeScanner.recentOpenPaths(runner, now: now), processes: "", now: now)
                 if !reasons.isEmpty { return "扫描后情况变了（\(reasons.joined(separator: "、"))），这次不删" }
             }

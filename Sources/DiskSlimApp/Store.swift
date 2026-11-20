@@ -306,7 +306,7 @@ final class Store: ObservableObject {
         if !readOnly { try? alertStore.save(state) }
     }
 
-    /// 自动清理（默认关）：可用低于 60 GB、今天还没跑过时，只清「看不见的」里安全、默认勾选的项；下载文件夹不动
+    /// 自动清理（默认关）：可用低于 60 GB、离上次至少 2 小时时，只清「看不见的」里安全、默认勾选的项；下载文件夹不动
     func autoCleanIfDue() {
         // 用户正在确认清理、或者刚清完还能撤销时不插队，下一轮再说（这时不记今天已跑）
         guard alertsActive, !busy, confirming == nil, toast?.canUndo != true, let r = report,

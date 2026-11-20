@@ -9,6 +9,7 @@ macOS 小工具（2026-11-19 起不在菜单栏显示，入口是驿窗侧栏的
 | 改需求、加功能 | [docs/PRD.md](docs/PRD.md) |
 | 排障、改脚本、装 launchd 或定时任务 | 先 `grep -n 关键词 docs/LESSONS.md`，再搜全局坑 `/Users/nat/Documents/ChatGPT/个人/work/agent-kit/LESSONS.md` |
 | 开需求、拆任务、实现、审查 | 下面「Agent skills」一节 |
+| 读代码、给东西起名字 | [GLOSSARY.md](GLOSSARY.md)：代码里的词和界面上的词怎么对应 |
 | 写交接、验收别人的交接 | [docs/templates/handoff.md](docs/templates/handoff.md) 骨架；[OPERATIONS](docs/OPERATIONS.md)「交接写法」「报告与验收」 |
 
 项目长出接口、样式、发布等文档后，在这张表里加一行。
@@ -50,7 +51,8 @@ dist/DiskSlim.app/Contents/MacOS/DiskSlimApp --test-notify   # 用示例数据�
 
 ```
 AGENTS.md            入口（本文件）
-CURRENT.md           当前状态与唯一下一步；每轮交接写在顶部
+CURRENT.md           当前状态与唯一下一步；每轮交接写在顶部，旧节归档在 docs/history/
+GLOSSARY.md          词汇表：代码里的词和界面上的词怎么对应
 docs/PRD.md          需求（含调研结论、规则、分批计划）
 Package.swift        SwiftPM：DiskSlimCore（规则与模型）、diskslim（命令行）、DiskSlimApp（桌面应用）、DiskSlimCoreTests
 Sources/
@@ -58,9 +60,9 @@ Sources/
                      DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、History（按上次实际释放校正清理命令）、Usage（每日记录、7 天曲线、谁涨了多少）、Alerts（提醒开关与规则、自动清理挑项）、Weekly（每周卡片只问「要你说一句」、保留 / 下周再问）、Scan（总入口、执行前复核）、
                      SafetyGuard（执行前重新核对路径和命令的白名单）、Cleaner（执行、操作记录、撤销）、FloatGeometry（悬浮球与面板位置、空间三档）、Pendant（给驿窗挂件的状态文件、diskslim:// 链接解析、点挂件防抖）、
                      Memory（读内存压力、交换、进程，按应用和 Claude Code 会话合计）、MemoryPlan（内存三段规则、memory.json、动手前核对）、RunningApps（读运行中的普通应用）
-  DiskSlimCLI/       命令行 `diskslim`（scan / clean / undo）
+  DiskSlimCLI/       命令行 `diskslim`（scan / clean / undo / growth / memory）
   DiskSlimApp/       桌面应用（AppKit 启动，没有 SwiftUI 场景，L-15）：Store（扫描、勾选、清理、撤销、提醒、自动清理）、Views（首页「替你判断」：雾光顶卡 + 替你挑好的 / 要你说一句 / 先不动；下钻页、涨幅页、提醒设置、确认、提示）、Notifier（系统通知，只在打包版）、Snapshot（离屏截图）、FloatingBall（桌面悬浮球：贴边小窗、点开面板、拖动贴边）、
-                     MemoryStore（内存读数、采样、一键退出、收会话、强制退出、重启提醒）、MemoryViews（「磁盘 | 内存」切换、内存页、强制退出页）
+                     MemoryStore.swift（是 `extension Store`，没有单独的类：内存读数、采样、一键退出、收会话、强制退出、重启提醒）、MemoryViews（「磁盘 | 内存」切换、内存页、强制退出页）
 tests/DiskSlimCoreTests/  各条规则的单元测试（Swift；和 Node 测试同在 tests/）
 assets/floating-ball.png  悬浮球图标（打包时复制成 Contents/Resources/ball.png）
 design/fuyou-icon/   悬浮球定稿图与生图需求（中间稿和参考图只留本机，不进仓库）
@@ -77,6 +79,7 @@ scripts/
   install.sh         装到「应用程序」并启动（只替换我们自己的那份）
   test.sh            跑 Swift 单元测试（补上测试宏插件路径，L-04）
   check-rules.mjs    通用规则检查（只查机器能判定的）
+  hooks/             提交、推送前的必经检查（commit-msg、pre-push），用 `git config core.hooksPath scripts/hooks` 装
 tests/               node:test 测试
 ```
 
@@ -109,7 +112,7 @@ single-context：根目录 `GLOSSARY.md` 与 `docs/adr/`，用到时再建。见
 
 ## AI 接入
 
-本应用当前不调用 AI：扫描、分级、清理、提醒、内存判断都由本机规则完成，没有任何内容由 AI 替本应用产出（2026-11-07 核实，2026-11-18 第 11 批复核）。会启动的外部程序只有已知位置表里的缓存清理命令（`npm`、`uv`、`pnpm`、`pip3`）和查 PR 是否已合并的 `gh pr list`。
+本应用当前不调用 AI：扫描、分级、清理、提醒、内存判断都由本机规则完成，没有任何内容由 AI 替本应用产出（2026-11-07 核实，2026-11-18 第 11 批复核）。会启动的外部程序都不是 AI：已知位置表里的缓存清理命令（`npm`、`uv`、`pnpm`、`pip3`）和查它们在不在的 `which`；判断 worktree 状态的 `gh pr list`、`git`（只读）；判断在不在用的 `ps`、`lsof`。
 
 - 数据对象（来源是本机目录，只统计占用空间、按风险分级，不读内容，不算执行方；定义在 `KnownPlaces.swift`、`WorktreeScanner.swift`）：
   - 只展示，任何路径都删不了：Claude 对话记录 `~/.claude/projects`；Codex 对话记录 `~/.codex/sessions`、`~/.codex/archived_sessions`。
