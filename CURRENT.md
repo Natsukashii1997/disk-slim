@@ -2,13 +2,13 @@
 
 当前阶段目标：常态维护。第 6 批已收尾：2026-11-19 常浩定 `disk-space-guard` 停用（原目标「第 6 批试用一周收尾，定下 disk-space-guard 去留，之后转常态维护」，2026-11-08 常浩确认，digital-twin#114）。
 
-更新：2026-11-20 深夜。第二批整改（结构简化，issue #20）在分支 `claude/20-simplify`，不改行为：文件拆分、阈值和重复代码去重、显示文字不再当判断条件（`Category`、`Finding.kind`）、测试按被测对象重组。唯一下一步：常浩看过后说「合并」；另请常浩在「系统设置 › 通知 › 磁盘瘦身」里打开通知（第一批遗留）。
+更新：2026-11-21。第二批整改（结构简化，issue #20）已随 PR #21 squash 合并（`b1100f7`，常浩经 Agent HUD 回「合并」），未装机：文件拆分、阈值和重复代码去重、显示文字不再当判断条件（`Category`、`Finding.kind`）、测试按被测对象重组。唯一下一步：常浩定要不要装机第二批；另请常浩在「系统设置 › 通知 › 磁盘瘦身」里打开通知（第一批遗留）。
 
 之前：2026-11-20。整体评估后的第一批整改（issue #18）已随 PR #19 squash 合回 main（`e35d96a`），2026-11-20 23:17 已装机：找不到清理命令的项不再默认勾选、清理命令加「正在装依赖就不清」、构建产物执行前复核补查 Rust 构建目录、文档收口。同一天查实：已装版本的通知权限是「已拒绝」，11-05 以来一条提醒都没发出去；06:03 重启后应用没起来，19:34 已手动启动。钩子的三个 PR（#14、#15、#16）都已合并，`core.hooksPath` 已装回 `scripts/hooks`；#16（commit-msg 钩子换 project-starter 0.5.0，`ccff96c`）当时没写交接节，以 PR 描述为准。Puppeteer 经改动确认后也照 Playwright 改成了需确认。唯一下一步：请常浩在「系统设置 › 通知 › 磁盘瘦身」里打开通知，打开后重跑 `--test-notify`，最后一行要是「已允许」；本机签名变了，下载访问和完全磁盘访问多半也要重给。
 
 之前：2026-11-19。`disk-space-guard` 定为停用（任务保持关闭、不删）。菜单栏图标已去掉，入口只留驿窗侧栏挂件，已随 PR #12 squash 合回 main（`8deed49`）、已装机。之前：2026-11-18。第 0–11 批、缩小键、面板尺寸固定和按钮手感都已合回 main（PR #1、#5、#6、#7、#8）。第 11 批「内存」：「磁盘 | 内存」切换、内存页（定稿一二结合）、一键退出、要你说一句（Claude 会话 / 浏览器 / 重启）、强制退出页，已装机。11-18 19:12 交接会话补做了真屏验收：内存页、强制退出页「退出」和「强制退出」点两下都通过；验收中发现面板切到内存页会长出屏幕底边，已修（`FloatingBall.swift`）并重装复验。常浩看过截图说「开 PR」，开了 PR #7，常浩说「合并」后已 squash 合回 main（`e862639`，2026-11-18 20:00）。20:00 后在新分支 `claude/panel-fixed-size` 做了「面板尺寸固定 + 磁盘顶卡谁占着」和「顶栏按钮点击手感」，已随 PR #8 squash 合回 main（`af6f2a2`，2026-11-18 20:58；PR #7 合并后才做，所以单开了 #8）。（当时的唯一下一步「`disk-space-guard` 要不要停」已在 2026-11-19 定为停用，见下面对应一节。）
 
-## 第二批整改：结构简化，不改行为（2026-11-20，Claude，常浩回「做第二批」，经 Agent HUD 送达；已提交到 `claude/20-simplify`、PR 待合并、未装机、未发布）
+## 第二批整改：结构简化，不改行为（2026-11-20，Claude，常浩回「做第二批」，经 Agent HUD 送达；已随 PR #21 squash 合并（`b1100f7`）、未装机、未发布）
 
 - 时间：开工 `2026-11-20 23:28`。★ 来由：当天接手成本评估列出的五类成本点，第二批做其中不改行为的部分（issue #20）。
 - 改了哪些文件：四个提交。① 文件搬家（`814f42e`）：`Weekly.swift` 拆出 `Decisions.swift`、`Persistence.swift`，`MemoryPlan.swift` 拆成 `MemoryRecord.swift`、`MemoryRules.swift`、`MemoryPlan.swift`、`MemoryGuard.swift`，`SpaceLevel` 搬进 `Model.swift`，`MemoryStore.swift` 改名 `Store+Memory.swift`。② 去重（`0eb479e`）：30 / 60 GB 只留 `SpaceLevel.lowBytes`、`criticalBytes`；`total()`、`ScanReport.with(findings:)`、`lastBuilt` 复用 `latestModification`；`SessionTrack` 改名 `ActivityTrack`。③ 类型（`950ee00`）：新文件 `Kind.swift`（分组名常量 `Category`、`Finding.kind`、`friendlyName`、`pickedLabel`），`Usage.partName`、每周卡片、首页图标按类型判断；`WorktreeScanner` 落地原因改成枚举；撤销结果前缀提成常量。④ 测试重组：三个按来历命名的文件拆回各自的对象，三个文件改名，新增 `DecisionsTests.swift`、`SystemTests.swift`、`FindingKindTests.swift`。文档：`AGENTS.md` 结构说明、`GLOSSARY.md`、`docs/LESSONS.md`（L-09 里的测试名）、本文件。
@@ -16,7 +16,7 @@
 - 验证：`FindingKindTests` 逐字锁住分组名、`usage.json` 里各位置的名字、首页名字和 `scan --json` 的字段。离屏渲染 31 张（`.build/debug/DiskSlimApp --snapshot`，证据 `evidence/batch2-2026-11-21/snapshot-after/`），看了首页：五个「谁占着」的图标和名字、颜色都对。验证环境：替身（调试版离屏渲染 + 真实只读扫描），未装机、未在真实面板里看。
 - 独立审查（L-06）：只读审查员专门核「有没有悄悄改了行为」。四条说法里文件搬家、去重、测试重组三条成立（搬家提交删除行和新增行的集合完全相同；阈值约 200 万个输入 0 个不同；`memory.json` 新旧两版往返逐字节相同；测试 300 条名字和正文都在，多出的 7 条全在 `FindingKindTests`；真实磁盘上新旧两版 `scan --json` 240 项的字段、分组、勾选、说明全部相同）。「显示文字不再当判断条件」部分成立，找到两处差异：① `WorktreeScanner` 里我把 `!reasons.contains("2 小时内编译过")` 换成了重新读一次文件系统，中间隔着几条 git 命令，赶上开始编译时两次结果对不上，会把本该「暂时不能清」的列成「已合并、默认勾选」（审查员用假命令回复复现）。已改回用 `inUse` 当时的结果，原因文字提成常量 `recentlyBuiltReason`。② `friendlyName` 原来按标题开头判断，下载文件夹里碰巧叫「Codex 备份 · …」的文件会被显示成「Codex 备份」；现在按类型判断，显示真名。这是修了一个潜伏的错，保留新行为并加测试锁住，在 PR 里单列。审查证据 `evidence/batch2-review-2026-11-21/`。
 - 截图：无界面改动。只做了电脑版。
-- 发布与回读：未发布、未装机。
+- 发布与回读：已随 PR #21 squash 合并（`b1100f7`，2026-11-21），合并前在 worktree 重跑三套测试全过（证据 `evidence/batch2-merge-2026-11-21/`）；未发布、未装机。
 - 与授权不一致之处、遗留问题、范围外发现：⓪ 说好不改行为，实际有一处改了：上面的 `friendlyName`（下载文件夹里名字以「Codex 备份 · 」开头、又落在「先不动」的文件，首页抽屉里从显示「Codex 备份」变成显示真名）。① `AlertsAdversarialTests.swift` 里还混着每周卡片和决定的套件，它们共用一组文件内私有的帮手，没拆。② `Finding.kind` 是从分组名算出来的，没有做成存进 JSON 的字段：存进去要改 `scan --json` 的输出，属于行为变化。`Snapshot.swift` 里编示例记录时还有一处按名字里含「worktree 构建产物」找位置，只用于示例截图，没动。③ `Finding.selectable`（应用层）和 `Cleanup.runnable`（核心层）仍是两个，对解码出来的异常数据判断不同，没合并。④ 两个 `learning`、三个 `busy` 的命名没动，记在 `GLOSSARY.md`。⑤ 范围外发现：离屏渲染时可用空间 47.8 GB，比白天的 67 GB 少了约 20 GB，低于 60 GB。
 - 本轮新坑：无。★
 
