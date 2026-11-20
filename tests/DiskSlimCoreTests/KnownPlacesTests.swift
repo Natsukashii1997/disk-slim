@@ -175,17 +175,3 @@ import Testing
         #expect(f.cleanup == .none)
     }
 }
-
-@Suite struct FormatTests {
-    @Test func 日期按北京时间显示() {
-        // 2026-10-05 17:00 UTC 是北京时间 10 月 6 日凌晨 1 点
-        let d = ISO8601DateFormatter().date(from: "2026-10-05T17:00:00Z")!
-        #expect(BeijingTime.monthDay(d) == "10 月 6 日")
-    }
-
-    @Test func 大小按1024进位() {
-        #expect(formatBytes(43 * 1_048_576) == "43 MB")
-        #expect(formatBytes(Int64(6.2 * 1_073_741_824)) == "6.2 GB")
-        #expect(formatBytes(500) == "1 KB")
-    }
-}

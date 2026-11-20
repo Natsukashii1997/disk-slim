@@ -47,26 +47,26 @@ public struct WorktreeScanner {
                 let built = BeijingTime.monthDay(Self.lastBuilt(target) ?? now)
                 let landed = landedReason(wt, merged: merged)
                 // 只靠「当前提交已在主分支里」认出来的（可能是刚切出来还没动、或常驻跟着 main 的），静置 24 小时才清
-                if landed?.hasPrefix("当前提交已在") == true, let last = Self.lastBuilt(target), now.timeIntervalSince(last) < 86_400,
-                   !reasons.contains("2 小时内编译过") {
+                if case .inMain? = landed, let last = Self.lastBuilt(target), now.timeIntervalSince(last) < 86_400,
+                   !reasons.contains(Self.recentlyBuiltReason) {
                     reasons.append("刚从主分支切出来或一直跟着主分支，24 小时内编译过")
                 }
                 // 没提交的改动在代码里，不在 target/ 里：不挡清理，只决定能不能进自动清理
                 let dirty = reasons.contains(Self.dirtyReason)
                 reasons.removeAll { $0 == Self.dirtyReason }
                 if reasons.isEmpty, let landed, !dirty {
-                    found.append(Finding(area: .hidden, category: "已合并 worktree 的构建产物", title: title,
-                                         detail: "\(landed)，最后编译 \(built)", paths: [target.path],
+                    found.append(Finding(area: .hidden, category: Category.landedBuild, title: title,
+                                         detail: "\(landed.text)，最后编译 \(built)", paths: [target.path],
                                          bytes: sizeOf(target), risk: .safe, suggested: true, cleanup: .remove))
                 } else if reasons.isEmpty {
                     let why = [landed == nil ? (merged == nil ? "查不到 PR 状态" : "PR 还没合并") : nil,
                                dirty ? "有没提交的改动（只删编译文件，代码不动）" : nil].compactMap { $0 }
-                    found.append(Finding(area: .hidden, category: "还在做的 worktree 构建产物", title: title,
+                    found.append(Finding(area: .hidden, category: Category.activeBuild, title: title,
                                          detail: why.joined(separator: "；") + "；最后编译 \(built)，删了下次要重新编译几分钟",
                                          paths: [target.path], bytes: sizeOf(target), risk: .confirm, suggested: true, cleanup: .remove))
                 } else {
                     if landed == nil { reasons.insert(merged == nil ? "查不到 PR 状态" : "PR 还没合并", at: 0) }
-                    found.append(Finding(area: .hidden, category: "暂时不能清的构建产物", title: title,
+                    found.append(Finding(area: .hidden, category: Category.blockedBuild, title: title,
                                          detail: reasons.joined(separator: "；"), paths: [target.path],
                                          bytes: sizeOf(target), risk: .safe, suggested: false, cleanup: .none))
                 }
@@ -89,6 +89,9 @@ public struct WorktreeScanner {
     }
 
     static let dirtyReason = "有未提交的改动"
+    /// `inUse` 给出的原因之一。扫描里还要按它判断，用的是 `inUse` 当时读到的结果，不再读一次文件系统
+    /// （中间隔着几条 git 命令，再读一次可能刚好赶上开始编译，两次结果对不上）
+    static let recentlyBuiltReason = "2 小时内编译过"
 
     /// 静置窗口：这么久内编译过就不清（第 7 批从 24 小时缩到 2 小时，换来的是下面三道「正在用」的判断）
     public static let quietSeconds: TimeInterval = 2 * 3600
@@ -109,7 +112,7 @@ public struct WorktreeScanner {
         if openPaths.contains(where: { p in prefixes.contains { p == $0 || p.hasPrefix($0 + "/") } }) || busy(wt, processes: processes) {
             reasons.append("有程序在里面运行")
         }
-        if recentlyBuilt(target, now: now) { reasons.append("2 小时内编译过") }
+        if recentlyBuilt(target, now: now) { reasons.append(recentlyBuiltReason) }
         return reasons
     }
 
@@ -194,14 +197,27 @@ public struct WorktreeScanner {
     }
 
     /// 已落地的说明；没落地返回 nil。PR 合并（按分支名 + 提交认）或当前提交已在远端主分支里（认得出 squash 合并后检出的 main）
-    private func landedReason(_ wt: URL, merged: [String: Set<String>]?) -> String? {
+    private enum Landed {
+        case prMerged
+        /// 只靠「当前提交已在主分支里」认出来的；`ref` 是比对的那个远端分支
+        case inMain(ref: String)
+
+        var text: String {
+            switch self {
+            case .prMerged: "PR 已合并"
+            case .inMain(let ref): "当前提交已在\(ref == "origin/HEAD" ? "主分支" : " \(ref) ")里"
+            }
+        }
+    }
+
+    private func landedReason(_ wt: URL, merged: [String: Set<String>]?) -> Landed? {
         let branch = git(wt, "branch", "--show-current")
         let head = git(wt, "rev-parse", "HEAD")
-        if !branch.isEmpty, !head.isEmpty, merged?[branch]?.contains(head) == true { return "PR 已合并" }
+        if !branch.isEmpty, !head.isEmpty, merged?[branch]?.contains(head) == true { return .prMerged }
         for ref in ["origin/HEAD", "origin/main", "origin/master"]
         where runner.run(["git", "--no-optional-locks", "-C", wt.path, "rev-parse", "--verify", "-q", ref], cwd: nil).status == 0 {
             let r = runner.run(["git", "--no-optional-locks", "-C", wt.path, "merge-base", "--is-ancestor", "HEAD", ref], cwd: nil)
-            return r.status == 0 ? "当前提交已在\(ref == "origin/HEAD" ? "主分支" : " \(ref) ")里" : nil
+            return r.status == 0 ? .inMain(ref: ref) : nil
         }
         return nil
     }
@@ -249,17 +265,5 @@ public struct WorktreeScanner {
     }
 
     /// `target/` 往下三层里最新的修改时间。cargo 增量编译改的是 `target/debug/deps/*` 这一层的文件（L-06）。
-    static func lastBuilt(_ target: URL) -> Date? {
-        let keys: [URLResourceKey] = [.contentModificationDateKey]
-        var latest = (try? target.resourceValues(forKeys: Set(keys)))?.contentModificationDate
-        guard let e = FileManager.default.enumerator(at: target, includingPropertiesForKeys: keys, options: [],
-                                                     errorHandler: { _, _ in true }) else { return latest }
-        for case let u as URL in e {
-            if e.level >= 3 { e.skipDescendants() }
-            if let d = (try? u.resourceValues(forKeys: Set(keys)))?.contentModificationDate, d > (latest ?? .distantPast) {
-                latest = d
-            }
-        }
-        return latest
-    }
+    static func lastBuilt(_ target: URL) -> Date? { latestModification(target, depth: 3) }
 }

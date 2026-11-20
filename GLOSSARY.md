@@ -1,6 +1,6 @@
 # 词汇表
 
-代码里的词和界面上的词怎么对应。读代码、起名字前先看；同一个意思只用这里的词。标「易混」的是现有命名里容易看错的地方，改名在计划里（issue #18 之后的结构简化），改之前以本表为准。
+代码里的词和界面上的词怎么对应。读代码、起名字前先看；同一个意思只用这里的词。标「易混」的是现有命名里容易看错的地方。
 
 ## 一项东西从扫到到清掉
 
@@ -8,7 +8,7 @@
 |---|---|---|
 | 一项 | `Finding` | 扫描找到的一个可以处理的东西：一个文件、一个缓存目录、一个 worktree 的 `target/` |
 | 下载文件夹 / 看不见的 | `Area.downloads` / `Area.hidden` | 在哪一块找到的。「看不见的」指缓存、构建产物、备份、虚拟机、对话记录 |
-| 分组 | `Finding.category` | 界面按它分组的中文名，如「安装包」「包管理器缓存」。易混：多处代码拿这个中文名当类型判断（`category.contains("构建产物")`），改文案前先全仓库搜 |
+| 分组 | `Finding.category` | 界面按它分组的中文名，如「安装包」「包管理器缓存」。分组名只在 `Kind.swift` 的 `Category` 里写一遍；判断「这一项是什么」用 `Finding.kind`，不拿文案去比，给人看的名字（`friendlyName`、`pickedLabel`、`Usage.partName`）都从它派生，`FindingKindTests` 逐字锁着 |
 | 安全 / 需确认 / 只展示 | `Risk.safe` / `.confirm` / `.readOnly` | 风险等级。只展示的任何路径都删不了。易混：标 `safe` 不等于能清，能不能清看 `cleanup` |
 | 怎么清 | `Cleanup.trash` / `.remove` / `.command` / `.none` | 移到废纸篓 / 直接删（只给可再生的目录）/ 跑工具自带的清理命令 / 清不了 |
 | 默认勾选 | `Finding.suggested` | 扫描规则建议清它。扫描器给初值，之后三道调整：命令找不到（`applyAvailability`）、上次几乎没释放（`applyHistory`）、用户选过保留（`applyDecisions`） |
@@ -37,12 +37,12 @@
 |---|---|---|
 | `history.json` | `OperationLog`、`Batch`、`ItemResult`（在 `Cleaner.swift`） | 每次清理一批的结果，撤销靠它。易混：`History.swift` 里只有按上次结果校正勾选的 `applyHistory` |
 | `usage.json` | `UsageLog`、`UsageSample`（`Usage.swift`） | 每天一份可用空间和各位置大小。界面和命令行叫「涨幅」（`growth`、`GrowthPage`），是同一个功能 |
-| `decisions.json` | `DecisionLog`、`Decisions`（`Weekly.swift`） | 保留、下周再问 |
+| `decisions.json` | `DecisionLog`、`Decisions`（`Decisions.swift`） | 保留、下周再问 |
 | `alerts.json` | `AlertStore`、`AlertState`（`Alerts.swift`） | 提醒开关、每条提醒上次发在哪天、自动清理上次时间 |
-| `memory.json` | `MemoryLog`、`MemoryRecord`（`MemoryPlan.swift`） | 内存曲线、应用最后使用时间、会话忙闲、几个「别问」 |
+| `memory.json` | `MemoryLog`、`MemoryRecord`（`MemoryRecord.swift`） | 内存曲线、应用最后使用时间、会话忙闲、几个「别问」 |
 | `status.json` | `StatusFile`（`Pendant.swift`） | 给驿窗挂件读的可用空间和档位 |
 
-易混：核心层的 `…Log` / `AlertStore` 是一个 JSON 文件的读写；应用层的 `Store` 是整个界面的状态，`MemoryStore.swift` 是它的扩展，没有 `MemoryStore` 这个类。`MemoryUsage` 是内存归属，和 `Usage`（磁盘涨幅）无关。
+易混：核心层的 `…Log` / `AlertStore` 是一个 JSON 文件的读写；应用层的 `Store` 是整个界面的状态，`Store+Memory.swift` 是它的扩展。`MemoryUsage` 是内存归属，和 `Usage`（磁盘涨幅）无关。
 
 ## 能不能删，查四道
 
@@ -57,10 +57,10 @@
 
 | 界面上 | 代码里 | 意思 |
 |---|---|---|
-| 可用空间三档（绿 / 橙 / 红） | `SpaceLevel.ok` / `.low` / `.critical`（在 `FloatGeometry.swift`） | 可用空间 60 GB 以上 / 低于 60 GB / 低于 30 GB。易混：同样的 30、60 在 `Alerts.swift` 和 `Views.swift` 里各写了一遍 |
+| 可用空间三档（绿 / 橙 / 红） | `SpaceLevel.ok` / `.low` / `.critical`（在 `Model.swift`） | 可用空间 60 GB 以上 / 低于 60 GB / 低于 30 GB。两个阈值只写在 `SpaceLevel.lowBytes`、`criticalBytes`，提醒规则和界面颜色都从这里取 |
 | 正常 / 偏紧 / 告急（内存） | `MemoryLevel` | 照系统自己的内存压力档位 |
 | 刚开始记 | `learning` | 还看不出闲不闲。易混：应用是开始记录不满 4 小时，Claude 会话是第一次见到不满 12 小时 |
-| 忙 | `busy` | 一个采样间隔里整棵进程树 CPU 用到 5% 以上；间隔太长看不准的也算忙 |
+| 忙 | `busy`、`ActivityTrack` | 一个采样间隔里整棵进程树 CPU 用到 5% 以上；间隔太长看不准的也算忙 |
 
 ## 入口和面板
 

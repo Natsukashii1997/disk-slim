@@ -4,7 +4,7 @@ import Testing
 
 // 第 11 批独立审查的对抗测试（2026-11-18，原稿在 evidence/2026-11-18-memory/review/）：
 // A 组是审查找到的问题，按修好后的规则断言；B 组是边界回归。
-@Suite struct MemoryReviewTests {
+@Suite struct MemoryAdversarialTests {
     let gb: Int64 = 1_073_741_824
     let mb: Int64 = 1_048_576
     let now = Date(timeIntervalSince1970: 1_800_000_000)
@@ -19,7 +19,7 @@ import Testing
     @Test func A1_应用停过一段再启动_从启动起重新看满4小时() {
         var r = MemoryRecord(trackingSince: now.addingTimeInterval(-3 * 86_400))
         r.activated("md.obsidian", at: now.addingTimeInterval(-10 * 3600))
-        r.apps["md.obsidian@10"] = SessionTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-86_400))
+        r.apps["md.obsidian@10"] = ActivityTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-86_400))
         let a = RunningApp(pid: 10, name: "Obsidian", bundleID: "md.obsidian", bundlePath: "/Applications/Obsidian.app",
                            launchedAt: now.addingTimeInterval(-2 * 86_400))
         r.restarted(at: now.addingTimeInterval(-60))
@@ -33,7 +33,7 @@ import Testing
 
     @Test func A2_采样间隔很长时_当忙过() {
         var r = MemoryRecord(trackingSince: now.addingTimeInterval(-5 * 86_400))
-        r.sessions["7@1"] = SessionTrack(cpuNanos: 0, at: now.addingTimeInterval(-2 * 86_400), busyAt: now.addingTimeInterval(-2 * 86_400))
+        r.sessions["7@1"] = ActivityTrack(cpuNanos: 0, at: now.addingTimeInterval(-2 * 86_400), busyAt: now.addingTimeInterval(-2 * 86_400))
         let s = SessionMemory(pid: 7, startedAt: 1, bytes: gb, cpuNanos: 3600 * 1_000_000_000)
         r.sample(st, sessions: [s], at: now)
         #expect(!hasSessionsAsk(MemoryPlan.make(usage: usage([], sessions: [s]), status: nil, record: r, now: now)))
@@ -41,15 +41,15 @@ import Testing
 
     @Test func A3_子进程跑完退出_合计变小时当忙过() {
         var r = MemoryRecord(trackingSince: now.addingTimeInterval(-86_400))
-        r.sessions["7@1"] = SessionTrack(cpuNanos: 210 * 1_000_000_000, at: now.addingTimeInterval(-300), busyAt: now.addingTimeInterval(-13 * 3600))
+        r.sessions["7@1"] = ActivityTrack(cpuNanos: 210 * 1_000_000_000, at: now.addingTimeInterval(-300), busyAt: now.addingTimeInterval(-13 * 3600))
         r.sample(st, sessions: [SessionMemory(pid: 7, startedAt: 1, bytes: gb, cpuNanos: 15 * 1_000_000_000)], at: now)
         #expect(r.sessions["7@1"]?.busyAt == now)
     }
 
     @Test func A4_收会话前再看一眼_正在跑的不收_闲着的收() {
         var r = MemoryRecord(trackingSince: now.addingTimeInterval(-86_400))
-        r.sessions["7@1"] = SessionTrack(cpuNanos: 100_000_000_000, at: now.addingTimeInterval(-120), busyAt: now.addingTimeInterval(-13 * 3600))
-        r.sessions["9@1"] = SessionTrack(cpuNanos: 100_000_000_000, at: now.addingTimeInterval(-120), busyAt: now.addingTimeInterval(-13 * 3600))
+        r.sessions["7@1"] = ActivityTrack(cpuNanos: 100_000_000_000, at: now.addingTimeInterval(-120), busyAt: now.addingTimeInterval(-13 * 3600))
+        r.sessions["9@1"] = ActivityTrack(cpuNanos: 100_000_000_000, at: now.addingTimeInterval(-120), busyAt: now.addingTimeInterval(-13 * 3600))
         func procs(_ cpu7: UInt64, _ child7: UInt64, _ cpu9: UInt64) -> [ProcInfo] {
             [ProcInfo(pid: 7, ppid: 6, path: claudePath, footprint: gb, cpuNanos: cpu7, startedAt: 1),
              ProcInfo(pid: 8, ppid: 7, path: "/bin/zsh", footprint: mb, cpuNanos: child7, startedAt: 2),
@@ -71,7 +71,7 @@ import Testing
         #expect(MemoryGuard.mayQuit(bundleID: "com.apple.Terminal"))
         #expect(MemoryGuard.mayQuit(bundleID: "com.apple.ActivityMonitor"))
         var r = MemoryRecord(trackingSince: now.addingTimeInterval(-86_400))
-        r.apps["com.apple.ActivityMonitor@3"] = SessionTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-86_400))
+        r.apps["com.apple.ActivityMonitor@3"] = ActivityTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-86_400))
         let a = RunningApp(pid: 3, name: "活动监视器", bundleID: "com.apple.ActivityMonitor", bundlePath: "/System/Applications/Utilities/Activity Monitor.app")
         #expect(MemoryPlan.make(usage: usage([(a, 500 * mb)]), status: nil, record: r, now: now).picked.isEmpty)
     }
@@ -79,7 +79,7 @@ import Testing
     @Test func A6_A7_ChatGPT和Docker这类有后台任务的不挑() {
         var r = MemoryRecord(trackingSince: now.addingTimeInterval(-86_400))
         for id in ["com.openai.codex@11", "com.docker.docker@12", "com.jetbrains.goland@13"] {
-            r.apps[id] = SessionTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-86_400))
+            r.apps[id] = ActivityTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-86_400))
         }
         let apps = [RunningApp(pid: 11, name: "ChatGPT", bundleID: "com.openai.codex", bundlePath: "/Applications/ChatGPT.app"),
                     RunningApp(pid: 12, name: "Docker", bundleID: "com.docker.docker", bundlePath: "/Applications/Docker.app"),
@@ -92,7 +92,7 @@ import Testing
     @Test func A6b_4小时没切前台但在后台忙过的普通应用不挑() {
         var r = MemoryRecord(trackingSince: now.addingTimeInterval(-86_400))
         let a = RunningApp(pid: 14, name: "某下载器", bundleID: "x.downloader", bundlePath: "/Applications/D.app")
-        r.apps["x.downloader@14"] = SessionTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-3600))
+        r.apps["x.downloader@14"] = ActivityTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-3600))
         #expect(MemoryPlan.make(usage: usage([(a, gb)]), status: nil, record: r, now: now).keep.first?.reason == .busy)
         // 没记到忙闲的也不挑
         #expect(MemoryPlan.make(usage: usage([(a, gb)]), status: nil, record: MemoryRecord(trackingSince: now.addingTimeInterval(-86_400)), now: now).picked.isEmpty)
@@ -115,7 +115,7 @@ import Testing
 
     @Test func B1_时钟回拨_不会把会话判闲_将来的曲线点丢掉() {
         var r = MemoryRecord(trackingSince: now.addingTimeInterval(-86_400))
-        r.sessions["7@1"] = SessionTrack(cpuNanos: 0, at: now.addingTimeInterval(3600), busyAt: now.addingTimeInterval(3600))
+        r.sessions["7@1"] = ActivityTrack(cpuNanos: 0, at: now.addingTimeInterval(3600), busyAt: now.addingTimeInterval(3600))
         let s = SessionMemory(pid: 7, startedAt: 1, bytes: gb, cpuNanos: 0)
         r.sample(st, sessions: [s], at: now)
         #expect(!hasSessionsAsk(MemoryPlan.make(usage: usage([], sessions: [s]), status: nil, record: r, now: now)))
@@ -126,7 +126,7 @@ import Testing
 
     @Test func B2_CPU计数回绕不崩() {
         var r = MemoryRecord(trackingSince: now.addingTimeInterval(-86_400))
-        r.sessions["7@1"] = SessionTrack(cpuNanos: UInt64.max, at: now.addingTimeInterval(-300), busyAt: now.addingTimeInterval(-300))
+        r.sessions["7@1"] = ActivityTrack(cpuNanos: UInt64.max, at: now.addingTimeInterval(-300), busyAt: now.addingTimeInterval(-300))
         r.sample(st, sessions: [SessionMemory(pid: 7, startedAt: 1, bytes: gb, cpuNanos: 5)], at: now)
         #expect(r.sessions["7@1"]?.cpuNanos == 5)
     }

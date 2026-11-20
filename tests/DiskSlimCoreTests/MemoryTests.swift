@@ -22,8 +22,8 @@ import Testing
     /// 一天前开始记录，什么应用都没切到前台过；Obsidian（1 号）一天没在后台忙过
     func record() -> MemoryRecord {
         var r = MemoryRecord(trackingSince: now.addingTimeInterval(-86_400))
-        r.apps["md.obsidian@1"] = SessionTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-86_400))
-        r.apps["com.apple.Preview@1"] = SessionTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-86_400))
+        r.apps["md.obsidian@1"] = ActivityTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-86_400))
+        r.apps["com.apple.Preview@1"] = ActivityTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-86_400))
         return r
     }
     func obsidian(active: Bool = false, launched: TimeInterval? = nil) -> RunningApp { app(1, "Obsidian", "md.obsidian", active: active, launched: launched) }
@@ -170,8 +170,8 @@ import Testing
         let idle = SessionMemory(pid: 1, startedAt: 9, bytes: 600 * mb, cpuNanos: 0)
         let busy = SessionMemory(pid: 2, startedAt: 9, bytes: 400 * mb, cpuNanos: 0)
         let unseen = SessionMemory(pid: 3, startedAt: 9, bytes: 100 * mb, cpuNanos: 0) // 没记录：不算闲
-        r.sessions[idle.key] = SessionTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-13 * 3600))
-        r.sessions[busy.key] = SessionTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-3600))
+        r.sessions[idle.key] = ActivityTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-13 * 3600))
+        r.sessions[busy.key] = ActivityTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-3600))
         let p = plan([], sessions: [idle, busy, unseen], record: r)
         #expect(p.asks == [.sessions(keys: ["1@9"], bytes: 600 * mb)])
         #expect(p.keep.first?.reason == .sessionsBusy)

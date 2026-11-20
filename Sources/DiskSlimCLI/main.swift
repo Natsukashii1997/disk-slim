@@ -35,7 +35,6 @@ let scan = Scan(home: home, workRoot: workRoot)
 let cleaner = scan.cleaner(sandbox: sandboxHome != nil)
 let riskLabel: [Risk: String] = [.safe: "安全", .confirm: "需确认", .readOnly: "只展示"]
 
-func total(_ items: [Finding]) -> Int64 { items.reduce(0) { $0 + $1.bytes } }
 
 func method(_ c: Cleanup) -> String {
     switch c {

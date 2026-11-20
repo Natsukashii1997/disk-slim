@@ -185,9 +185,10 @@ final class Store: ObservableObject {
         samples = all
     }
 
-    /// 应用开着时每 30 分钟看一次：今天（北京时间）还没有记录、或者周报 / 自动清理到点了而扫描结果超过一小时，
-    /// 就在后台扫描一次（扫描完成会写记录、查提醒、按需自动清理）；否则直接查提醒
-    /// 第 7 批：每 5 分钟读一次可用空间（很便宜）；比上次扫描时掉了 8 GB 以上就马上扫描，否则每 30 分钟按原来的规则看一次
+    /// 应用开着时一直转的巡检，每 5 分钟一轮（名字里的 daily 是早期「每天检查一次」留下的）：
+    /// - 每轮：读可用空间（很便宜）、记一次内存；可用空间比上次扫描时掉了 8 GB 以上就马上扫描。
+    /// - 每 6 轮（30 分钟）：今天（北京时间）还没有记录，或者周报 / 自动清理到点了而扫描结果超过一小时，就在后台扫描一次
+    ///   （扫描完成会写记录、查提醒、按需自动清理）；否则直接查提醒。
     func dailyLoop() async {
         guard !readOnly else { return }
         startMemoryTracking()
@@ -352,16 +353,14 @@ final class Store: ObservableObject {
         // 选了保留的项马上不再默认勾选
         if let r = report {
             let findings = applyDecisions(r.findings, d)
-            report = ScanReport(scannedAt: r.scannedAt, seconds: r.seconds, disk: r.disk, findings: findings,
-                                downloadsBytes: r.downloadsBytes, trashBytes: r.trashBytes, needsAccess: r.needsAccess)
+            report = r.with(findings: findings)
             selected.subtract(findings.filter { d.isKept($0) }.map(\.id))
         }
     }
 
     func apply(_ r: ScanReport) {
         // 扫描时从磁盘读决定；万一上次保存失败，这里再用内存里的套一次，选过保留的不会又被勾上
-        let r = ScanReport(scannedAt: r.scannedAt, seconds: r.seconds, disk: r.disk, findings: applyDecisions(r.findings, decisions),
-                           downloadsBytes: r.downloadsBytes, trashBytes: r.trashBytes, needsAccess: r.needsAccess)
+        let r = r.with(findings: applyDecisions(r.findings, decisions))
         report = r
         disk = r.disk
         if !readOnly { canUndo = cleaner.canUndo() }
@@ -481,8 +480,8 @@ final class Store: ObservableObject {
         Task.detached {
             let lines = cleaner.undoLast()
             await MainActor.run {
-                let placed = lines.filter { $0.hasPrefix("已放回") }.count
-                let others = lines.filter { !$0.hasPrefix("已放回") }
+                let placed = lines.filter { $0.hasPrefix(Cleaner.restoredPrefix) }.count
+                let others = lines.filter { !$0.hasPrefix(Cleaner.restoredPrefix) }
                 var text = placed > 0 ? "已放回 \(placed) 项" : ""
                 if !others.isEmpty { text += (text.isEmpty ? "" : "；") + others.joined(separator: "；") }
                 self.working = false
@@ -504,5 +503,3 @@ final class Store: ObservableObject {
         return text
     }
 }
-
-func total(_ list: [Finding]) -> Int64 { list.reduce(0) { $0 + $1.bytes } }
