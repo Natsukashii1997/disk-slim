@@ -35,14 +35,16 @@
 
 | 文件 | 代码里 | 记什么 |
 |---|---|---|
-| `history.json` | `OperationLog`、`Batch`、`ItemResult`（在 `Cleaner.swift`） | 每次清理一批的结果，撤销靠它。易混：`History.swift` 里只有按上次结果校正勾选的 `applyHistory` |
+| `history.json` | `OperationLog`、`Batch`、`ItemResult`（在 `Cleaner.swift`） | 每次清理一批的结果，撤销靠它。第三批起逐项落盘：`Batch.unfinished` 为 true 表示还在清或中途断了，照样能撤销。易混：`History.swift` 里只有按上次结果校正勾选的 `applyHistory` |
 | `usage.json` | `UsageLog`、`UsageSample`（`Usage.swift`） | 每天一份可用空间和各位置大小。界面和命令行叫「涨幅」（`growth`、`GrowthPage`），是同一个功能 |
 | `decisions.json` | `DecisionLog`、`Decisions`（`Decisions.swift`） | 保留、下周再问 |
 | `alerts.json` | `AlertStore`、`AlertState`（`Alerts.swift`） | 提醒开关、每条提醒上次发在哪天、自动清理上次时间 |
 | `memory.json` | `MemoryLog`、`MemoryRecord`（`MemoryRecord.swift`） | 内存曲线、应用最后使用时间、会话忙闲、几个「别问」 |
 | `status.json` | `StatusFile`（`Pendant.swift`） | 给驿窗挂件读的可用空间和档位 |
 
-易混：核心层的 `…Log` / `AlertStore` 是一个 JSON 文件的读写；应用层的 `Store` 是整个界面的状态，`Store+Memory.swift` 是它的扩展。`MemoryUsage` 是内存归属，和 `Usage`（磁盘涨幅）无关。
+前五份（不含 `status.json`）的读、坏了留底（`<名字>-damaged-<时间>-<8位>.json.bak`）、加锁写都走 `RecordFile`（`Persistence.swift`），日期一律存 ISO 文本。
+
+易混：核心层的 `…Log` / `AlertStore` 是一个 JSON 文件的读写，底下都是 `RecordFile`；应用层的 `Store` 是整个界面的状态，`Store+Memory.swift` 是它的扩展。`MemoryUsage` 是内存归属，和 `Usage`（磁盘涨幅）无关。
 
 ## 能不能删，查四道
 

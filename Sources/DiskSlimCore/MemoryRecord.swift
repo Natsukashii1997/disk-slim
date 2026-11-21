@@ -124,6 +124,7 @@ public struct MemoryRecord: Codable, Equatable {
 /// memory.json 读写：坏了先留底再从头记（和 usage.json 一样，L-08）
 public struct MemoryLog {
     public let url: URL
+    var file: RecordFile<MemoryRecord> { RecordFile(url: url) }
 
     public init(url: URL) { self.url = url }
 
@@ -132,22 +133,9 @@ public struct MemoryLog {
     }
 
     public func load(now: Date, readOnly: Bool = false) -> MemoryRecord {
-        guard let data = try? Data(contentsOf: url) else { return MemoryRecord(trackingSince: now) }
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
-        if let r = try? d.decode(MemoryRecord.self, from: data) { return r }
-        if !readOnly {
-            let aside = url.deletingLastPathComponent().appendingPathComponent("memory.broken-\(Int(now.timeIntervalSince1970)).json")
-            try? FileManager.default.moveItem(at: url, to: aside)
-        }
-        return MemoryRecord(trackingSince: now)
+        file.load(readOnly: readOnly).value ?? MemoryRecord(trackingSince: now)
     }
 
-    public func save(_ r: MemoryRecord) throws {
-        let e = JSONEncoder()
-        e.outputFormatting = [.prettyPrinted, .sortedKeys]
-        e.dateEncodingStrategy = .iso8601
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try withFileLock(url) { try e.encode(r).write(to: url, options: .atomic) }
-    }
+    /// 文件在但读不了时报错不写（第三批起，之前会直接覆盖）
+    public func save(_ r: MemoryRecord) throws { try file.save(r) }
 }

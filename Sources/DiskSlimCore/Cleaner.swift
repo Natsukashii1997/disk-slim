@@ -41,13 +41,17 @@ public struct ItemResult: Codable {
 public struct Batch: Codable {
     public let id: String
     public let at: Date
-    public let items: [ItemResult]
+    /// 清完一项追加一项（逐项落盘）
+    public internal(set) var items: [ItemResult]
     /// 这一批里能放回的都放回了
     public var undone: Bool
     /// 已经放回原处的原路径；没放回的下次撤销还能再试
     public var restored: [String]?
     /// 操作记录没写成功等需要告诉用户的事；有它时不提供撤销
     public var note: String?
+    /// 还在清（每清完一项落一次盘）。清完后去掉；一直为 true 说明那次清理中途断了（崩溃、被强退、断电），
+    /// 已经移走的照样记着、能撤销
+    public var unfinished: Bool? = nil
 
     public var trashedBytes: Int64 { items.reduce(0) { $0 + $1.trashedBytes } }
     public var freedBytes: Int64 { items.reduce(0) { $0 + $1.freedBytes } }
@@ -62,6 +66,8 @@ public struct Batch: Codable {
 /// 操作记录存成一个 JSON 文件，只留最近 200 次。
 public struct OperationLog {
     public let url: URL
+    var file: RecordFile<[Batch]> { RecordFile(url: url) }
+    static let keep = 200
 
     public init(url: URL) { self.url = url }
 
@@ -73,34 +79,30 @@ public struct OperationLog {
     /// 返回值的 `backup` 是留底文件的位置，没坏时为 nil；`unreadable` 表示文件在但读不了（权限、读错误），这时不能写。
     /// `readOnly` 为 true 时（扫描、查能不能撤销）坏文件不挪，只当没有记录。
     public func loadChecked(readOnly: Bool = false) -> (batches: [Batch], backup: URL?, unreadable: Bool) {
-        guard FileManager.default.fileExists(atPath: url.path) else { return ([], nil, false) }
-        guard let data = try? Data(contentsOf: url) else { return ([], nil, true) }
-        if let batches = try? decoder.decode([Batch].self, from: data) { return (batches, nil, false) }
-        if readOnly { return ([], nil, false) }
-        let stamp = Int(Date().timeIntervalSince1970)
-        let backup = url.deletingLastPathComponent().appendingPathComponent("history-damaged-\(stamp).json.bak")
-        guard (try? FileManager.default.moveItem(at: url, to: backup)) != nil else { return ([], nil, true) }
-        return ([], backup, false)
+        let l = file.load(readOnly: readOnly)
+        return (l.value ?? [], l.backup, l.unreadable)
     }
 
     public func load(readOnly: Bool = false) -> [Batch] { loadChecked(readOnly: readOnly).batches }
 
-    public func save(_ batches: [Batch]) throws {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try encoder.encode(Array(batches.suffix(200))).write(to: url, options: .atomic)
-    }
+    /// 不加锁的整份写：调用方要先拿着 `withFileLock(url)`（撤销）
+    public func save(_ batches: [Batch]) throws { try file.write(Array(batches.suffix(Self.keep))) }
 
-    private var encoder: JSONEncoder {
-        let e = JSONEncoder()
-        e.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        e.dateEncodingStrategy = .iso8601
-        return e
-    }
-
-    private var decoder: JSONDecoder {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
-        return d
+    /// 加锁后把这一批写进记录：锁里重读最新内容，已有同 id 的原地替换，没有就追加到最后。
+    /// 替换时保留记录里已经放回的（清理还没结束时，命令行可能已经撤销过这一批的一部分），不拿内存里的旧状态盖掉
+    public func put(_ batch: Batch) throws {
+        try file.update { latest in
+            var all = latest.value ?? []
+            if let i = all.firstIndex(where: { $0.id == batch.id }) {
+                var merged = batch
+                merged.restored = all[i].restored
+                merged.undone = all[i].undone && merged.pending.isEmpty
+                all[i] = merged
+            } else {
+                all.append(batch)
+            }
+            return Array(all.suffix(Self.keep))
+        }
     }
 }
 
@@ -129,7 +131,7 @@ public struct Cleaner {
         self.allowCommands = allowCommands
     }
 
-    /// 逐项执行并记一次操作记录。不允许的、已经不在的、正在使用的、复核不通过的都跳过，不会中断其他项。
+    /// 逐项执行，每清完一项写一次操作记录。不允许的、已经不在的、正在使用的、复核不通过的都跳过，不会中断其他项。
     public func clean(_ findings: [Finding], now: Date = Date()) -> Batch {
         let (_, backup, unreadable) = log.loadChecked()
         // 操作记录在但读不了：清了也记不下来、会覆盖旧记录、也没法撤销，干脆一项都不清
@@ -144,19 +146,30 @@ public struct Cleaner {
         clearStaging()
         let processes = runner.run(["ps", "-axo", "command"], cwd: nil).output
         let openPaths = findings.contains { $0.cleanup == .remove } ? WorktreeScanner.openPaths(runner) : []
-        let items = findings.map { clean($0, processes: processes, openPaths: openPaths) }
-        var batch = Batch(id: UUID().uuidString, at: now, items: items, undone: false, restored: [], note: nil)
+        // 逐项落盘：先记一条「进行中」，每清完一项写一次，最后去掉「进行中」。
+        // 中途崩溃、被强退、断电时，已经移到废纸篓的也记着、能撤销。每次都在锁里重读再替换，不覆盖别的进程同时写的记录。
+        var batch = Batch(id: UUID().uuidString, at: now, items: [], undone: false, restored: [], note: nil, unfinished: true)
+        var saveError: Error?
+        /// 最近一次成功落盘时记下了几项（nil：一次都没写成）
+        var savedItems: Int?
+        func persist() {
+            do { try log.put(batch); saveError = nil; savedItems = batch.items.count } catch { saveError = error }
+        }
+        persist()
+        for f in findings {
+            batch.items.append(clean(f, processes: processes, openPaths: openPaths))
+            persist()
+        }
+        batch.unfinished = nil
+        persist()
         var notes: [String] = []
         if let backup { notes.append("原来的操作记录读不出来，已另存为 \(backup.lastPathComponent)") }
-        // 清理可能花了很久，期间别的进程（应用 / 命令行）也许写过记录：加锁后重读再追加，不用开头读到的旧内容
-        do {
-            try withFileLock(log.url) {
-                let (latest, _, unreadableNow) = log.loadChecked()
-                if unreadableNow { throw CocoaError(.fileReadNoPermission) }
-                try log.save(latest + [batch])
+        if let saveError {
+            if let n = savedItems, n > 0 {
+                notes.append("操作记录只记下了前 \(n) 项（\(saveError.localizedDescription)），撤销只能放回这几项里移走的，其余请到废纸篓里找")
+            } else {
+                notes.append("操作记录没保存成功（\(saveError.localizedDescription)），这次不能用撤销，移走的文件请到废纸篓里找")
             }
-        } catch {
-            notes.append("操作记录没保存成功（\(error.localizedDescription)），这次不能用撤销，移走的文件请到废纸篓里找")
         }
         batch.note = notes.isEmpty ? nil : notes.joined(separator: "；")
         return batch

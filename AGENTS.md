@@ -57,7 +57,7 @@ docs/PRD.md          需求（含调研结论、规则、分批计划）
 Package.swift        SwiftPM：DiskSlimCore（规则与模型）、diskslim（命令行）、DiskSlimApp（桌面应用）、DiskSlimCoreTests
 Sources/
   DiskSlimCore/      Model（Finding、风险等级、清理方式、空间三档和 30 / 60 GB 阈值）、Kind（分组名常量、每一项的类型、给人看的名字）、System（元数据、大小、命令、格式）、
-                     DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、History（按上次实际释放校正清理命令）、Usage（每日记录、7 天曲线、谁涨了多少）、Alerts（提醒开关与规则、自动清理挑项）、Weekly（每周卡片只问「要你说一句」、周报时间）、Decisions（保留 / 下周再问和 decisions.json）、Persistence（记录文件读写共用的小工具）、Scan（总入口、执行前复核）、
+                     DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、History（按上次实际释放校正清理命令）、Usage（每日记录、7 天曲线、谁涨了多少）、Alerts（提醒开关与规则、自动清理挑项）、Weekly（每周卡片只问「要你说一句」、周报时间）、Decisions（保留 / 下周再问和 decisions.json）、Persistence（五份记录文件统一的读、留底、加锁写 `RecordFile`）、Scan（总入口、执行前复核）、
                      SafetyGuard（执行前重新核对路径和命令的白名单）、Cleaner（执行、操作记录、撤销）、FloatGeometry（悬浮球与面板位置）、Pendant（给驿窗挂件的状态文件、diskslim:// 链接解析、点挂件防抖）、
                      Memory（读内存压力、交换、进程，按应用和 Claude Code 会话合计）、MemoryRecord（memory.json：曲线、最后使用、忙闲）、MemoryRules（阈值和应用名单）、MemoryPlan（内存三段）、MemoryGuard（动手前核对）、RunningApps（读运行中的普通应用）
   DiskSlimCLI/       命令行 `diskslim`（scan / clean / undo / growth / memory）

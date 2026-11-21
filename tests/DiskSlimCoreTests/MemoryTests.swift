@@ -231,7 +231,7 @@ import Testing
         let fresh = log.load(now: now)
         #expect(fresh.trackingSince == now)
         let left = try FileManager.default.contentsOfDirectory(atPath: t.url.path)
-        #expect(left.contains { $0.hasPrefix("memory.broken-") })
+        #expect(left.contains { $0.hasPrefix("memory-damaged-") && $0.hasSuffix(".json.bak") })
         var w = fresh
         w.activated("a.b", at: now)
         try log.save(w)

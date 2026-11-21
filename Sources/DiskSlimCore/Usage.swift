@@ -38,52 +38,30 @@ public struct UsageLog {
         UsageLog(url: home.appendingPathComponent("Library/Application Support/disk-slim/usage.json"))
     }
 
+    var file: RecordFile<[UsageSample]> { RecordFile(url: url) }
+
     /// 读记录。`readOnly` 为 true 时（命令行查看、离屏截图）文件坏了也不挪动，只返回空
-    public func load(readOnly: Bool = false) -> [UsageSample] {
-        guard let data = try? Data(contentsOf: url) else { return [] }
-        if let samples = Self.decode(data) { return samples }
-        if !readOnly { try? setAside() }
-        return []
-    }
+    public func load(readOnly: Bool = false) -> [UsageSample] { Self.clean(file.load(readOnly: readOnly).value ?? []) }
 
+    /// 写之前在锁里读旧记录：没有文件从头开始；文件在但读不出来就报错不写，免得覆盖掉历史；内容坏了先留底再写
     @discardableResult
-    public func record(_ s: UsageSample) throws -> [UsageSample] { try withFileLock(url) { try recordLocked(s) } }
-
-    private func recordLocked(_ s: UsageSample) throws -> [UsageSample] {
-        // 写之前读旧记录：没有文件从头开始；文件在但读不出来就报错不写，免得覆盖掉历史；内容坏了先留底再写
-        var all: [UsageSample] = []
-        if FileManager.default.fileExists(atPath: url.path) {
-            let data = try Data(contentsOf: url)
-            if let old = Self.decode(data) { all = old } else { try setAside() }
+    public func record(_ s: UsageSample) throws -> [UsageSample] {
+        try file.update { latest in
+            var all = Self.clean(latest.value ?? [])
+            // 同一天只留时间最晚的一份（时钟被往回调过时，后写的不一定更晚）
+            let day = BeijingTime.dayKey(s.at)
+            if let kept = all.first(where: { BeijingTime.dayKey($0.at) == day && $0.at > s.at }) {
+                all = all.filter { BeijingTime.dayKey($0.at) != day } + [kept]
+            } else {
+                all = all.filter { BeijingTime.dayKey($0.at) != day } + [s]
+            }
+            return all.filter { s.at.timeIntervalSince($0.at) < keepDays * 86_400 }.sorted { $0.at < $1.at }
         }
-        // 同一天只留时间最晚的一份（时钟被往回调过时，后写的不一定更晚）
-        let day = BeijingTime.dayKey(s.at)
-        if let kept = all.first(where: { BeijingTime.dayKey($0.at) == day && $0.at > s.at }) {
-            all = all.filter { BeijingTime.dayKey($0.at) != day } + [kept]
-        } else {
-            all = all.filter { BeijingTime.dayKey($0.at) != day } + [s]
-        }
-        all = all.filter { s.at.timeIntervalSince($0.at) < keepDays * 86_400 }.sorted { $0.at < $1.at }
-        let e = JSONEncoder()
-        e.outputFormatting = [.prettyPrinted, .sortedKeys]
-        e.dateEncodingStrategy = .iso8601
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try e.encode(all).write(to: url, options: .atomic)
-        return all
     }
 
-    private static func decode(_ data: Data) -> [UsageSample]? {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
-        // 数值离谱（负数、超过 1 PB）的记录扔掉，免得后面相减溢出把应用弄崩
-        return (try? d.decode([UsageSample].self, from: data))?.filter(\.plausible).sorted { $0.at < $1.at }
-    }
-
-    /// 坏了就改名留底
-    private func setAside() throws {
-        let stamp = Int(Date().timeIntervalSince1970)
-        try FileManager.default.moveItem(at: url, to: url.deletingLastPathComponent()
-            .appendingPathComponent("usage-damaged-\(stamp)-\(UUID().uuidString.prefix(8)).json.bak"))
+    /// 数值离谱（负数、超过 1 PB）的记录扔掉，免得后面相减溢出把应用弄崩
+    private static func clean(_ samples: [UsageSample]) -> [UsageSample] {
+        samples.filter(\.plausible).sorted { $0.at < $1.at }
     }
 }
 

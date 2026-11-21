@@ -38,12 +38,15 @@ public struct AlertState: Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         settings = (try? c.decodeIfPresent(AlertSettings.self, forKey: .settings)) ?? nil ?? AlertSettings()
         sent = (try? c.decodeIfPresent([String: String].self, forKey: .sent)) ?? nil ?? [:]
+        // 第三批起存 ISO 文本；之前存的是数字（离 2001-01-01 的秒数），两种都认
         autoCleanAt = (try? c.decodeIfPresent(Date.self, forKey: .autoCleanAt)) ?? nil
+            ?? ((try? c.decodeIfPresent(Double.self, forKey: .autoCleanAt)) ?? nil).map(Date.init(timeIntervalSinceReferenceDate:))
     }
 }
 
 public struct AlertStore {
     public let url: URL
+    var file: RecordFile<AlertState> { RecordFile(url: url) }
 
     public init(url: URL) { self.url = url }
 
@@ -52,24 +55,9 @@ public struct AlertStore {
     }
 
     /// 读不出来按默认值（自动清理默认关，读坏了也不会被打开）；内容坏了先改名留底（`readOnly` 时不挪）
-    public func load(readOnly: Bool = false) -> AlertState {
-        guard let data = try? Data(contentsOf: url) else { return AlertState() }
-        if let state = try? JSONDecoder().decode(AlertState.self, from: data) { return state }
-        if !readOnly {
-            let stamp = Int(Date().timeIntervalSince1970)
-            try? FileManager.default.moveItem(at: url, to: url.deletingLastPathComponent()
-                .appendingPathComponent("alerts-damaged-\(stamp)-\(UUID().uuidString.prefix(8)).json.bak"))
-        }
-        return AlertState()
-    }
+    public func load(readOnly: Bool = false) -> AlertState { file.load(readOnly: readOnly).value ?? AlertState() }
 
-    public func save(_ state: AlertState) throws {
-        try refuseIfUnreadable(url)
-        let e = JSONEncoder()
-        e.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try e.encode(state).write(to: url, options: .atomic)
-    }
+    public func save(_ state: AlertState) throws { try file.save(state) }
 }
 
 /// 一条要发的系统通知
