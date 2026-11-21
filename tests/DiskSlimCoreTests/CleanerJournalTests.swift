@@ -85,6 +85,46 @@ import Testing
         // 第 1 项落盘之后记录文件变得读不了：后面几次写都失败，结果要提示不能撤销
         let batch = cleaner(trasher).clean([f("a.zip"), f("b.zip")])
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: log.url.path)
-        #expect(batch.note?.contains("操作记录没保存成功") == true)
+        // 提示和实际一致：记下了前 1 项，撤销只放回它
+        #expect(batch.note?.contains("只记下了前 1 项") == true, "\(batch.note ?? "")")
+        let c = cleaner(FakeTrasher(dir: trash))
+        #expect(c.canUndo())
+        #expect(c.undoLast() == ["已放回：a.zip"])
+        #expect(!FileManager.default.fileExists(atPath: home.appendingPathComponent("Downloads/b.zip").path))
+    }
+
+    @Test func 一次都没写进操作记录_提示这次不能撤销() throws {
+        t.file("home/Downloads/a.zip")
+        // 记录文件一开始就读不了的情况在清理前就会拦下；这里让目录写不进去：开头那次写就失败
+        let dir = log.url.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: dir.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path) }
+        let batch = cleaner(FakeTrasher(dir: trash)).clean([f("a.zip")])
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path)
+        #expect(batch.note?.contains("这次不能用撤销") == true, "\(batch.note ?? "")")
+        #expect(!cleaner(FakeTrasher(dir: trash)).canUndo())
+    }
+
+    @Test func 清理还没结束时命令行撤销了一部分_后面落盘不把撤销结果盖掉() throws {
+        for n in ["a.zip", "b.zip"] { t.file("home/Downloads/\(n)") }
+        final class UndoMidway: Trasher, @unchecked Sendable {
+            let inner: FakeTrasher; let other: Cleaner; var n = 0; var undoLines: [String] = []
+            init(_ dir: URL, _ other: Cleaner) { inner = FakeTrasher(dir: dir); self.other = other }
+            func trash(_ url: URL) throws -> URL {
+                n += 1
+                if n == 2 { undoLines = other.undoLast() } // 另一个进程（命令行）这时撤销
+                return try inner.trash(url)
+            }
+        }
+        let spy = UndoMidway(trash, cleaner(FakeTrasher(dir: trash)))
+        _ = cleaner(spy).clean([f("a.zip"), f("b.zip")])
+        #expect(spy.undoLines == ["已放回：a.zip"])
+        let saved = try #require(log.load().last)
+        #expect(saved.restored == [home.appendingPathComponent("Downloads/a.zip").path])
+        #expect(!saved.undone && saved.unfinished == nil)
+        // 再撤销只放回 b，不会把 a 当成还在废纸篓里
+        #expect(cleaner(FakeTrasher(dir: trash)).undoLast() == ["已放回：b.zip"])
+        #expect(log.load().last?.undone == true)
     }
 }

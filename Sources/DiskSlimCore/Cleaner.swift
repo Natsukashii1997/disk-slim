@@ -88,11 +88,19 @@ public struct OperationLog {
     /// 不加锁的整份写：调用方要先拿着 `withFileLock(url)`（撤销）
     public func save(_ batches: [Batch]) throws { try file.write(Array(batches.suffix(Self.keep))) }
 
-    /// 加锁后把这一批写进记录：锁里重读最新内容，已有同 id 的原地替换，没有就追加到最后
+    /// 加锁后把这一批写进记录：锁里重读最新内容，已有同 id 的原地替换，没有就追加到最后。
+    /// 替换时保留记录里已经放回的（清理还没结束时，命令行可能已经撤销过这一批的一部分），不拿内存里的旧状态盖掉
     public func put(_ batch: Batch) throws {
         try file.update { latest in
             var all = latest.value ?? []
-            if let i = all.firstIndex(where: { $0.id == batch.id }) { all[i] = batch } else { all.append(batch) }
+            if let i = all.firstIndex(where: { $0.id == batch.id }) {
+                var merged = batch
+                merged.restored = all[i].restored
+                merged.undone = all[i].undone && merged.pending.isEmpty
+                all[i] = merged
+            } else {
+                all.append(batch)
+            }
             return Array(all.suffix(Self.keep))
         }
     }
@@ -142,8 +150,10 @@ public struct Cleaner {
         // 中途崩溃、被强退、断电时，已经移到废纸篓的也记着、能撤销。每次都在锁里重读再替换，不覆盖别的进程同时写的记录。
         var batch = Batch(id: UUID().uuidString, at: now, items: [], undone: false, restored: [], note: nil, unfinished: true)
         var saveError: Error?
+        /// 最近一次成功落盘时记下了几项（nil：一次都没写成）
+        var savedItems: Int?
         func persist() {
-            do { try log.put(batch); saveError = nil } catch { saveError = error }
+            do { try log.put(batch); saveError = nil; savedItems = batch.items.count } catch { saveError = error }
         }
         persist()
         for f in findings {
@@ -155,7 +165,11 @@ public struct Cleaner {
         var notes: [String] = []
         if let backup { notes.append("原来的操作记录读不出来，已另存为 \(backup.lastPathComponent)") }
         if let saveError {
-            notes.append("操作记录没保存成功（\(saveError.localizedDescription)），这次不能用撤销，移走的文件请到废纸篓里找")
+            if let n = savedItems, n > 0 {
+                notes.append("操作记录只记下了前 \(n) 项（\(saveError.localizedDescription)），撤销只能放回这几项里移走的，其余请到废纸篓里找")
+            } else {
+                notes.append("操作记录没保存成功（\(saveError.localizedDescription)），这次不能用撤销，移走的文件请到废纸篓里找")
+            }
         }
         batch.note = notes.isEmpty ? nil : notes.joined(separator: "；")
         return batch

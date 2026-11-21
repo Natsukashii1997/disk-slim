@@ -22,7 +22,7 @@ public struct Loaded<Value> {
     public let value: Value?
     /// 内容坏了、已改名留底的位置
     public let backup: URL?
-    /// 文件在但读不了（权限、读错误），或坏了却挪不走：这时不能写，写了会把它覆盖掉
+    /// 文件在但读不了（权限、读错误），或坏了却挪不走。`update` 遇到它会拒写；`save` / `write` 只拦「读不了」
     public let unreadable: Bool
 }
 
