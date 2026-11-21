@@ -23,6 +23,12 @@ public enum MemoryGuard {
         }.map(\.pid)
     }
 
+    /// 真动手前再核对一次：名单允许、不是磁盘瘦身自己（`selfPID`）、这个 pid 现在跑的还是当初那个应用
+    /// （`currentBundleID` 是按 pid 现查到的；进程已经没了时为 nil）
+    public static func mayTerminate(_ app: RunningApp, selfPID: Int32, currentBundleID: String?) -> Bool {
+        mayQuit(bundleID: app.bundleID) && app.pid != selfPID && currentBundleID == app.bundleID
+    }
+
     /// 能不能退出（一键退出、强制退出都过这一道）：系统自己的、磁盘瘦身自己、驿窗不退
     public static func mayQuit(bundleID: String) -> Bool {
         !bundleID.isEmpty && !MemoryRules.never.contains(bundleID) && bundleID != "com.apple.loginwindow" && bundleID != "com.apple.dock"

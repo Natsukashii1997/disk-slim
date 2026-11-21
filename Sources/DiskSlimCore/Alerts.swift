@@ -130,6 +130,26 @@ public enum Alerts {
         return now.timeIntervalSince(last) >= autoCleanGap || last > now
     }
 
+    /// 每 5 分钟那一轮要不要重新扫描：今天还没记过每日空间、还没扫描过；或上次扫描已过 1 小时、
+    /// 而且周报该发没发（通知被拒时不算，发不出去也就一直「没发」，不为它反复扫描）或自动清理到点了
+    public static func needsScan(now: Date, samples: [UsageSample], scannedAt: Date?, state: AlertState,
+                                 notificationsAllowed: Bool?, free: Int64?) -> Bool {
+        let today = BeijingTime.dayKey(now)
+        if !samples.contains(where: { BeijingTime.dayKey($0.at) == today }) { return true }
+        guard let scannedAt else { return true }
+        if now.timeIntervalSince(scannedAt) < 3600 { return false }
+        let weeklyPending = state.settings.weekly && notificationsAllowed != false
+            && state.sent["weekly"] != BeijingTime.dayKey(Weekly.lastReport(atOrBefore: now))
+        return weeklyPending || shouldAutoClean(now: now, free: free, state: state)
+    }
+
+    /// 自动清理现在能不能插进来：提醒在跑（打包版、非只读）、没在扫描或清理、用户没在确认清理、
+    /// 刚清完还能撤销时不插队，有扫描结果，并且 `shouldAutoClean` 到点了
+    public static func mayAutoCleanNow(active: Bool, busy: Bool, confirming: Bool, undoOffered: Bool, hasReport: Bool,
+                                       now: Date, free: Int64?, state: AlertState) -> Bool {
+        active && !busy && !confirming && !undoOffered && hasReport && shouldAutoClean(now: now, free: free, state: state)
+    }
+
     /// 自动清理只动「看不见的」里安全、默认勾选的项（缓存、可再生的构建产物）；下载文件夹里的用户文件一律不动
     public static func autoCleanPicks(_ findings: [Finding]) -> [Finding] {
         findings.filter { $0.area == .hidden && $0.risk == .safe && $0.suggested && $0.cleanup.runnable }

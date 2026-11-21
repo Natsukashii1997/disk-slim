@@ -12,13 +12,15 @@ final class FloatingBall: NSObject {
     private var store: Store?
     private var ballWindow: BallWindow?
     private var ballView: BallView?
-    private var panel: FloatingPanel?
-    private var host: NSHostingController<AnyView>?
+    /// 面板窗口（建窗口、摆位置、点外面收起）；开在谁旁边由这里的 `anchor` 和球决定
+    private lazy var panel = PanelController(
+        target: { [weak self] in self?.anchor ?? self?.ballWindow?.frame },
+        fallbackScreen: { [weak self] in self?.currentScreen() },
+        companion: { [weak self] in self?.ballWindow },
+        onOutsideClick: { [weak self] in self?.closePanel(byOutsideClick: true) },
+        onCancel: { [weak self] in self?.closePanel() })
     private var bag: Set<AnyCancellable> = []
-    private var clickMonitors: [Any] = []
     private var screenObserver: Any?
-    private var sizeObservation: NSKeyValueObservation?
-    private var resizeObserver: Any?
     private var saved = Saved.load()
     /// 第 9 批：面板是驿窗挂件叫开的时候，开在这颗挂件旁边（AppKit 屏幕坐标）；nil 表示开在桌面悬浮球旁边
     private var anchor: CGRect?
@@ -27,7 +29,7 @@ final class FloatingBall: NSObject {
     /// 应用是被链接叫起来的、悬浮球还没启动时先记下，启动后再处理
     private var pendingAnchor: CGRect?
 
-    var panelOpen: Bool { panel?.isVisible == true }
+    var panelOpen: Bool { panel.isOpen }
 
     /// 应用启动后调一次（AppDelegate 启动完时）。开关和可用空间变了自动跟着变
     func start(store: Store) {
@@ -45,7 +47,7 @@ final class FloatingBall: NSObject {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.restoreBall()
-                if self?.panelOpen == true { self?.placePanel() }
+                if self?.panelOpen == true { self?.panel.place() }
             }
         }
         // 应用是被链接叫起来的：排在上面两个订阅的初值之后再开面板，免得刚开就被「球关着」收掉
@@ -121,7 +123,7 @@ final class FloatingBall: NSObject {
         else { return }
         let pos = saved.positions[screenKey(screen)] ?? FloatGeometry.defaultPosition(in: screen.visibleFrame)
         w.setFrame(FloatGeometry.ball(pos, in: screen.visibleFrame), display: true)
-        if panelOpen && anchor == nil { placePanel() }
+        if panelOpen && anchor == nil { panel.place() }
     }
 
     /// 拖完松手：贴最近的左右边，记到这块显示器上
@@ -132,7 +134,7 @@ final class FloatingBall: NSObject {
         saved.lastDisplay = screenKey(screen)
         saved.save()
         w.setFrame(FloatGeometry.ball(pos, in: screen.visibleFrame), display: true)
-        if panelOpen { placePanel() }
+        if panelOpen { panel.place() }
     }
 
     // MARK: 面板
@@ -145,117 +147,32 @@ final class FloatingBall: NSObject {
     private func openPanel(anchor: CGRect?) {
         guard let store, anchor != nil || ballWindow != nil else { return }
         self.anchor = anchor
-        if panel == nil { makePanel(store) }
+        panel.makeIfNeeded(store)
         // 每次打开：回首页、收起确认框、结果旧了就重扫
-        store.page = .home
-        store.drawer = nil
-        store.confirming = nil
-        store.tab = .disk
-        store.memDrawer = nil
+        store.ui.page = .home
+        store.ui.drawer = nil
+        store.ui.confirming = nil
+        store.ui.tab = .disk
+        store.mem.drawer = nil
         store.scanIfStale()
         store.refreshMemory()
-        placePanel()
-        panel?.makeKeyAndOrderFront(nil)
+        panel.place()
+        panel.orderFront()
         // 球外圈的青光只在面板是从球上点开时亮
         ballView?.expanded = anchor == nil
-        installMonitors()
+        panel.installMonitors()
         store.panelOpen = true
     }
 
     func closePanel(byOutsideClick: Bool = false) {
         guard panelOpen else { return }
-        panel?.orderOut(nil)
+        panel.orderOut()
         ballView?.expanded = false
-        removeMonitors()
+        panel.removeMonitors()
         store?.panelOpen = false
         if byOutsideClick {
             lastOutside = .init(point: NSEvent.mouseLocation, uptime: ProcessInfo.processInfo.systemUptime)
         }
-    }
-
-    private func makePanel(_ store: Store) {
-        let p = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: 400),
-                              styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        p.isOpaque = false
-        p.backgroundColor = .clear
-        p.hasShadow = true
-        p.level = .floating
-        p.hidesOnDeactivate = false
-        p.isReleasedWhenClosed = false
-        p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
-        // 只有浅色一种外观（2026-11-18 常浩定）：系统切深色也不跟
-        p.appearance = NSAppearance(named: .aqua)
-        p.onCancel = { [weak self] in self?.closePanel() }
-        // 半透明底、圆角（和系统弹出面板一样）
-        let fx = NSVisualEffectView(frame: p.contentLayoutRect)
-        fx.material = .popover
-        fx.blendingMode = .behindWindow
-        fx.state = .active
-        fx.wantsLayer = true
-        fx.layer?.cornerRadius = 12
-        fx.layer?.masksToBounds = true
-        let hc = NSHostingController(rootView: AnyView(PanelView().environmentObject(store)))
-        hc.sizingOptions = [.preferredContentSize]
-        hc.view.frame = fx.bounds
-        hc.view.autoresizingMask = [.width, .height]
-        fx.addSubview(hc.view)
-        p.contentView = fx
-        // 换页、展开分组时面板高度跟着内容变；顶边保持和球对齐
-        sizeObservation = hc.observe(\.preferredContentSize, options: [.new]) { [weak self] _, _ in
-            DispatchQueue.main.async { MainActor.assumeIsolated { if self?.panelOpen == true { self?.placePanel() } } }
-        }
-        // 上面那条有时不来：窗口被 SwiftUI 内容直接撑高，顶边不动往下长，底边会出屏幕
-        // （2026-11-18 真屏：挂件在右上时切到内存页，691→754 点，页脚「强制退出…」被切掉一半）。尺寸一变就按同样规则把位置收回屏内
-        resizeObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didResizeNotification, object: p, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { if self?.panelOpen == true { self?.keepPanelInside() } }
-        }
-        panel = p
-        host = hc
-    }
-
-    private func placePanel() {
-        guard let p = panel, let hc = host, let target = anchor ?? ballWindow?.frame,
-              let screen = screen(containing: target) else { return }
-        var size = hc.preferredContentSize
-        if size.height < 50 { size = hc.view.fittingSize }
-        let frame = FloatGeometry.panel(size: CGSize(width: panelWidth, height: max(size.height, 120)),
-                                        ball: target, screen: screen.visibleFrame)
-        p.setFrame(frame, display: true)
-    }
-
-    /// 只挪位置不改大小：按 placePanel 同样的规则（顶边对齐挂件或球、四周留 12 点）算出该在哪，不在就挪过去
-    private func keepPanelInside() {
-        guard let p = panel, let target = anchor ?? ballWindow?.frame, let screen = screen(containing: target) else { return }
-        let want = FloatGeometry.panel(size: p.frame.size, ball: target, screen: screen.visibleFrame).origin
-        if want != p.frame.origin { p.setFrameOrigin(want) }
-    }
-
-    /// 挂件或球所在的那块屏
-    private func screen(containing r: CGRect) -> NSScreen? {
-        let c = NSPoint(x: r.midX, y: r.midY)
-        return NSScreen.screens.first { $0.frame.contains(c) } ?? currentScreen()
-    }
-
-    /// 点面板和球以外的地方收起（别的应用里点也算，驿窗挂件也算）
-    private func installMonitors() {
-        removeMonitors()
-        let kinds: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        if let g = NSEvent.addGlobalMonitorForEvents(matching: kinds, handler: { [weak self] _ in
-            MainActor.assumeIsolated { self?.closePanel(byOutsideClick: true) }
-        }) { clickMonitors.append(g) }
-        if let l = NSEvent.addLocalMonitorForEvents(matching: kinds, handler: { [weak self] e in
-            MainActor.assumeIsolated {
-                if let self, e.window !== self.panel, e.window !== self.ballWindow { self.closePanel(byOutsideClick: true) }
-            }
-            return e
-        }) { clickMonitors.append(l) }
-    }
-
-    private func removeMonitors() {
-        clickMonitors.forEach(NSEvent.removeMonitor)
-        clickMonitors = []
     }
 
     /// 每块显示器上记的位置（UserDefaults）

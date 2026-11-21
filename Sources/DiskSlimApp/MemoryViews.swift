@@ -14,16 +14,16 @@ struct PanelTabs: View {
         let t = Tone()
         HStack(spacing: 2) {
             tab("磁盘", .disk, dot: nil)
-            tab("内存", .memory, dot: store.memStatus.flatMap { $0.level == .normal ? nil : memoryColor($0.level, t) })
+            tab("内存", .memory, dot: store.mem.status.flatMap { $0.level == .normal ? nil : memoryColor($0.level, t) })
         }
         .padding(2)
         .background(RoundedRectangle(cornerRadius: 9).fill(t.track))
     }
 
     private func tab(_ title: String, _ which: PanelTab, dot: Color?) -> some View {
-        let on = store.tab == which
+        let on = store.ui.tab == which
         return Button {
-            store.tab = which
+            store.ui.tab = which
             if which == .memory { store.refreshMemory() }
         } label: {
             HStack(spacing: 5) {
@@ -108,23 +108,23 @@ struct MemoryHome: View {
     // MARK: 白卡
 
     private func card(_ t: Tone) -> some View {
-        let plan = store.memPlan
+        let plan = store.mem.plan
         let asks = plan?.asks ?? []
         let keep = plan?.keep ?? []
         return VStack(spacing: 0) {
             picked(t, plan).padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 14)
             row(t, .ask, title: "要你说一句", sub: plan == nil ? "正在看…" : asks.isEmpty ? "现在没有要问你的"
-                : store.memDrawer == .ask ? "选一个就行" : asks.map(askShort).joined(separator: "、")) {
+                : store.mem.drawer == .ask ? "选一个就行" : asks.map(askShort).joined(separator: "、")) {
                 if !asks.isEmpty {
                     Text("\(asks.count)").font(.system(size: 11.5, weight: .bold)).foregroundStyle(t.card)
                         .frame(minWidth: 20, minHeight: 20).background(Capsule().fill(Color.primary))
                 }
             }
-            if store.memDrawer == .ask && !asks.isEmpty { askDrawer(t, asks) }
+            if store.mem.drawer == .ask && !asks.isEmpty { askDrawer(t, asks) }
             row(t, .keep, title: "先不动", sub: plan == nil ? "正在看…" : keep.isEmpty ? "没有" : "\(keep.count) 个在用、要收消息或还在观察") {
                 if let plan, !keep.isEmpty { Text(formatBytes(plan.keepBytes)).font(.system(size: 13, weight: .semibold)).monospacedDigit() }
             }
-            if store.memDrawer == .keep && !keep.isEmpty { keepDrawer(keep) }
+            if store.mem.drawer == .keep && !keep.isEmpty { keepDrawer(keep) }
         }
         .background(RoundedRectangle(cornerRadius: 18).fill(t.card))
     }
@@ -160,9 +160,9 @@ struct MemoryHome: View {
                 }
                 .padding(.top, 10).padding(.bottom, 14)
             }
-            Button(store.memWorking ? "正在退出…" : "一键退出") { store.quitPicked() }
-                .buttonStyle(BigButton(color: t.blue, enabled: !picks.isEmpty && !store.memWorking))
-                .disabled(picks.isEmpty || store.memWorking)
+            Button(store.mem.working ? "正在退出…" : "一键退出") { store.quitPicked() }
+                .buttonStyle(BigButton(color: t.blue, enabled: !picks.isEmpty && !store.mem.working))
+                .disabled(picks.isEmpty || store.mem.working)
             if !picks.isEmpty {
                 Text("和按 ⌘Q 一样，没保存的会先问你").font(.system(size: 11.5)).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity).padding(.top, 8)
@@ -171,7 +171,7 @@ struct MemoryHome: View {
     }
 
     private func idleText(_ app: RunningApp) -> String {
-        let h = Int(Date().timeIntervalSince(store.memRecord.lastUsed(app)) / 3600)
+        let h = Int(Date().timeIntervalSince(store.mem.record.lastUsed(app)) / 3600)
         return h >= 48 ? "\(h / 24) 天没用" : "\(h) 小时没用"
     }
 
@@ -194,7 +194,7 @@ struct MemoryHome: View {
                         Button(yes) { store.answer(ask, yes: true) }.buttonStyle(ChipButton(primary: true))
                         Button(no) { store.answer(ask, yes: false) }.buttonStyle(ChipButton())
                     }
-                    .disabled(store.memWorking)
+                    .disabled(store.mem.working)
                 }
             }
         }
@@ -218,7 +218,7 @@ struct MemoryHome: View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(keep.enumerated()), id: \.offset) { _, k in
                 HStack(spacing: 10) {
-                    if let id = k.bundleID, let a = store.memUsage?.apps.first(where: { $0.app.bundleID == id }) {
+                    if let id = k.bundleID, let a = store.mem.usage?.apps.first(where: { $0.app.bundleID == id }) {
                         AppIcon(path: a.app.bundlePath)
                     } else {
                         GlyphIcon(symbol: k.name == "虚拟机" ? "desktopcomputer" : "terminal", size: 24)
@@ -238,7 +238,7 @@ struct MemoryHome: View {
 
     private func row<Trailing: View>(_ t: Tone, _ which: HomeDrawer, title: String, sub: String,
                                      @ViewBuilder trailing: () -> Trailing) -> some View {
-        Button { store.memDrawer = store.memDrawer == which ? nil : which } label: {
+        Button { store.mem.drawer = store.mem.drawer == which ? nil : which } label: {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title).font(.system(size: 13, weight: .semibold))
@@ -246,7 +246,7 @@ struct MemoryHome: View {
                 }
                 Spacer(minLength: 8)
                 trailing()
-                Image(systemName: store.memDrawer == which ? "chevron.down" : "chevron.right")
+                Image(systemName: store.mem.drawer == which ? "chevron.down" : "chevron.right")
                     .font(.system(size: 11, weight: .semibold)).foregroundStyle(.tertiary).frame(width: 12)
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
@@ -264,7 +264,7 @@ struct MemoryFooter: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            Button { store.forceArmed = nil; store.page = .forceQuit } label: {
+            Button { store.mem.forceArmed = nil; store.ui.page = .forceQuit } label: {
                 HStack(spacing: 4) {
                     Text("强制退出…")
                     Text("⌥⌘Esc").foregroundStyle(.tertiary)
@@ -272,7 +272,7 @@ struct MemoryFooter: View {
             }
             .help("程序卡住时用；也可以按 Option + Command + Esc 打开系统的强制退出窗口")
             Spacer()
-            Button("提醒") { store.page = .alerts }
+            Button("提醒") { store.ui.page = .alerts }
             Button("退出") { NSApp.terminate(nil) }
         }
         .buttonStyle(.plain)
@@ -287,9 +287,9 @@ struct MemoryHero: View {
     let t: Tone
 
     var body: some View {
-        let s = store.memStatus
+        let s = store.mem.status
         let color = s.map { memoryColor($0.level, t) } ?? .secondary
-        let points = store.memRecord.pressure
+        let points = store.mem.record.pressure
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("内存压力")
@@ -322,13 +322,13 @@ struct MemoryHero: View {
             HStack {
                 if let s { Text("交换文件 ") + Text(formatBytes(s.swapUsedBytes)).fontWeight(.semibold).foregroundColor(.primary) }
                 Spacer()
-                if let p = store.memPlan, p.pickedBytes > 0 {
+                if let p = store.mem.plan, p.pickedBytes > 0 {
                     Text("能腾出 \(formatBytes(p.pickedBytes))").fontWeight(.semibold).foregroundStyle(t.gain)
                 }
             }
             .font(.system(size: 11.5)).foregroundStyle(.secondary).padding(.top, 8)
 
-            if let top = store.memPlan?.top, let first = top.first, first.bytes > 0 {
+            if let top = store.mem.plan?.top, let first = top.first, first.bytes > 0 {
                 Rectangle().fill(t.hair).frame(height: 1).padding(.top, 12)
                 VStack(spacing: 9) {
                     ForEach(Array(top.enumerated()), id: \.offset) { _, item in
@@ -354,7 +354,7 @@ struct MemoryHero: View {
     @ViewBuilder private func icon(_ item: MemoryTopItem) -> some View {
         switch item.kind {
         case .app(let id):
-            AppIcon(path: store.memUsage?.apps.first { $0.app.bundleID == id }?.app.bundlePath ?? "", size: 20)
+            AppIcon(path: store.mem.usage?.apps.first { $0.app.bundleID == id }?.app.bundlePath ?? "", size: 20)
         case .sessions: GlyphIcon(symbol: "terminal")
         case .vm: GlyphIcon(symbol: "desktopcomputer")
         }
@@ -367,7 +367,7 @@ struct ForceQuitPage: View {
 
     var body: some View {
         let t = Tone()
-        let apps = (store.memUsage?.apps ?? []).filter { MemoryGuard.mayQuit(bundleID: $0.app.bundleID) && $0.app.pid != getpid() }
+        let apps = (store.mem.usage?.apps ?? []).filter { MemoryGuard.mayQuit(bundleID: $0.app.bundleID) && $0.app.pid != getpid() }
         VStack(alignment: .leading, spacing: 10) {
             PageHeader(title: "强制退出")
             Text("程序卡住、点不动时用。「退出」会先问你保存；「强制退出」立刻关掉，没保存的会丢，要点两下。也可以按 Option + Command + Esc 打开系统的同一个窗口。")
@@ -384,8 +384,8 @@ struct ForceQuitPage: View {
                         }
                         Spacer()
                         Button("退出") { store.quit(a) }.buttonStyle(ChipButton())
-                        Button(store.forceArmed == a.key ? "确认强制退出" : "强制退出") { store.forceQuit(a) }
-                            .buttonStyle(ChipButton(primary: store.forceArmed == a.key, danger: true))
+                        Button(store.mem.forceArmed == a.key ? "确认强制退出" : "强制退出") { store.forceQuit(a) }
+                            .buttonStyle(ChipButton(primary: store.mem.forceArmed == a.key, danger: true))
                     }
                     .padding(.horizontal, 12).padding(.vertical, 9)
                     .overlay(alignment: .top) { if i > 0 { Rectangle().fill(t.hair).frame(height: 1) } }
@@ -394,7 +394,7 @@ struct ForceQuitPage: View {
                     Text("正在读…").font(.system(size: 12)).foregroundStyle(.secondary).padding(14)
                 }
             }
-            .disabled(store.memWorking)
+            .disabled(store.mem.working)
             .background(RoundedRectangle(cornerRadius: 14).fill(t.card))
             .padding(.horizontal, 14).padding(.bottom, 14)
             }

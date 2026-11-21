@@ -61,7 +61,7 @@ Sources/
                      SafetyGuard（执行前重新核对路径和命令的白名单）、Cleaner（执行、操作记录、撤销）、FloatGeometry（悬浮球与面板位置）、Pendant（给驿窗挂件的状态文件、diskslim:// 链接解析、点挂件防抖）、
                      Memory（读内存压力、交换、进程，按应用和 Claude Code 会话合计）、MemoryRecord（memory.json：曲线、最后使用、忙闲）、MemoryRules（阈值和应用名单）、MemoryPlan（内存三段）、MemoryGuard（动手前核对）、RunningApps（读运行中的普通应用）
   DiskSlimCLI/       命令行 `diskslim`（scan / clean / undo / growth / memory）
-  DiskSlimApp/       桌面应用（AppKit 启动，没有 SwiftUI 场景，L-15）：Store（扫描、勾选、清理、撤销、提醒、自动清理）、Views（首页「替你判断」：雾光顶卡 + 替你挑好的 / 要你说一句 / 先不动；下钻页、涨幅页、提醒设置、确认、提示）、Notifier（系统通知，只在打包版）、Snapshot（离屏截图）、FloatingBall（桌面悬浮球：贴边小窗、点开面板、拖动贴边）、
+  DiskSlimApp/       桌面应用（AppKit 启动，没有 SwiftUI 场景，L-15）：Store（扫描、勾选、清理、撤销、提醒、自动清理）、Views（首页「替你判断」：雾光顶卡 + 替你挑好的 / 要你说一句 / 先不动；下钻页、涨幅页、提醒设置、确认、提示）、Notifier（系统通知，只在打包版）、Snapshot（离屏截图）、FloatingBall（桌面悬浮球：贴边小窗、点开面板、拖动贴边）、PanelController（面板窗口：建窗口、摆位置、点外面收起）、
                      Store+Memory.swift（`extension Store`：内存读数、采样、一键退出、收会话、强制退出、重启提醒）、MemoryViews（「磁盘 | 内存」切换、内存页、强制退出页）
 tests/DiskSlimCoreTests/  各条规则的单元测试（Swift；和 Node 测试同在 tests/）。文件按被测对象命名，`…AdversarialTests` 和带 Adversarial 的套件是独立审查留下的对抗用例
 assets/floating-ball.png  悬浮球图标（打包时复制成 Contents/Resources/ball.png）

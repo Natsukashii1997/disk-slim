@@ -41,6 +41,39 @@ struct Celebration: Identifiable {
     static let toastDelay: TimeInterval = 1.2
 }
 
+/// 面板上现在显示什么：整体是 `Store` 的一个 `@Published`，改其中任何一项都会让界面重画（和拆开前一样）
+struct PanelUI {
+    /// 打开面板默认停在磁盘页；内存偏紧时切换条上的「内存」亮橙点，不自动跳页（2026-11-18 常浩同意计划）
+    var tab: PanelTab = .disk
+    var page: Page = .home
+    var selected: Set<String> = []
+    var expanded: Set<String> = []
+    /// 首页白卡里展开了哪一段（打开面板时收起）
+    var drawer: HomeDrawer?
+    var confirming: [Finding]?
+    var toast: Toast?
+    /// 清理完成的彩带；过一会儿自动清掉（顶卡上的「+X GB」跟着消失）
+    var celebration: Celebration?
+}
+
+/// 内存页（第 11 批）的读数和按钮状态
+struct MemoryPanel {
+    var drawer: HomeDrawer?
+    var status: MemoryStatus?
+    /// 最近一次读内存的时间（内存页顶栏「HH:mm 看过」）
+    var at: Date?
+    /// 正在读内存：顶栏 ↻ 转圈用
+    var reading = false
+    var usage: MemoryUsage?
+    var plan: MemoryPlan?
+    /// memory.json：曲线、每个应用最后一次被用的时间、会话忙闲、几个「别问」
+    var record: MemoryRecord
+    /// 强制退出页里点了一次「强制退出」、等第二下确认的那个应用（bundle id@pid，同一应用开两份也分得开）
+    var forceArmed: String?
+    /// 正在读内存或刚退出了程序、等它真的退出
+    var working = false
+}
+
 @MainActor
 final class Store: ObservableObject {
     @Published var report: ScanReport?
@@ -48,15 +81,8 @@ final class Store: ObservableObject {
     @Published var disk: DiskStatus? { didSet { writeStatus() } }
     @Published var scanning = false
     @Published var working = false
-    @Published var selected: Set<String> = []
-    @Published var expanded: Set<String> = []
-    @Published var page: Page = .home
-    /// 首页白卡里展开了哪一段（打开面板时收起）
-    @Published var drawer: HomeDrawer?
-    @Published var confirming: [Finding]?
-    @Published var toast: Toast?
-    /// 清理完成的彩带；过一会儿自动清掉（顶卡上的「+X GB」跟着消失）
-    @Published var celebration: Celebration?
+    /// 面板上现在显示什么（页、勾选、展开、确认框、提示、彩带）
+    @Published var ui = PanelUI()
     /// 离屏截图用：把彩带和数字定格在第几秒；平时为 nil，按真实时间走
     var celebrationFrozenAt: TimeInterval?
     /// 每日记录（usage.json），首页曲线和涨幅页用
@@ -77,24 +103,10 @@ final class Store: ObservableObject {
     private var pendingAlerts: Set<String> = []
 
     // MARK: 内存（第 11 批）
-    /// 打开面板默认停在磁盘页；内存偏紧时切换条上的「内存」亮橙点，不自动跳页（2026-11-18 常浩同意计划）
-    @Published var tab: PanelTab = .disk
-    @Published var memDrawer: HomeDrawer?
-    @Published var memStatus: MemoryStatus?
-    /// 最近一次读内存的时间（内存页顶栏「HH:mm 看过」）
-    @Published var memAt: Date?
-    /// 正在读内存：顶栏 ↻ 转圈用
-    @Published var memReading = false
-    @Published var memUsage: MemoryUsage?
-    @Published var memPlan: MemoryPlan?
-    /// memory.json：曲线、每个应用最后一次被用的时间、会话忙闲、几个「别问」
-    @Published var memRecord: MemoryRecord
-    /// 强制退出页里点了一次「强制退出」、等第二下确认的那个应用（bundle id@pid，同一应用开两份也分得开）
-    @Published var forceArmed: String?
+    /// 内存页的读数、三段、记录和按钮状态
+    @Published var mem: MemoryPanel
     /// 每次读内存加一；回来的结果代次不对就丢掉，免得旧读数盖掉新读数（审查低 10）
     var memGeneration = 0
-    /// 正在读内存或刚退出了程序、等它真的退出
-    @Published var memWorking = false
     let memoryLog: MemoryLog
     var activationObserver: NSObjectProtocol?
 
@@ -122,13 +134,13 @@ final class Store: ObservableObject {
         decisionLog = DecisionLog.standard(home: home)
         alertStore = AlertStore.standard(home: home)
         memoryLog = MemoryLog.standard(home: home)
-        memRecord = memoryLog.load(now: Date(), readOnly: readOnly)
+        mem = MemoryPanel(record: memoryLog.load(now: Date(), readOnly: readOnly))
         disk = diskStatus(of: home)
         samples = usageLog.load(readOnly: readOnly)
         decisions = decisionLog.load(readOnly: readOnly)
         alertState = alertStore.load(readOnly: readOnly)
         // 停机这段时间里谁用过记不到：从这次启动重新看满 4 小时再挑（审查中 3）
-        if !readOnly { memRecord.restarted(at: Date()) }
+        if !readOnly { mem.record.restarted(at: Date()) }
         if !readOnly { Store.main = self }
         // 第一次运行：从下一个周五开始发周报，不补发装上之前那个周五的
         if !readOnly, Notifier.shared.available, alertState.sent["weekly"] == nil {
@@ -209,14 +221,8 @@ final class Store: ObservableObject {
     }
 
     private func needsScan(now: Date) -> Bool {
-        let today = BeijingTime.dayKey(now)
-        if !samples.contains(where: { BeijingTime.dayKey($0.at) == today }) { return true }
-        guard let r = report else { return true }
-        if now.timeIntervalSince(r.scannedAt) < 3600 { return false }
-        // 通知被拒时周报发不出去，也就一直「没发」：不为它反复扫描
-        let weeklyPending = alertState.settings.weekly && notificationsAllowed != false
-            && alertState.sent["weekly"] != BeijingTime.dayKey(Weekly.lastReport(atOrBefore: now))
-        return weeklyPending || Alerts.shouldAutoClean(now: now, free: disk?.availableBytes, state: alertState)
+        Alerts.needsScan(now: now, samples: samples, scannedAt: report?.scannedAt, state: alertState,
+                         notificationsAllowed: notificationsAllowed, free: disk?.availableBytes)
     }
 
     // MARK: 提醒
@@ -310,8 +316,10 @@ final class Store: ObservableObject {
     /// 自动清理（默认关）：可用低于 60 GB、离上次至少 2 小时时，只清「看不见的」里安全、默认勾选的项；下载文件夹不动
     func autoCleanIfDue() {
         // 用户正在确认清理、或者刚清完还能撤销时不插队，下一轮再说（这时不记今天已跑）
-        guard alertsActive, !busy, confirming == nil, toast?.canUndo != true, let r = report,
-              Alerts.shouldAutoClean(now: Date(), free: disk?.availableBytes, state: alertState) else { return }
+        guard Alerts.mayAutoCleanNow(active: alertsActive, busy: busy, confirming: ui.confirming != nil,
+                                     undoOffered: ui.toast?.canUndo == true, hasReport: report != nil,
+                                     now: Date(), free: disk?.availableBytes, state: alertState),
+              let r = report else { return }
         var state = alertState
         state.autoCleanAt = Date()
         saveAlerts(state)
@@ -327,7 +335,7 @@ final class Store: ObservableObject {
                 let gained = batch.freedBytes + batch.trashedBytes
                 if gained > 0 {
                     let text = Self.summary(batch)
-                    if self.toast == nil { self.toast = Toast(text: "自动清理：" + text, canUndo: false) }
+                    if self.ui.toast == nil { self.ui.toast = Toast(text: "自动清理：" + text, canUndo: false) }
                     Notifier.shared.send(title: "自动清理腾出了 \(formatBytes(gained))", body: text)
                 }
                 self.report = nil
@@ -347,14 +355,14 @@ final class Store: ObservableObject {
         decisions = d
         if !readOnly {
             do { try decisionLog.save(d) } catch {
-                toast = Toast(text: "这个决定没保存成功（\(error.localizedDescription)），重启后会忘掉。", canUndo: false)
+                ui.toast = Toast(text: "这个决定没保存成功（\(error.localizedDescription)），重启后会忘掉。", canUndo: false)
             }
         }
         // 选了保留的项马上不再默认勾选
         if let r = report {
             let findings = applyDecisions(r.findings, d)
             report = r.with(findings: findings)
-            selected.subtract(findings.filter { d.isKept($0) }.map(\.id))
+            ui.selected.subtract(findings.filter { d.isKept($0) }.map(\.id))
         }
     }
 
@@ -365,11 +373,11 @@ final class Store: ObservableObject {
         disk = r.disk
         if !readOnly { canUndo = cleaner.canUndo() }
         // 确认框里还是旧扫描的清单：收起来，按新结果重新确认
-        if confirming != nil {
-            confirming = nil
-            toast = Toast(text: "扫描结果更新了，请重新选择后再确认清理。", canUndo: false)
+        if ui.confirming != nil {
+            ui.confirming = nil
+            ui.toast = Toast(text: "扫描结果更新了，请重新选择后再确认清理。", canUndo: false)
         }
-        selected = Set(r.findings.filter(\.suggested).map(\.id))
+        ui.selected = Set(r.findings.filter(\.suggested).map(\.id))
         scanning = false
     }
 
@@ -405,7 +413,7 @@ final class Store: ObservableObject {
         if page == .keep { return all.filter { bucket($0) == .keep || (bucket($0) == .ask && $0.area == .hidden) } }
         return all.filter { self.page(of: $0) == page }
     }
-    func picked(_ page: Page) -> [Finding] { findings(page).filter { $0.selectable && selected.contains($0.id) } }
+    func picked(_ page: Page) -> [Finding] { findings(page).filter { $0.selectable && ui.selected.contains($0.id) } }
     /// 首页「一键清理」：替你挑好的里还勾着的
     var suggestedPicks: [Finding] { picked(.picked) }
     /// 「要你说一句」：能清的按卡片（下载按分组），清不了的（虚拟机）单列，只能选留着
@@ -422,21 +430,21 @@ final class Store: ObservableObject {
 
     func toggle(_ f: Finding) {
         guard f.selectable else { return }
-        if selected.contains(f.id) { selected.remove(f.id) } else { selected.insert(f.id) }
+        if ui.selected.contains(f.id) { ui.selected.remove(f.id) } else { ui.selected.insert(f.id) }
     }
 
     // MARK: 清理
 
-    func askToClean(_ list: [Finding]) { if !list.isEmpty && !busy { confirming = list } }
+    func askToClean(_ list: [Finding]) { if !list.isEmpty && !busy { ui.confirming = list } }
 
     func clean(_ list: [Finding]) {
-        confirming = nil
+        ui.confirming = nil
         guard !busy else {
-            toast = Toast(text: "正在扫描或清理，没有执行。等它结束再点一次。", canUndo: false)
+            ui.toast = Toast(text: "正在扫描或清理，没有执行。等它结束再点一次。", canUndo: false)
             return
         }
         working = true
-        toast = nil
+        ui.toast = nil
         let cleaner = cleaner
         Task.detached {
             let batch = cleaner.clean(list)
@@ -450,7 +458,7 @@ final class Store: ObservableObject {
                     self.celebrate(Celebration(at: Date(), fromBytes: before, toBytes: after,
                                                freedBytes: batch.freedBytes, trashedBytes: batch.trashedBytes), toast: toast)
                 } else {
-                    self.toast = toast
+                    self.ui.toast = toast
                 }
                 self.report = nil
                 self.scan(force: true)
@@ -460,21 +468,21 @@ final class Store: ObservableObject {
 
     /// 放彩带：结果提示晚一点弹，彩带放完、再停一会儿后把「+X GB」收掉
     private func celebrate(_ c: Celebration, toast: Toast) {
-        celebration = c
+        ui.celebration = c
         Task {
             try? await Task.sleep(nanoseconds: UInt64(Celebration.toastDelay * 1e9))
-            if self.celebration?.id == c.id, self.toast == nil { self.toast = toast }
+            if self.ui.celebration?.id == c.id, self.ui.toast == nil { self.ui.toast = toast }
             // 彩带放完：刷新一次，让每帧刷新的时钟停下来
             try? await Task.sleep(nanoseconds: UInt64((Celebration.duration - Celebration.toastDelay + 0.1) * 1e9))
-            if self.celebration?.id == c.id { self.objectWillChange.send() }
+            if self.ui.celebration?.id == c.id { self.objectWillChange.send() }
             try? await Task.sleep(nanoseconds: 8_000_000_000)
-            if self.celebration?.id == c.id { self.celebration = nil }
+            if self.ui.celebration?.id == c.id { self.ui.celebration = nil }
         }
     }
 
     func undo() {
         guard !working else { return }
-        toast = nil
+        ui.toast = nil
         working = true
         let cleaner = cleaner
         Task.detached {
@@ -485,7 +493,7 @@ final class Store: ObservableObject {
                 var text = placed > 0 ? "已放回 \(placed) 项" : ""
                 if !others.isEmpty { text += (text.isEmpty ? "" : "；") + others.joined(separator: "；") }
                 self.working = false
-                self.toast = Toast(text: text, canUndo: false)
+                self.ui.toast = Toast(text: text, canUndo: false)
                 self.report = nil
                 self.scan(force: true)
             }
