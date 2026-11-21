@@ -2,7 +2,7 @@
 
 当前阶段目标：常态维护。第 6 批已收尾：2026-11-19 常浩定 `disk-space-guard` 停用（原目标「第 6 批试用一周收尾，定下 disk-space-guard 去留，之后转常态维护」，2026-11-08 常浩确认，digital-twin#114）。
 
-更新：2026-11-21 上午。第三批整改（issue #22）分两个 PR：PR-A「五份记录文件统一读写、操作记录逐项落盘」已提交到分支 `claude/22-batch3-records`、独立审查的两处已修，PR 待合并、未装机；PR-B「结构拆分（不改行为）」在分支 `claude/22-batch3-split` 进行中。唯一下一步：常浩看过 PR-A 后说「合并」；另请常浩在系统设置里重给完全磁盘访问、打开通知（第一、二批遗留）。
+更新：2026-11-21 上午。第三批整改（issue #22）：PR-A（五份记录文件统一读写、操作记录逐项落盘）已随 PR #23 squash 合并（`c5d1d2b`，常浩经 Agent HUD 回「两个都合」）；PR-B（结构拆分、不改行为，PR #24）变基后合并中。都未装机。唯一下一步：常浩定要不要装机第三批；另请常浩在系统设置里重给完全磁盘访问、打开通知（第一、二批遗留）。
 
 之前：2026-11-21。第二批整改（结构简化，issue #20）已随 PR #21 squash 合并（`b1100f7`，常浩经 Agent HUD 回「合并」），2026-11-21 09:27 已装机（常浩经 Agent HUD 回「确认装机」）：文件拆分、阈值和重复代码去重、显示文字不再当判断条件（`Category`、`Finding.kind`）、测试按被测对象重组。唯一下一步：请常浩在「系统设置 › 通知 › 磁盘瘦身」里打开通知（第一批遗留），并在「完全磁盘访问权限」里先用「−」删掉磁盘瘦身再重新加（本机签名换了，首页已提示废纸篓读不了）；打开后重跑 `--test-notify`，最后一行要是「已允许」。
 
@@ -10,7 +10,19 @@
 
 之前：2026-11-19。`disk-space-guard` 定为停用（任务保持关闭、不删）。菜单栏图标已去掉，入口只留驿窗侧栏挂件，已随 PR #12 squash 合回 main（`8deed49`）、已装机。之前：2026-11-18。第 0–11 批、缩小键、面板尺寸固定和按钮手感都已合回 main（PR #1、#5、#6、#7、#8）。第 11 批「内存」：「磁盘 | 内存」切换、内存页（定稿一二结合）、一键退出、要你说一句（Claude 会话 / 浏览器 / 重启）、强制退出页，已装机。11-18 19:12 交接会话补做了真屏验收：内存页、强制退出页「退出」和「强制退出」点两下都通过；验收中发现面板切到内存页会长出屏幕底边，已修（`FloatingBall.swift`）并重装复验。常浩看过截图说「开 PR」，开了 PR #7，常浩说「合并」后已 squash 合回 main（`e862639`，2026-11-18 20:00）。20:00 后在新分支 `claude/panel-fixed-size` 做了「面板尺寸固定 + 磁盘顶卡谁占着」和「顶栏按钮点击手感」，已随 PR #8 squash 合回 main（`af6f2a2`，2026-11-18 20:58；PR #7 合并后才做，所以单开了 #8）。（当时的唯一下一步「`disk-space-guard` 要不要停」已在 2026-11-19 定为停用，见下面对应一节。）
 
-## 第三批 PR-A：五份记录文件统一读写、操作记录逐项落盘（2026-11-21，Claude，常浩看过计划后回「按计划开工」，确认了五处行为变化；已提交到 `claude/22-batch3-records`、PR 待合并、未装机、未发布）
+## 第三批 PR-B：判断下沉核心层、Store 状态分组、悬浮球拆出面板控制器（2026-11-21，Claude，常浩看过计划后回「按计划开工」；已提交到 `claude/22-batch3-split`、PR 待合并、未装机、未发布）
+
+- 时间：开工 `2026-11-21 09:43`（和 PR-A 同一次开工，PR-A 提交后接着做）。★ 来由：2026-11-20 接手成本评估里的「`Store` 29 个 `@Published`、判断写在界面层没测试、`FloatingBall` 太大」三条，第三批 PR-B 处理，不改行为。
+- 改了哪些文件：`Sources/DiskSlimCore/Alerts.swift`（新增 `needsScan`、`mayAutoCleanNow`）、`MemoryGuard.swift`（新增 `mayTerminate`）；`Sources/DiskSlimApp/Store.swift`（29 个 `@Published` 收成 14 个：`ui: PanelUI`、`mem: MemoryPanel`，三处判断改为调用核心层）、`Store+Memory.swift`、`Views.swift`、`MemoryViews.swift`、`Snapshot.swift`、`DiskSlimApp.swift`（引用改成 `ui.` / `mem.`）；新文件 `PanelController.swift`（面板窗口），`FloatingBall.swift` 392 → 309 行；测试 `AlertsScheduleTests.swift`（8 项）；`AGENTS.md`、`GLOSSARY.md` 同步。
+- 测试：`scripts/test.sh` 原样 `✔ Test run with 315 tests in 46 suites passed`（main 上 307 项，新增 8 项）；`node --test tests/*.test.mjs` 原样 `ℹ pass 10` / `ℹ fail 0`；`node scripts/check-rules.mjs`「通用规则检查通过」。★
+- 验证：离屏渲染（调试版 `--snapshot`，真实只读扫描）main 和本分支各跑一遍。main 自己连跑两遍就有 20 张字节不同（扫描时间、可用空间、内存读数），所以逐张对照：内存示例四张字节相同；`8-清理前确认` 两边只差顶栏扫描时间。证据 `evidence/batch3-split-2026-11-21/`。验证环境：替身（离屏渲染）；面板真实开关、点外面收起、Esc、插拔显示器没在真实环境验。
+- 独立审查（L-06）：只读审查员核「有没有用户看得到的行为变化」：三个纯函数逐分支等价；脚本改名没有误伤（`page(of:)`、局部 `toast`、两个 `drawer` 都核过）；全仓只有 `$disk`、`$floatingBallOn` 两个单独订阅，都没收进分组；每次赋值仍各发一次变化通知；`PanelController` 开关顺序、弱引用、点外面判断和原来一致。它自己另编 main 对比 31 张截图，22 张逐字节相同，其余 9 张差在实时数据。结论：没有用户看得到的行为变化。建议的两处（词汇表和结构说明过期、`Snapshot.swift` 一处续行缩进）已改。证据 `evidence/batch3-split-review-2026-11-21/`。
+- 截图：无界面改动。只做了电脑版。
+- 发布与回读：未发布、未装机。
+- 与授权不一致之处、遗留问题、范围外发现：① 本分支从 main 起，和 PR-A 都改了 `CURRENT.md` 顶部；先合 PR-A 后，本分支要变基并合并这两节。② `autoCleanIfDue` 原来是短路求值，现在参数先全部求值；`terminate` 现在先按 pid 查进程再判断名单。两处都只读属性、没有副作用，结果相同。③ 可用空间 10:13 离屏渲染时已降到 35.5 GB（低于 60 GB），「AI 写代码编出来的文件」31 GB，比早上多了约 10 GB，多半是本轮各 worktree 的编译产物，合并后清掉 worktree 会回来。
+- 本轮新坑：无。★
+
+## 第三批 PR-A：五份记录文件统一读写、操作记录逐项落盘（2026-11-21，Claude，常浩看过计划后回「按计划开工」，确认了五处行为变化；已随 PR #23 squash 合并（`c5d1d2b`）、未装机、未发布）
 
 - 时间：开工 `2026-11-21 09:43`。★ 来由：2026-11-20 整体评估列出的五套手写记录文件读写、操作记录「整批做完才写」两项，第三批 PR-A 处理。
 - 改了哪些文件：`Sources/DiskSlimCore/Persistence.swift`（新类型 `RecordFile`：读、坏了留底、加锁写、ISO 日期）；`Cleaner.swift`（`OperationLog` 改用它，新增 `put`，`Batch.unfinished`，清理逐项落盘）；`Alerts.swift`（`AlertStore` 改用它，`autoCleanAt` 两种格式都认）；`Decisions.swift`、`Usage.swift`、`MemoryRecord.swift`（各自的读写改用它）；测试 `RecordFileTests.swift`（9 项）、`CleanerJournalTests.swift`（6 项），`MemoryTests.swift` 改留底名；`GLOSSARY.md`、`AGENTS.md` 同步。

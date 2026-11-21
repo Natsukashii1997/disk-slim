@@ -125,7 +125,7 @@ enum Snapshot {
         // 清理后的数字用现在真实的可用空间；清理前固定写 5.9 GB
         let after = store.disk?.availableBytes ?? Int64(51.2 * gb)
         store.ui.celebration = Celebration(at: Date(), fromBytes: Int64(5.9 * gb), toBytes: after,
-                                        freedBytes: Int64(45.3 * gb), trashedBytes: Int64(6.7 * gb))
+                                           freedBytes: Int64(45.3 * gb), trashedBytes: Int64(6.7 * gb))
         store.celebrationFrozenAt = t
         if t >= Celebration.toastDelay {
             store.ui.toast = Toast(text: "已释放 45.3 GB，移到废纸篓 6.7 GB（清空后才释放）", canUndo: true)

@@ -44,7 +44,7 @@
 
 前五份（不含 `status.json`）的读、坏了留底（`<名字>-damaged-<时间>-<8位>.json.bak`）、加锁写都走 `RecordFile`（`Persistence.swift`），日期一律存 ISO 文本。
 
-易混：核心层的 `…Log` / `AlertStore` 是一个 JSON 文件的读写，底下都是 `RecordFile`；应用层的 `Store` 是整个界面的状态，`Store+Memory.swift` 是它的扩展。`MemoryUsage` 是内存归属，和 `Usage`（磁盘涨幅）无关。
+易混：核心层的 `…Log` / `AlertStore` 是一个 JSON 文件的读写，底下都是 `RecordFile`；应用层的 `Store` 是整个界面的状态，`Store+Memory.swift` 是它的扩展；`store.ui`（`PanelUI`）是面板上现在显示什么（页、勾选、确认框、提示、彩带），`store.mem`（`MemoryPanel`）是内存页的读数和按钮状态。`MemoryUsage` 是内存归属，和 `Usage`（磁盘涨幅）无关。
 
 ## 能不能删，查四道
 
@@ -70,7 +70,7 @@
 |---|---|---|
 | 挂件 | `Pendant.swift`：`StatusFile`、`PanelLink`、`PanelToggle` | 驿窗侧栏的扫帚浮游兽，现在唯一默认开着的入口。点它时驿窗发 `diskslim://panel/toggle` |
 | 悬浮球 | `FloatingBall`、`BallView` | 桌面上贴边的球，默认关 |
-| 面板 | `FloatingPanel`、`PanelView` | 挂件和悬浮球点开的是同一个面板。易混：面板的开关和摆放都写在 `FloatingBall` 类里 |
+| 面板 | `FloatingPanel`、`PanelView`、`PanelController` | 挂件和悬浮球点开的是同一个面板。易混：开在谁旁边、开关时回首页由 `FloatingBall` 决定；建窗口、摆位置、点外面收起在 `PanelController`（第三批拆出） |
 | 磁盘 / 内存 | `PanelTab` | 面板顶上的切换 |
 | 下钻页 | `Page` | 首页之外的页面 |
 
