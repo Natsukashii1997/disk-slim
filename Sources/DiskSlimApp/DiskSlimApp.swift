@@ -28,7 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 应用唯一的数据（面板、悬浮球、驿窗挂件共用）。启动完才建：离屏截图在 App.init 里就退出了，不该碰真实记录
     private var store: Store?
 
-    /// 正在清理时不退出：操作记录要等整批做完才写，半途退出会丢掉撤销记录
+    /// 正在清理时不退出：操作记录每清完一项才写一次，半途退出，正在清的那一项可能记不下、撤销不了
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if MainActor.assumeIsolated({ Store.main?.working == true }) {
             MainActor.assumeIsolated { Store.main?.toast = Toast(text: "正在清理，清完再退出。", canUndo: false) }
