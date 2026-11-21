@@ -14,12 +14,12 @@
 
 - 时间：开工 `2026-11-21 09:43`（和 PR-A 同一次开工，PR-A 提交后接着做）。★ 来由：2026-11-20 接手成本评估里的「`Store` 29 个 `@Published`、判断写在界面层没测试、`FloatingBall` 太大」三条，第三批 PR-B 处理，不改行为。
 - 改了哪些文件：`Sources/DiskSlimCore/Alerts.swift`（新增 `needsScan`、`mayAutoCleanNow`）、`MemoryGuard.swift`（新增 `mayTerminate`）；`Sources/DiskSlimApp/Store.swift`（29 个 `@Published` 收成 14 个：`ui: PanelUI`、`mem: MemoryPanel`，三处判断改为调用核心层）、`Store+Memory.swift`、`Views.swift`、`MemoryViews.swift`、`Snapshot.swift`、`DiskSlimApp.swift`（引用改成 `ui.` / `mem.`）；新文件 `PanelController.swift`（面板窗口），`FloatingBall.swift` 392 → 309 行；测试 `AlertsScheduleTests.swift`（8 项）；`AGENTS.md`、`GLOSSARY.md` 同步。
-- 测试：`scripts/test.sh` 原样 `✔ Test run with 315 tests in 46 suites passed`（main 上 307 项，新增 8 项）；`node --test tests/*.test.mjs` 原样 `ℹ pass 10` / `ℹ fail 0`；`node scripts/check-rules.mjs`「通用规则检查通过」。★
+- 测试：`scripts/test.sh` 原样 `✔ Test run with 315 tests in 46 suites passed`（main 上 307 项，新增 8 项）；变基到合并 #23 后的 main 再跑：`✔ Test run with 329 tests in 48 suites passed`（321 + 8）；`node --test tests/*.test.mjs` 原样 `ℹ pass 10` / `ℹ fail 0`；`node scripts/check-rules.mjs`「通用规则检查通过」。★
 - 验证：离屏渲染（调试版 `--snapshot`，真实只读扫描）main 和本分支各跑一遍。main 自己连跑两遍就有 20 张字节不同（扫描时间、可用空间、内存读数），所以逐张对照：内存示例四张字节相同；`8-清理前确认` 两边只差顶栏扫描时间。证据 `evidence/batch3-split-2026-11-21/`。验证环境：替身（离屏渲染）；面板真实开关、点外面收起、Esc、插拔显示器没在真实环境验。
 - 独立审查（L-06）：只读审查员核「有没有用户看得到的行为变化」：三个纯函数逐分支等价；脚本改名没有误伤（`page(of:)`、局部 `toast`、两个 `drawer` 都核过）；全仓只有 `$disk`、`$floatingBallOn` 两个单独订阅，都没收进分组；每次赋值仍各发一次变化通知；`PanelController` 开关顺序、弱引用、点外面判断和原来一致。它自己另编 main 对比 31 张截图，22 张逐字节相同，其余 9 张差在实时数据。结论：没有用户看得到的行为变化。建议的两处（词汇表和结构说明过期、`Snapshot.swift` 一处续行缩进）已改。证据 `evidence/batch3-split-review-2026-11-21/`。
 - 截图：无界面改动。只做了电脑版。
 - 发布与回读：未发布、未装机。
-- 与授权不一致之处、遗留问题、范围外发现：① 本分支从 main 起，和 PR-A 都改了 `CURRENT.md` 顶部；先合 PR-A 后，本分支要变基并合并这两节。② `autoCleanIfDue` 原来是短路求值，现在参数先全部求值；`terminate` 现在先按 pid 查进程再判断名单。两处都只读属性、没有副作用，结果相同。③ 可用空间 10:13 离屏渲染时已降到 35.5 GB（低于 60 GB），「AI 写代码编出来的文件」31 GB，比早上多了约 10 GB，多半是本轮各 worktree 的编译产物，合并后清掉 worktree 会回来。
+- 与授权不一致之处、遗留问题、范围外发现：① 本分支从 main 起，和 PR-A 都改了 `CURRENT.md` 顶部和 `GLOSSARY.md`；#23 合并后已变基，两边内容都保留。② `autoCleanIfDue` 原来是短路求值，现在参数先全部求值；`terminate` 现在先按 pid 查进程再判断名单。两处都只读属性、没有副作用，结果相同。③ 可用空间 10:13 离屏渲染时已降到 35.5 GB（低于 60 GB），「AI 写代码编出来的文件」31 GB，比早上多了约 10 GB，多半是本轮各 worktree 的编译产物，合并后清掉 worktree 会回来。
 - 本轮新坑：无。★
 
 ## 第三批 PR-A：五份记录文件统一读写、操作记录逐项落盘（2026-11-21，Claude，常浩看过计划后回「按计划开工」，确认了五处行为变化；已随 PR #23 squash 合并（`c5d1d2b`）、未装机、未发布）
