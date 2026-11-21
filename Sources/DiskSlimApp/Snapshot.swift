@@ -11,18 +11,18 @@ enum Snapshot {
         let report = Scan().run()
         let shots: [(String, (Store) -> Void)] = [
             ("1-首页", { _ in }),
-            ("2-首页-要你说一句", { $0.drawer = .ask }),
-            ("3-首页-先不动", { $0.drawer = .keep }),
-            ("4-替你挑好的", { $0.page = .picked }),
-            ("5-下载", { $0.page = .downloads }),
-            ("6-先不动的", { $0.page = .keep }),
-            ("7-对话记录", { $0.page = .records }),
-            ("8-清理前确认", { $0.confirming = $0.suggestedPicks }),
-            ("9-清理后提示", { $0.toast = Toast(text: "移到废纸篓 139 MB（清空后才释放），已释放 897 MB", canUndo: true) }),
-            ("10-涨幅-真实记录", { $0.page = .growth }),
+            ("2-首页-要你说一句", { $0.ui.drawer = .ask }),
+            ("3-首页-先不动", { $0.ui.drawer = .keep }),
+            ("4-替你挑好的", { $0.ui.page = .picked }),
+            ("5-下载", { $0.ui.page = .downloads }),
+            ("6-先不动的", { $0.ui.page = .keep }),
+            ("7-对话记录", { $0.ui.page = .records }),
+            ("8-清理前确认", { $0.ui.confirming = $0.suggestedPicks }),
+            ("9-清理后提示", { $0.ui.toast = Toast(text: "移到废纸篓 139 MB（清空后才释放），已释放 897 MB", canUndo: true) }),
+            ("10-涨幅-真实记录", { $0.ui.page = .growth }),
             ("11-首页-示例记录", { $0.samples = example(report) }),
-            ("12-涨幅-示例记录", { $0.samples = example(report); $0.page = .growth }),
-            ("13-提醒设置", { $0.page = .alerts }),
+            ("12-涨幅-示例记录", { $0.samples = example(report); $0.ui.page = .growth }),
+            ("13-提醒设置", { $0.ui.page = .alerts }),
             // 清理完成的彩带，用 11 月 18 日那次真实清理的数字（清理前 5.9 GB，腾出 45.3 GB，6.7 GB 进废纸篓）定格在几个时刻
             ("14-清理完成彩带-示例-0.5秒", { celebrate($0, at: 0.5) }),
             ("15-清理完成彩带-示例-1.3秒", { celebrate($0, at: 1.3) }),
@@ -33,13 +33,13 @@ enum Snapshot {
             ("19-首页-示例-可用22GB", { freeGB($0, 22) }),
             // 第 11 批内存页：真实读数（曲线要应用常驻攒），和照 11 月 18 日 13:50 实测编的示例
             ("30-内存-真实", { realMemory($0) }),
-            ("31-内存-真实-先不动", { realMemory($0); $0.memDrawer = .keep }),
+            ("31-内存-真实-先不动", { realMemory($0); $0.mem.drawer = .keep }),
             ("32-内存-示例", { exampleMemory($0) }),
-            ("33-内存-示例-要你说一句", { exampleMemory($0); $0.memDrawer = .ask }),
-            ("34-内存-示例-先不动", { exampleMemory($0); $0.memDrawer = .keep }),
-            ("35-强制退出-真实", { realMemory($0); $0.page = .forceQuit }),
-            ("36-强制退出-示例-点了一下", { exampleMemory($0); $0.page = .forceQuit; $0.forceArmed = "com.google.Chrome@1" }),
-            ("37-内存-示例-退出后提示", { exampleMemory($0); $0.toast = Toast(text: "已退出 预览，腾出约 1.2 GB。要用时照常打开", canUndo: false) }),
+            ("33-内存-示例-要你说一句", { exampleMemory($0); $0.mem.drawer = .ask }),
+            ("34-内存-示例-先不动", { exampleMemory($0); $0.mem.drawer = .keep }),
+            ("35-强制退出-真实", { realMemory($0); $0.ui.page = .forceQuit }),
+            ("36-强制退出-示例-点了一下", { exampleMemory($0); $0.ui.page = .forceQuit; $0.mem.forceArmed = "com.google.Chrome@1" }),
+            ("37-内存-示例-退出后提示", { exampleMemory($0); $0.ui.toast = Toast(text: "已退出 预览，腾出约 1.2 GB。要用时照常打开", canUndo: false) }),
         ]
         for (name, setup) in shots {
             let store = Store(readOnly: true)
@@ -70,7 +70,7 @@ enum Snapshot {
     }
 
     static func realMemory(_ store: Store) {
-        store.tab = .memory
+        store.ui.tab = .memory
         store.applyMemory(status: readMemoryStatus(), usage: MemoryAttribution.usage(listProcesses(), apps: RunningApps.current()))
     }
 
@@ -103,8 +103,8 @@ enum Snapshot {
         record.apps["com.apple.Preview@6"] = ActivityTrack(cpuNanos: 0, at: now, busyAt: now.addingTimeInterval(-2 * 86_400))
         let curve = [38, 40, 36, 42, 48, 55, 52, 58, 61, 57, 63, 66, 70, 64, 68, 72, 75, 71, 74, 78, 76, 79, 77, 78]
         record.pressure = curve.enumerated().map { PressurePoint(at: now.addingTimeInterval(Double($0.offset - 23) * 3600), usedPercent: $0.element, level: .tight) }
-        store.memRecord = record
-        store.tab = .memory
+        store.mem.record = record
+        store.ui.tab = .memory
         let status = MemoryStatus(totalBytes: Int64(24 * gb), level: .tight, usedPercent: 78, swapUsedBytes: Int64(29.6 * gb),
                                   swapTotalBytes: Int64(30 * gb), bootedAt: now.addingTimeInterval(-(3 * 86_400 + 17 * 3600)))
         store.applyMemory(status: status, usage: MemoryUsage(apps: apps.map { AppMemory(app: $0.0, bytes: Int64($0.1 * gb)) },
@@ -124,11 +124,11 @@ enum Snapshot {
         store.scanning = true
         // 清理后的数字用现在真实的可用空间；清理前固定写 5.9 GB
         let after = store.disk?.availableBytes ?? Int64(51.2 * gb)
-        store.celebration = Celebration(at: Date(), fromBytes: Int64(5.9 * gb), toBytes: after,
+        store.ui.celebration = Celebration(at: Date(), fromBytes: Int64(5.9 * gb), toBytes: after,
                                         freedBytes: Int64(45.3 * gb), trashedBytes: Int64(6.7 * gb))
         store.celebrationFrozenAt = t
         if t >= Celebration.toastDelay {
-            store.toast = Toast(text: "已释放 45.3 GB，移到废纸篓 6.7 GB（清空后才释放）", canUndo: true)
+            store.ui.toast = Toast(text: "已释放 45.3 GB，移到废纸篓 6.7 GB（清空后才释放）", canUndo: true)
         }
     }
 

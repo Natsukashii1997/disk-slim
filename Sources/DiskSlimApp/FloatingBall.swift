@@ -147,11 +147,11 @@ final class FloatingBall: NSObject {
         self.anchor = anchor
         if panel == nil { makePanel(store) }
         // 每次打开：回首页、收起确认框、结果旧了就重扫
-        store.page = .home
-        store.drawer = nil
-        store.confirming = nil
-        store.tab = .disk
-        store.memDrawer = nil
+        store.ui.page = .home
+        store.ui.drawer = nil
+        store.ui.confirming = nil
+        store.ui.tab = .disk
+        store.mem.drawer = nil
         store.scanIfStale()
         store.refreshMemory()
         placePanel()

@@ -66,7 +66,7 @@ struct PanelView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             Group {
-                switch store.page {
+                switch store.ui.page {
                 case .home: HomeView()
                 case .picked: ListPage(page: .picked, title: "替你挑好的", action: "清理所选")
                 case .downloads: ListPage(page: .downloads, title: "下载文件夹", action: "移到废纸篓")
@@ -78,14 +78,14 @@ struct PanelView: View {
                 }
             }
             .frame(maxHeight: .infinity, alignment: .top)
-            .disabled(store.confirming != nil)
-            .blur(radius: store.confirming != nil ? 2 : 0)
+            .disabled(store.ui.confirming != nil)
+            .blur(radius: store.ui.confirming != nil ? 2 : 0)
 
-            if let list = store.confirming { ConfirmView(list: list).padding(10) }
-            if let t = store.toast, store.confirming == nil { ToastView(toast: t).padding(10) }
+            if let list = store.ui.confirming { ConfirmView(list: list).padding(10) }
+            if let t = store.ui.toast, store.ui.confirming == nil { ToastView(toast: t).padding(10) }
         }
         .overlay {
-            if let c = store.celebration { ConfettiView(celebration: c).allowsHitTesting(false) }
+            if let c = store.ui.celebration { ConfettiView(celebration: c).allowsHitTesting(false) }
         }
         .frame(width: panelWidth, height: panelHeight)
         .font(.system(size: 13))
@@ -267,7 +267,7 @@ struct HomeView: View {
             meta
             PanelTabs()
             Scroller(inset: 0, spacing: 12) {
-                if store.tab == .memory {
+                if store.ui.tab == .memory {
                     MemoryHome()
                 } else {
                     if !store.unreadable.isEmpty { accessHint(t) }
@@ -275,7 +275,7 @@ struct HomeView: View {
                     decideCard(t)
                 }
             }
-            if store.tab == .memory { MemoryFooter() } else { footer }
+            if store.ui.tab == .memory { MemoryFooter() } else { footer }
         }
         .padding(14)
     }
@@ -285,10 +285,10 @@ struct HomeView: View {
             Text(statusLine)
             Spacer()
             // 点击手感（2026-11-18 常浩选甲「系统灰底」，预览 docs/design/ui-v10-button-press.html）：平时无底，悬停淡灰底，按下灰底加深；扫描或读内存时 ↻ 一直转
-            Button { if store.tab == .memory { store.refreshMemory() } else { store.scan() } } label: {
-                Spinning(on: store.tab == .memory ? store.memReading : store.scanning) { Image(systemName: "arrow.clockwise") }
+            Button { if store.ui.tab == .memory { store.refreshMemory() } else { store.scan() } } label: {
+                Spinning(on: store.ui.tab == .memory ? store.mem.reading : store.scanning) { Image(systemName: "arrow.clockwise") }
             }
-                .buttonStyle(TopBarButton()).help(store.tab == .memory ? "重新看一遍" : "重新扫描")
+                .buttonStyle(TopBarButton()).help(store.ui.tab == .memory ? "重新看一遍" : "重新扫描")
             // 缩小键（2026-11-18 常浩选甲「同款线条」，预览 docs/design/ui-v7-minimize.html）：收回挂件或悬浮球
             Button { FloatingBall.shared.closePanel() } label: { Image(systemName: "minus") }
                 .buttonStyle(TopBarButton()).help("缩小")
@@ -298,8 +298,8 @@ struct HomeView: View {
     }
 
     private var statusLine: String {
-        if store.tab == .memory {
-            guard let at = store.memAt else { return "正在看内存…" }
+        if store.ui.tab == .memory {
+            guard let at = store.mem.at else { return "正在看内存…" }
             return "\(BeijingTime.hourMinute(at)) 看过"
         }
         if store.scanning { return "正在扫描…" }
@@ -333,19 +333,19 @@ struct HomeView: View {
             // 还没有扫描结果（刚清理完正在重扫）时不说「没有」「0 KB」，免得像真的清空了
             let scanned = store.report != nil
             drawerRow(t, .ask, title: "要你说一句",
-                      sub: !scanned ? Self.afterScan : askCount == 0 ? "现在没有要问你的" : store.drawer == .ask ? "选一个就行，选错了能撤销" : askSub) {
+                      sub: !scanned ? Self.afterScan : askCount == 0 ? "现在没有要问你的" : store.ui.drawer == .ask ? "选一个就行，选错了能撤销" : askSub) {
                 if askCount > 0 {
                     Text("\(askCount)").font(.system(size: 11.5, weight: .bold)).foregroundStyle(t.card)
                         .frame(minWidth: 20, minHeight: 20).padding(.horizontal, askCount > 9 ? 4 : 0)
                         .background(Capsule().fill(Color.primary))
                 }
             }
-            if store.drawer == .ask { askDrawer(t) }
+            if store.ui.drawer == .ask { askDrawer(t) }
             let keep = store.keepList
             drawerRow(t, .keep, title: "先不动", sub: !scanned ? Self.afterScan : keep.isEmpty ? "没有" : "\(keep.count) 项还在用或留着保底") {
                 if scanned { Text(formatBytes(total(keep))).font(.system(size: 13, weight: .semibold)).monospacedDigit() }
             }
-            if store.drawer == .keep { keepDrawer(t, keep) }
+            if store.ui.drawer == .keep { keepDrawer(t, keep) }
         }
         .background(RoundedRectangle(cornerRadius: 18).fill(t.card))
     }
@@ -360,7 +360,7 @@ struct HomeView: View {
         let picks = store.suggestedPicks
         let (num, unit) = splitBytes(total(picks))
         VStack(alignment: .leading, spacing: 0) {
-            Button { store.page = .picked } label: {
+            Button { store.ui.page = .picked } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("替你挑好的").font(.system(size: 11.5)).foregroundStyle(.secondary)
                     Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
@@ -416,7 +416,7 @@ struct HomeView: View {
 
     private func drawerRow<Trailing: View>(_ t: Tone, _ which: HomeDrawer, title: String, sub: String,
                                            @ViewBuilder trailing: () -> Trailing) -> some View {
-        Button { store.drawer = store.drawer == which ? nil : which } label: {
+        Button { store.ui.drawer = store.ui.drawer == which ? nil : which } label: {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title).font(.system(size: 13, weight: .semibold))
@@ -424,7 +424,7 @@ struct HomeView: View {
                 }
                 Spacer(minLength: 8)
                 trailing()
-                Image(systemName: store.drawer == which ? "chevron.down" : "chevron.right")
+                Image(systemName: store.ui.drawer == which ? "chevron.down" : "chevron.right")
                     .font(.system(size: 11, weight: .semibold)).foregroundStyle(.tertiary).frame(width: 12)
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
@@ -440,7 +440,7 @@ struct HomeView: View {
                 question(title: "\(card.title) · \(formatBytes(card.bytes))", why: card.why) {
                     if card.findings.allSatisfy({ $0.area == .downloads }) {
                         Button("都不要了") { store.askToClean(card.findings) }.buttonStyle(ChipButton(primary: true))
-                        Button("让我挑") { store.page = .downloads }.buttonStyle(ChipButton())
+                        Button("让我挑") { store.ui.page = .downloads }.buttonStyle(ChipButton())
                         Button("都留着") { store.keep(card) }.buttonStyle(ChipButton())
                     } else {
                         Button(card.actionLabel) { store.askToClean(card.findings) }.buttonStyle(ChipButton(primary: true))
@@ -486,7 +486,7 @@ struct HomeView: View {
                     Text(formatBytes(f.bytes)).font(.system(size: 12.5, weight: .semibold)).monospacedDigit()
                 }
             }
-            Button(keep.count > shown ? "还有 \(keep.count - shown) 项，全部看看 ›" : "想自己挑着清，点这里 ›") { store.page = .keep }
+            Button(keep.count > shown ? "还有 \(keep.count - shown) 项，全部看看 ›" : "想自己挑着清，点这里 ›") { store.ui.page = .keep }
                 .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(t.blue)
         }
         .padding(.horizontal, 16).padding(.bottom, 14)
@@ -496,9 +496,9 @@ struct HomeView: View {
     private var footer: some View {
         HStack(spacing: 14) {
             let records = store.findings(.records)
-            Button(store.report == nil ? "对话记录 · \(Self.afterScan)" : "对话记录 \(formatBytes(total(records))) · 只看不删") { store.page = .records }
+            Button(store.report == nil ? "对话记录 · \(Self.afterScan)" : "对话记录 \(formatBytes(total(records))) · 只看不删") { store.ui.page = .records }
             Spacer()
-            Button("提醒") { store.page = .alerts }
+            Button("提醒") { store.ui.page = .alerts }
             if store.canUndo { Button("撤销") { store.undo() }.disabled(store.busy) }
             Button("退出") { NSApp.terminate(nil) }
         }
@@ -518,7 +518,7 @@ struct HeroCard: View {
         let free = store.disk?.availableBytes ?? 0
         let picks = store.suggestedPicks
         let soon = total(picks.filter { $0.cleanup != .trash })
-        Button { store.page = .growth } label: {
+        Button { store.ui.page = .growth } label: {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     Text("可用空间")
@@ -531,7 +531,7 @@ struct HeroCard: View {
                 }
                 .font(.system(size: 11.5)).foregroundStyle(.secondary)
 
-                CelebrationClock(celebration: store.celebration, frozenAt: store.celebrationFrozenAt) { elapsed in
+                CelebrationClock(celebration: store.ui.celebration, frozenAt: store.celebrationFrozenAt) { elapsed in
                     let gb = shownGB(elapsed)
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(gb.map { String(format: "%.1f", $0) } ?? "—")
@@ -539,7 +539,7 @@ struct HeroCard: View {
                             .foregroundStyle(levelColor(gb))
                         Text("GB").font(.system(size: 17, weight: .semibold)).foregroundStyle(.secondary)
                         Spacer(minLength: 0)
-                        if let c = store.celebration {
+                        if let c = store.ui.celebration {
                             Text("+\(formatBytes(c.freedBytes))").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
                                 .padding(.horizontal, 10).padding(.vertical, 4)
                                 .background(Capsule().fill(t.gain))
@@ -563,7 +563,7 @@ struct HeroCard: View {
                 }
 
                 HStack {
-                    if let c = store.celebration, picks.isEmpty {
+                    if let c = store.ui.celebration, picks.isEmpty {
                         Text("刚腾出 ") + Text(formatBytes(c.freedBytes)).fontWeight(.semibold).foregroundColor(.primary)
                         Spacer()
                         if c.trashedBytes > 0 {
@@ -618,7 +618,7 @@ struct HeroCard: View {
     /// 刚清理完的头 1.4 秒，数字从清理前滚到清理后（先快后慢）；其余时候就是现在的可用空间
     private func shownGB(_ elapsed: TimeInterval?) -> Double? {
         let gb = { (b: Int64) in Double(b) / 1_073_741_824 }
-        if let c = store.celebration, let elapsed, elapsed < Celebration.countUp {
+        if let c = store.ui.celebration, let elapsed, elapsed < Celebration.countUp {
             let k = max(0, elapsed) / Celebration.countUp
             return gb(c.fromBytes) + (gb(c.toBytes) - gb(c.fromBytes)) * (1 - pow(1 - k, 3))
         }
@@ -771,7 +771,7 @@ struct PageHeader: View {
 
     var body: some View {
         HStack {
-            Button { store.page = .home } label: { Label("返回", systemImage: "chevron.left") }
+            Button { store.ui.page = .home } label: { Label("返回", systemImage: "chevron.left") }
                 .buttonStyle(.plain).foregroundStyle(Palette.accent)
             Spacer()
             Text(title).font(.system(size: 13, weight: .semibold))
@@ -842,7 +842,7 @@ struct ListPage: View {
     }
 
     @ViewBuilder private func group(_ g: Group) -> some View {
-        let folded = g.items.count > foldOver && !store.expanded.contains(g.name)
+        let folded = g.items.count > foldOver && !store.ui.expanded.contains(g.name)
         let shown = folded ? Array(g.items.prefix(foldShow)) : g.items
         HStack {
             Text(g.name).font(.system(size: 11.5, weight: .semibold))
@@ -854,7 +854,7 @@ struct ListPage: View {
         ForEach(shown) { f in ItemRow(f: f) }
         if g.items.count > foldOver {
             Button {
-                if folded { store.expanded.insert(g.name) } else { store.expanded.remove(g.name) }
+                if folded { store.ui.expanded.insert(g.name) } else { store.ui.expanded.remove(g.name) }
             } label: {
                 let rest = g.items.dropFirst(foldShow)
                 Text(folded ? "还有 \(rest.count) 项 · \(formatBytes(total(Array(rest))))，展开" : "收起")
@@ -887,8 +887,8 @@ struct ItemRow: View {
             HStack(spacing: 8) {
                 Group {
                     if f.selectable {
-                        Image(systemName: store.selected.contains(f.id) ? "checkmark.square.fill" : "square")
-                            .foregroundStyle(store.selected.contains(f.id) ? Palette.accent : .secondary)
+                        Image(systemName: store.ui.selected.contains(f.id) ? "checkmark.square.fill" : "square")
+                            .foregroundStyle(store.ui.selected.contains(f.id) ? Palette.accent : .secondary)
                     } else {
                         Color.clear
                     }
@@ -947,7 +947,7 @@ struct ConfirmView: View {
             }
             Text("移到废纸篓的要清空废纸篓后才真正腾出空间。").font(.system(size: 11.5)).foregroundStyle(.secondary)
             HStack(spacing: 8) {
-                Button("取消") { store.confirming = nil }.buttonStyle(QuietButton())
+                Button("取消") { store.ui.confirming = nil }.buttonStyle(QuietButton())
                 Button(store.busy ? "正在扫描…" : "确认清理") { store.clean(list) }
                     .buttonStyle(PrimaryButton(enabled: !store.busy)).disabled(store.busy)
             }
@@ -981,7 +981,7 @@ struct ToastView: View {
                     .foregroundStyle(Color(red: 0.56, green: 0.75, blue: 1))
                     .disabled(store.working)
             }
-            Button { store.toast = nil } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .bold)) }
+            Button { store.ui.toast = nil } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .bold)) }
                 .buttonStyle(.plain).foregroundStyle(.white.opacity(0.6))
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
@@ -989,7 +989,7 @@ struct ToastView: View {
         .task(id: toast.id) {
             if isSnapshot { return }
             try? await Task.sleep(nanoseconds: 10_000_000_000)
-            if store.toast?.id == toast.id { store.toast = nil }
+            if store.ui.toast?.id == toast.id { store.ui.toast = nil }
         }
     }
 }
@@ -1100,7 +1100,7 @@ struct GrowthPage: View {
                 Text(formatDelta(c.delta)).font(.system(size: 12.5, weight: .semibold, design: .monospaced))
                     .foregroundStyle(c.delta > 0 ? Palette.bad : Palette.ok)
                 if let target {
-                    Button("去处理") { store.page = target }
+                    Button("去处理") { store.ui.page = target }
                         .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(Palette.accent)
                 }
             }

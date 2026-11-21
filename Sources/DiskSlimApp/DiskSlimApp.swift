@@ -31,7 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 正在清理时不退出：操作记录每清完一项才写一次，半途退出，正在清的那一项可能记不下、撤销不了
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if MainActor.assumeIsolated({ Store.main?.working == true }) {
-            MainActor.assumeIsolated { Store.main?.toast = Toast(text: "正在清理，清完再退出。", canUndo: false) }
+            MainActor.assumeIsolated { Store.main?.ui.toast = Toast(text: "正在清理，清完再退出。", canUndo: false) }
             return .terminateCancel
         }
         // 面板开着就退出时先收起，状态文件写回 panelOpen false，驿窗挂件的光圈才会熄
