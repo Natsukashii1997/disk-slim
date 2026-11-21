@@ -63,29 +63,13 @@ public struct DecisionLog {
         DecisionLog(url: home.appendingPathComponent("Library/Application Support/disk-slim/decisions.json"))
     }
 
+    var file: RecordFile<Decisions> { RecordFile(url: url) }
+
     /// 没有文件当没有决定；整份读不出来时先改名留底（`readOnly` 时不挪），免得下次保存把它覆盖掉
-    public func load(readOnly: Bool = false) -> Decisions {
-        guard let data = try? Data(contentsOf: url) else { return Decisions() }
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
-        if let decisions = try? d.decode(Decisions.self, from: data) { return decisions }
-        if !readOnly {
-            let stamp = Int(Date().timeIntervalSince1970)
-            try? FileManager.default.moveItem(at: url, to: url.deletingLastPathComponent()
-                .appendingPathComponent("decisions-damaged-\(stamp)-\(UUID().uuidString.prefix(8)).json.bak"))
-        }
-        return Decisions()
-    }
+    public func load(readOnly: Bool = false) -> Decisions { file.load(readOnly: readOnly).value ?? Decisions() }
 
     /// 文件在但读不了（权限、读错误）时报错不写，免得把读不到的「保留」整份覆盖掉
-    public func save(_ decisions: Decisions) throws {
-        try refuseIfUnreadable(url)
-        let e = JSONEncoder()
-        e.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        e.dateEncodingStrategy = .iso8601
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try e.encode(decisions).write(to: url, options: .atomic)
-    }
+    public func save(_ decisions: Decisions) throws { try file.save(decisions) }
 }
 
 /// 选过「保留」的项不再默认勾选（首页「清理建议项」不会把它清掉），说明里写明
