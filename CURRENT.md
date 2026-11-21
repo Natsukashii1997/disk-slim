@@ -2,7 +2,7 @@
 
 当前阶段目标：常态维护。第 6 批已收尾：2026-11-19 常浩定 `disk-space-guard` 停用（原目标「第 6 批试用一周收尾，定下 disk-space-guard 去留，之后转常态维护」，2026-11-08 常浩确认，digital-twin#114）。
 
-更新：2026-11-21 上午。第三批整改（issue #22）：PR-A（五份记录文件统一读写、操作记录逐项落盘）已随 PR #23 squash 合并（`c5d1d2b`，常浩经 Agent HUD 回「两个都合」）；PR-B（结构拆分、不改行为，PR #24）变基后合并中。都未装机。唯一下一步：常浩定要不要装机第三批；另请常浩在系统设置里重给完全磁盘访问、打开通知（第一、二批遗留）。
+更新：2026-11-21 上午。第三批整改（issue #22）：PR-A（五份记录文件统一读写、操作记录逐项落盘）已随 PR #23 squash 合并（`c5d1d2b`，常浩经 Agent HUD 回「两个都合」）；PR-B（结构拆分、不改行为）已随 PR #24 squash 合并（`ee67fb0`），issue #22 已关闭。都未装机。唯一下一步：常浩定要不要装机第三批；另请常浩在系统设置里重给完全磁盘访问、打开通知（第一、二批遗留）。
 
 之前：2026-11-21。第二批整改（结构简化，issue #20）已随 PR #21 squash 合并（`b1100f7`，常浩经 Agent HUD 回「合并」），2026-11-21 09:27 已装机（常浩经 Agent HUD 回「确认装机」）：文件拆分、阈值和重复代码去重、显示文字不再当判断条件（`Category`、`Finding.kind`）、测试按被测对象重组。唯一下一步：请常浩在「系统设置 › 通知 › 磁盘瘦身」里打开通知（第一批遗留），并在「完全磁盘访问权限」里先用「−」删掉磁盘瘦身再重新加（本机签名换了，首页已提示废纸篓读不了）；打开后重跑 `--test-notify`，最后一行要是「已允许」。
 
@@ -10,7 +10,7 @@
 
 之前：2026-11-19。`disk-space-guard` 定为停用（任务保持关闭、不删）。菜单栏图标已去掉，入口只留驿窗侧栏挂件，已随 PR #12 squash 合回 main（`8deed49`）、已装机。之前：2026-11-18。第 0–11 批、缩小键、面板尺寸固定和按钮手感都已合回 main（PR #1、#5、#6、#7、#8）。第 11 批「内存」：「磁盘 | 内存」切换、内存页（定稿一二结合）、一键退出、要你说一句（Claude 会话 / 浏览器 / 重启）、强制退出页，已装机。11-18 19:12 交接会话补做了真屏验收：内存页、强制退出页「退出」和「强制退出」点两下都通过；验收中发现面板切到内存页会长出屏幕底边，已修（`FloatingBall.swift`）并重装复验。常浩看过截图说「开 PR」，开了 PR #7，常浩说「合并」后已 squash 合回 main（`e862639`，2026-11-18 20:00）。20:00 后在新分支 `claude/panel-fixed-size` 做了「面板尺寸固定 + 磁盘顶卡谁占着」和「顶栏按钮点击手感」，已随 PR #8 squash 合回 main（`af6f2a2`，2026-11-18 20:58；PR #7 合并后才做，所以单开了 #8）。（当时的唯一下一步「`disk-space-guard` 要不要停」已在 2026-11-19 定为停用，见下面对应一节。）
 
-## 第三批 PR-B：判断下沉核心层、Store 状态分组、悬浮球拆出面板控制器（2026-11-21，Claude，常浩看过计划后回「按计划开工」；已提交到 `claude/22-batch3-split`、PR 待合并、未装机、未发布）
+## 第三批 PR-B：判断下沉核心层、Store 状态分组、悬浮球拆出面板控制器（2026-11-21，Claude，常浩看过计划后回「按计划开工」；已随 PR #24 squash 合并（`ee67fb0`）、未装机、未发布）
 
 - 时间：开工 `2026-11-21 09:43`（和 PR-A 同一次开工，PR-A 提交后接着做）。★ 来由：2026-11-20 接手成本评估里的「`Store` 29 个 `@Published`、判断写在界面层没测试、`FloatingBall` 太大」三条，第三批 PR-B 处理，不改行为。
 - 改了哪些文件：`Sources/DiskSlimCore/Alerts.swift`（新增 `needsScan`、`mayAutoCleanNow`）、`MemoryGuard.swift`（新增 `mayTerminate`）；`Sources/DiskSlimApp/Store.swift`（29 个 `@Published` 收成 14 个：`ui: PanelUI`、`mem: MemoryPanel`，三处判断改为调用核心层）、`Store+Memory.swift`、`Views.swift`、`MemoryViews.swift`、`Snapshot.swift`、`DiskSlimApp.swift`（引用改成 `ui.` / `mem.`）；新文件 `PanelController.swift`（面板窗口），`FloatingBall.swift` 392 → 309 行；测试 `AlertsScheduleTests.swift`（8 项）；`AGENTS.md`、`GLOSSARY.md` 同步。
