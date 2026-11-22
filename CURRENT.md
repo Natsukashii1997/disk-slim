@@ -2,7 +2,7 @@
 
 当前阶段目标：常态维护。第 6 批已收尾：2026-11-19 常浩定 `disk-space-guard` 停用（原目标「第 6 批试用一周收尾，定下 disk-space-guard 去留，之后转常态维护」，2026-11-08 常浩确认，digital-twin#114）。
 
-更新：2026-11-22 23:40。第四批（issue #26）已随 PR #28 squash 合并（`953ddbd`，常浩经 Agent HUD 回「Merge」），未装机：已定内容登记表 `docs/DECIDED.md`；启动时并上登录 shell 的 PATH；通知被拒时首页提示；`diskslim doctor` 自检；打包写入提交号。同日按常浩「做 1 和 4，清」清掉默认勾选 5 项（报 36.2 GB，`df` 只多了 13.3 GB，原因一部分是量大小没按硬链接去重，另开 issue #27）。唯一下一步：常浩定要不要装机第四批；通知仍是「已拒绝」，要常浩在系统设置里打开；AGENTS.md「范围外不顺手修」那条的改动确认待单独发。
+更新：2026-11-22 23:56。第四批（issue #26）已随 PR #28 squash 合并（`953ddbd`，常浩经 Agent HUD 回「Merge」），23:53 已装机（常浩经 Agent HUD 回「装机」；已装版本提交 `0b6b084`）：已定内容登记表 `docs/DECIDED.md`；启动时并上登录 shell 的 PATH；通知被拒时首页提示；`diskslim doctor` 自检；打包写入提交号。同日按常浩「做 1 和 4，清」清掉默认勾选 5 项（报 36.2 GB，`df` 只多了 13.3 GB，原因一部分是量大小没按硬链接去重，另开 issue #27）。唯一下一步：签名又换了，请常浩重给完全磁盘访问；通知仍是「已拒绝」，要常浩在系统设置里打开；AGENTS.md「范围外不顺手修」那条的改动确认待单独发。
 
 之前：2026-11-22 14:25。常浩回「权限开好了」后核对：完全磁盘访问已生效（按应用平时的启动方式 `open -n` 起，首页不再提示废纸篓读不了）；通知仍是「已拒绝」（`--test-notify` 三次都是），系统设置里的通知开关还没开成。唯一下一步：请常浩在「系统设置 › 通知」里找到「磁盘瘦身」，把「允许通知」打开，再回一句，我重跑自测。
 
@@ -16,7 +16,7 @@
 
 之前：2026-11-19。`disk-space-guard` 定为停用（任务保持关闭、不删）。菜单栏图标已去掉，入口只留驿窗侧栏挂件，已随 PR #12 squash 合回 main（`8deed49`）、已装机。之前：2026-11-18。第 0–11 批、缩小键、面板尺寸固定和按钮手感都已合回 main（PR #1、#5、#6、#7、#8）。第 11 批「内存」：「磁盘 | 内存」切换、内存页（定稿一二结合）、一键退出、要你说一句（Claude 会话 / 浏览器 / 重启）、强制退出页，已装机。11-18 19:12 交接会话补做了真屏验收：内存页、强制退出页「退出」和「强制退出」点两下都通过；验收中发现面板切到内存页会长出屏幕底边，已修（`FloatingBall.swift`）并重装复验。常浩看过截图说「开 PR」，开了 PR #7，常浩说「合并」后已 squash 合回 main（`e862639`，2026-11-18 20:00）。20:00 后在新分支 `claude/panel-fixed-size` 做了「面板尺寸固定 + 磁盘顶卡谁占着」和「顶栏按钮点击手感」，已随 PR #8 squash 合回 main（`af6f2a2`，2026-11-18 20:58；PR #7 合并后才做，所以单开了 #8）。（当时的唯一下一步「`disk-space-guard` 要不要停」已在 2026-11-19 定为停用，见下面对应一节。）
 
-## 第四批：已定内容登记表 + 登录 shell PATH、首页通知提示、doctor 自检、打包写提交号（2026-11-22，Claude，常浩经 Agent HUD 回「做 1 和 4，清」；已随 PR #28 squash 合并（`953ddbd`）、未装机、未发布）
+## 第四批：已定内容登记表 + 登录 shell PATH、首页通知提示、doctor 自检、打包写提交号（2026-11-22，Claude，常浩经 Agent HUD 回「做 1 和 4，清」；已随 PR #28 squash 合并（`953ddbd`）、已装机（2026-11-22 23:53）、未发布）
 
 - 时间：开工 `2026-11-22 21:47`。★ 来由：「牛马之家」会话转来常浩「全部按推荐去做」，本会话把待办和推荐逐项列给他本人后，他经 Agent HUD 回「做 1 和 4，清」（issue #26）。
 - 改了哪些文件：`docs/DECIDED.md`（新建，登记雾光首页、只留浅色、面板尺寸固定、入口只留挂件四项，和「开机自启默认关、④～⑧ 先不做」）；`Sources/DiskSlimCore/System.swift`（`LoginShell`：`<SHELL> -l -c` 取 PATH、取成功一直用、失败隔 10 分钟再试；`mergedPath`；`ProcessRunner` 并上登录 shell 的 PATH，可传 `basePath`；抽出 `execute`；`BeijingTime.date(dayKey:)`）、`KnownPlaces.swift`（注释）、`Alerts.swift`（`AlertState.deliveredAt`：系统真收下提醒才记；`AlertSettings.wantsNotifications`）、新文件 `Doctor.swift`（`diskslim doctor`、`AppBuild`）；`Sources/DiskSlimCLI/main.swift`（`doctor` 子命令）；`Sources/DiskSlimApp/Views.swift`（首页通知提示、提醒设置页底部版本行、两处应用名统一）、`Store.swift`（打开面板重查通知权限、`openNotificationSettings`、送达时记 `deliveredAt`）、`Snapshot.swift`（新增截图 20）；`scripts/bundle.sh`（写 `DiskSlimCommit`、`DiskSlimBuiltAt`）；测试 `LoginShellTests.swift`（7 项）、`DoctorTests.swift`（7 项）；`AGENTS.md`、`GLOSSARY.md`、`docs/PRD.md`、`docs/LESSONS.md`（L-16）同步。
@@ -24,7 +24,7 @@
 - 验证：① 模拟应用的短 PATH（`env -i … PATH=/usr/bin:/bin`）真实只读扫描：main 版 pnpm 写「没找到 pnpm 命令，这里清不了」，本分支找得到（`scan-appenv-before.txt`、`scan-appenv-after.txt`）。③ 真跑 `diskslim doctor`，数据目录前后不变（`doctor.txt`、`doctor-2.txt`）。⑨ 打包脚本写提交号那几行对 Info.plist 副本跑过（`plist-test/`），完整打包没跑。② 离屏截图 `snapshot/20-首页-示例-通知被拒.png`、`13-提醒设置.png`（替身：示例状态 + 离屏渲染；没在真屏面板看、没点系统设置链接）。
 - 独立审查（L-06）：只读审查员报必须修 2、建议修 4，全部已改：① doctor「提醒送达」原来看 `sent`，首次运行预填、周报没卡片都会写它，故障时会误报 ✓ → 改成只认新加的 `deliveredAt`；② doctor 查清理命令用的是终端 PATH，抓不到「应用里找不到」→ 改成按应用的短 PATH + 登录 shell 查；③ 登录 shell 取失败后整个运行期间都按失败 → 只缓存成功、失败隔 10 分钟重试，超时 5 → 10 秒，测试超时放宽；④ 漏列的行为变化（见下）；⑤ 三个提醒都关时首页不再提示，两处应用名统一；⑥ `bundle.sh` 不在 git 仓库时提交号写「未知」。另补一条测试守「命令真的用上登录 shell 的 PATH」。证据 `evidence/batch4-review-2026-11-22/`。
 - 截图：`evidence/batch4-2026-11-22/snapshot/`。界面改动：首页顶部多一条提示（只在通知被拒且有提醒开着时）、提醒设置页底部多一行版本。只做了电脑版。
-- 发布与回读：未发布、未装机。
+- 发布与回读：未发布。装机（2026-11-22 23:53，常浩经 Agent HUD 回「装机」）：`scripts/install.sh` 退出码 0（release 编译 978 秒），输出「已打包：dist/DiskSlim.app（提交 0b6b084）」；Info.plist 写着 `DiskSlimCommit = 0b6b084`、`DiskSlimBuiltAt = 2026-11-22T15:53:04Z`；新进程 23:53:05 启动；`status.json` 23:53:06 更新；`diskslim doctor` 第一行「✓ 已装版本：0.1.0（提交 0b6b084），11 月 22 日 23:53 打包」。用 `open -n` 离屏渲染，提醒设置页底部「版本 0.1.0 · 提交 0b6b084」，首页又提示废纸篓读不了（签名换了，要重给完全磁盘访问）。证据 `evidence/batch4-install-2026-11-22/`。真屏面板没看。
 - 与授权不一致之处、遗留问题、范围外发现：⓪ 改变已有行为的（都在常浩点头的四项里，PR 里单列）：从访达、挂件启动时 uv、pnpm 缓存从「不能清」变成能清、默认勾选（打开自动清理时会被自动清）；应用里跑的 npm 从 `/opt/homebrew/bin/npm`（node 22）换成 `/usr/local/bin/npm`（node 24），缓存目录都是 `~/.npm`；pnpm 由 `/usr/local/bin/node` 运行；`alerts.json` 多一个 `deliveredAt` 字段；提醒设置页的「通知 › DiskSlim」改成「通知 › 磁盘瘦身（有的系统显示 DiskSlim）」。① 系统设置里通知列表显示的是「磁盘瘦身」还是「DiskSlim」没在真机核实。② 清理报「已释放 36.2 GB」但 `df` 只多 13.3 GB：量大小不按硬链接去重（postpane/target 多算约 25%），其余约 15 GB 没查清，另开 issue #27。③ 可用空间清理后 31.1 GB，23:21 又降到 20.2 GB；本批两处编译产物合计约 1.1 GB，其余不是本会话占的，没查。④ AGENTS.md 第 19 行「范围外不顺手修」与全局第 3 节冲突，属已定规则，改动确认待单独发。
 - 本轮新坑：无。★
 
