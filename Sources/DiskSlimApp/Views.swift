@@ -271,6 +271,8 @@ struct HomeView: View {
                     MemoryHome()
                 } else {
                     if !store.unreadable.isEmpty { accessHint(t) }
+                    // 三个提醒都关了就不提示：本来也不发（审查建议 5）
+                    if store.notificationsAllowed == false, store.alertState.settings.wantsNotifications { notifyHint(t) }
                     HeroCard(t: t)
                     decideCard(t)
                 }
@@ -314,6 +316,22 @@ struct HomeView: View {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "lock.shield").foregroundStyle(t.orange)
                 Text("\(store.unreadable.joined(separator: "、"))读不了，它们的变化会算进「其他」。点这里打开「完全磁盘访问权限」，把磁盘瘦身加进去；列表里已经有的话，先用「−」删掉再加（每次更新后都要）。")
+                    .font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 14).fill(t.card))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 系统没允许发通知（第四批 ②）：提醒设置页之外，首页也说一声，一键打开系统设置的「通知」（打开开关要用户自己点）
+    private func notifyHint(_ t: Tone) -> some View {
+        Button { store.openNotificationSettings() } label: {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "bell.slash").foregroundStyle(t.orange)
+                Text("系统没允许磁盘瘦身发通知，空间告急、涨得快、周报这些提醒都收不到。点这里打开「通知」设置，找到「磁盘瘦身」（有的系统显示 DiskSlim），打开「允许通知」。")
                     .font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             .padding(12)
@@ -1120,7 +1138,7 @@ struct AlertsPage: View {
         VStack(alignment: .leading, spacing: 0) {
             PageHeader(title: "提醒设置")
             if store.notificationsAllowed == false {
-                Text("系统没允许磁盘瘦身发通知，下面的提醒收不到。到「系统设置 › 通知 › DiskSlim」里打开「允许通知」。")
+                Text("系统没允许磁盘瘦身发通知，下面的提醒收不到。到「系统设置 › 通知 › 磁盘瘦身」（有的系统显示 DiskSlim）里打开「允许通知」。")
                     .font(.system(size: 11.5)).foregroundStyle(Palette.bad).fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 16).padding(.bottom, 4)
             }
@@ -1138,6 +1156,10 @@ struct AlertsPage: View {
                 switchRow(store.loginItemOn, "开机自动打开",
                           store.loginItemError ?? (store.installedInApplications ? "登录后自动在后台运行，从驿窗侧栏打开" : "装进「应用程序」后才能打开（运行 scripts/install.sh）"),
                           enabled: store.installedInApplications) { store.setLoginItem(!store.loginItemOn) }
+                // 第四批 ⑨：装的是哪一版（打包时写进的提交号），装机后对得上
+                Text("版本 \(AppBuild.label(Bundle.main.infoDictionary))")
+                    .font(.system(size: 10.5)).foregroundStyle(.tertiary)
+                    .padding(.horizontal, 6).padding(.top, 6)
             }
             .padding(.horizontal, 10).padding(.bottom, 12)
         }

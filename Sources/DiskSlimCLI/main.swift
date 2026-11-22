@@ -9,6 +9,7 @@ let usage = """
   diskslim undo                 撤销最近一次：把移到废纸篓的东西放回原处
   diskslim growth               最近 7 天可用空间和谁涨了多少（只读每日记录，不扫描）
   diskslim memory               内存压力、谁占着、替你判断的三段（只读，不退出任何程序）
+  diskslim doctor               自检：已装版本、应用在不在跑、状态和记录文件、提醒送达、清理命令找不找得到（只读）
 通用选项：
   --home <目录>  --work <目录>   换一个主目录 / 项目目录（自测用的沙盒）
 """
@@ -155,6 +156,15 @@ case "memory":
     print("\n先不动：\(plan.keep.isEmpty ? "没有" : "")")
     for k in plan.keep { print("  \(formatBytes(k.bytes).padding(toLength: 9, withPad: " ", startingAt: 0)) \(k.name) · \(k.reason.rawValue)") }
     print("\n本命令只读，不退出任何程序。记录从 \(BeijingTime.monthDay(record.trackingSince)) \(BeijingTime.hourMinute(record.trackingSince)) 开始。")
+
+case "doctor":
+    let checks = Doctor(home: home).run(now: Date())
+    let mark: [DoctorCheck.Level: String] = [.ok: "✓", .warn: "!", .bad: "✗"]
+    for c in checks { print("\(mark[c.level]!) \(c.name)：\(c.detail)") }
+    let bad = checks.filter { $0.level == .bad }.count, warn = checks.filter { $0.level == .warn }.count
+    print("\n\(bad == 0 && warn == 0 ? "都正常" : "有问题 \(bad) 项、要留意 \(warn) 项")。本命令只读，不扫描、不清理。")
+    print("通知权限和完全磁盘访问只有应用自己查得到：/Applications/DiskSlim.app/Contents/MacOS/DiskSlimApp --test-notify")
+    exit(bad == 0 ? 0 : 1)
 
 default:
     print(usage)

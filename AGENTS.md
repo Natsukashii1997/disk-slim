@@ -10,6 +10,7 @@ macOS 小工具（2026-11-19 起不在菜单栏显示，入口是驿窗侧栏的
 | 排障、改脚本、装 launchd 或定时任务 | 先 `grep -n 关键词 docs/LESSONS.md`，再搜全局坑 `/Users/nat/Documents/ChatGPT/个人/work/agent-kit/LESSONS.md` |
 | 开需求、拆任务、实现、审查 | 下面「Agent skills」一节 |
 | 读代码、给东西起名字 | [GLOSSARY.md](GLOSSARY.md)：代码里的词和界面上的词怎么对应 |
+| 改已定内容（外观、文案、行为、规则） | [docs/DECIDED.md](docs/DECIDED.md)：碰到里面任何一项先单独发「改动确认」 |
 | 写交接、验收别人的交接 | [docs/templates/handoff.md](docs/templates/handoff.md) 骨架；[OPERATIONS](docs/OPERATIONS.md)「交接写法」「报告与验收」 |
 
 项目长出接口、样式、发布等文档后，在这张表里加一行。
@@ -38,8 +39,9 @@ swift build -c release                       # 编译
 .build/release/diskslim undo                 # 撤销最近一次：把移到废纸篓的放回原处
 .build/release/diskslim growth               # 最近 7 天可用空间和谁涨了多少；只读每日记录 usage.json，不扫描
 .build/release/diskslim memory               # 内存压力、谁占着、替你判断的三段；只读，不退出任何程序
+.build/release/diskslim doctor               # 自检：已装版本（提交号）、应用在不在跑、状态和记录文件、提醒送达、清理命令找不找得到；只读
 # 自测一律用沙盒：加 --home <沙盒>/home --work <沙盒>/home/work，沙盒放在证据目录下
-scripts/bundle.sh                            # 打包应用到 dist/DiskSlim.app（本机签名，不安装、不启动）
+scripts/bundle.sh                            # 打包应用到 dist/DiskSlim.app（本机签名、写入提交号，不安装、不启动）
 scripts/install.sh                           # 打包并装到 /Applications/DiskSlim.app 后启动；先复制后替换、失败回滚；应用正在清理时不替换
 .build/debug/DiskSlimApp --snapshot <目录>    # 用真实扫描离屏渲染各页面 PNG（只有浅色），只读，不清理
 dist/DiskSlim.app/Contents/MacOS/DiskSlimApp --test-notify   # 用示例数据把每种提醒各发一条系统通知，标题带「示例」；只发通知，不扫描、不清理
@@ -58,7 +60,7 @@ Package.swift        SwiftPM：DiskSlimCore（规则与模型）、diskslim（�
 Sources/
   DiskSlimCore/      Model（Finding、风险等级、清理方式、空间三档和 30 / 60 GB 阈值）、Kind（分组名常量、每一项的类型、给人看的名字）、System（元数据、大小、命令、格式）、
                      DownloadsScanner、WorktreeScanner、KnownPlaces（缓存 / 需确认 / 只展示）、History（按上次实际释放校正清理命令）、Usage（每日记录、7 天曲线、谁涨了多少）、Alerts（提醒开关与规则、自动清理挑项）、Weekly（每周卡片只问「要你说一句」、周报时间）、Decisions（保留 / 下周再问和 decisions.json）、Persistence（五份记录文件统一的读、留底、加锁写 `RecordFile`）、Scan（总入口、执行前复核）、
-                     SafetyGuard（执行前重新核对路径和命令的白名单）、Cleaner（执行、操作记录、撤销）、FloatGeometry（悬浮球与面板位置）、Pendant（给驿窗挂件的状态文件、diskslim:// 链接解析、点挂件防抖）、
+                     SafetyGuard（执行前重新核对路径和命令的白名单）、Cleaner（执行、操作记录、撤销）、FloatGeometry（悬浮球与面板位置）、Pendant（给驿窗挂件的状态文件、diskslim:// 链接解析、点挂件防抖）、Doctor（`diskslim doctor` 自检、打包写进的版本 `AppBuild`）、
                      Memory（读内存压力、交换、进程，按应用和 Claude Code 会话合计）、MemoryRecord（memory.json：曲线、最后使用、忙闲）、MemoryRules（阈值和应用名单）、MemoryPlan（内存三段）、MemoryGuard（动手前核对）、RunningApps（读运行中的普通应用）
   DiskSlimCLI/       命令行 `diskslim`（scan / clean / undo / growth / memory）
   DiskSlimApp/       桌面应用（AppKit 启动，没有 SwiftUI 场景，L-15）：Store（扫描、勾选、清理、撤销、提醒、自动清理）、Views（首页「替你判断」：雾光顶卡 + 替你挑好的 / 要你说一句 / 先不动；下钻页、涨幅页、提醒设置、确认、提示）、Notifier（系统通知，只在打包版）、Snapshot（离屏截图）、FloatingBall（桌面悬浮球：贴边小窗、点开面板、拖动贴边）、PanelController（面板窗口：建窗口、摆位置、点外面收起）、
@@ -72,6 +74,7 @@ docs/
   design/ui-v8-memory.html、ui-v9-memory-polish.html  第 11 批内存页预览（定稿 v9「一二结合」）
   agents/            Matt Pocock 技能读的约定：issue 看板、分流标签、领域文档
   LESSONS.md         本项目的坑（排障、改脚本前先搜）
+  DECIDED.md         已定内容登记表（常浩选定、验收过的；要改先单独确认）
   OPERATIONS.md      操作手册：交接写法、报告与验收
   templates/handoff.md  交接一节的骨架
 scripts/

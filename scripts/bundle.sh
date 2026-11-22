@@ -40,5 +40,12 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
+# 第四批 ⑨：写进是哪个提交打的包、什么时候打的；工作区有没提交的改动时提交号后面加「-改动未提交」
+# `diskslim doctor` 和提醒设置页底部会显示
+COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo 未知)
+[ -z "$(git status --porcelain -- Sources Package.swift assets 2>/dev/null)" ] || COMMIT="$COMMIT-改动未提交"
+plutil -insert DiskSlimCommit -string "$COMMIT" "$APP/Contents/Info.plist"
+plutil -insert DiskSlimBuiltAt -string "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$APP/Contents/Info.plist"
+
 codesign --force --sign - "$APP" >/dev/null
-echo "已打包：$APP"
+echo "已打包：$APP（提交 $COMMIT）"

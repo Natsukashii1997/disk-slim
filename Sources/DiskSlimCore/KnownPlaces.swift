@@ -90,8 +90,8 @@ public enum KnownPlaces {
 }
 
 /// 清理命令在这台电脑上找不到的项：不勾选、不能勾，说明里写去终端怎么清。
-/// 应用从「应用程序」或登录项启动时 PATH 很短（`ProcessRunner` 只补了 Homebrew），装在 `~/.local/bin`、nvm 目录下的
-/// uv、pnpm 找不到，点了只会被跳过；在终端里跑命令行时找得到，照常勾选（L-16）。
+/// 第四批起 `ProcessRunner` 会并上登录 shell 的 PATH，从访达、挂件启动也找得到 uv、pnpm；登录 shell 取不到
+/// （超时、配置报错）或命令确实没装时仍会找不到，点了只会被跳过（L-16）。
 /// 用和执行时同一个 `runner` 查（`which`），两边看到的 PATH 一致。
 public func applyAvailability(_ findings: [Finding], runner: CommandRunner) -> [Finding] {
     var known: [String: Bool] = [:]
