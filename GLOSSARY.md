@@ -41,6 +41,9 @@
 | `alerts.json` | `AlertStore`、`AlertState`（`Alerts.swift`） | 提醒开关、每条提醒上次发在哪天、自动清理上次时间 |
 | `memory.json` | `MemoryLog`、`MemoryRecord`（`MemoryRecord.swift`） | 内存曲线、应用最后使用时间、会话忙闲、几个「别问」 |
 | `status.json` | `StatusFile`（`Pendant.swift`） | 给驿窗挂件读的可用空间和档位 |
+| 自检 | `Doctor`、`DoctorCheck`（`Doctor.swift`） | `diskslim doctor`：一项一行，✓ 正常 / ! 要留意 / ✗ 有问题。只读，坏文件也不挪。查不到通知权限和完全磁盘访问（只有应用自己知道） |
+| 版本、提交号 | `AppBuild`、Info.plist 的 `DiskSlimCommit`、`DiskSlimBuiltAt` | `scripts/bundle.sh` 打包时写进；工作区有没提交的改动时提交号后面带「-改动未提交」 |
+| 登录 shell 的 PATH | `LoginShell.path`、`mergedPath`、`ProcessRunner.loginPath`（`System.swift`） | 进程里第一次跑命令时取一次 `<SHELL> -l -c` 的 PATH，接在原 PATH 后面，再补 Homebrew。取不到时和第四批之前一样 |
 
 前五份（不含 `status.json`）的读、坏了留底（`<名字>-damaged-<时间>-<8位>.json.bak`）、加锁写都走 `RecordFile`（`Persistence.swift`），日期一律存 ISO 文本。
 

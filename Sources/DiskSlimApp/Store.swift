@@ -157,7 +157,12 @@ final class Store: ObservableObject {
 
     /// 面板（悬浮球或驿窗挂件叫开的）开着没有，写进状态文件给驿窗挂件的光圈用
     var panelOpen = false {
-        didSet { if panelOpen != oldValue { writeStatus() } }
+        didSet {
+            guard panelOpen != oldValue else { return }
+            writeStatus()
+            // 每次打开面板重新问一次通知权限：用户在系统设置里改了，首页提示跟着变（第四批 ②）
+            if panelOpen { refreshNotificationPermission() }
+        }
     }
 
     private func writeStatus() {
@@ -246,6 +251,7 @@ final class Store: ObservableObject {
                     guard ok else { return }
                     var s = self.alertState
                     s.sent[a.key] = a.day
+                    s.deliveredAt = Date()
                     self.saveAlerts(s)
                 }
             }
@@ -293,6 +299,10 @@ final class Store: ObservableObject {
 
     func openFullDiskAccessSettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") { NSWorkspace.shared.open(url) }
+    }
+
+    func openNotificationSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=local.nat.disk-slim") { NSWorkspace.shared.open(url) }
     }
 
     func refreshNotificationPermission() {

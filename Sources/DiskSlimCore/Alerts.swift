@@ -11,6 +11,9 @@ public struct AlertSettings: Codable, Equatable {
     /// 自动清理「安全」的缓存和构建产物：默认关闭；打开后只在可用低于 60 GB 时执行，两次之间至少隔 2 小时（`Alerts.autoCleanGap`）
     public var autoClean = false
 
+    /// 三个会发通知的提醒有没有开着一个（自动清理不发通知）
+    public var wantsNotifications: Bool { lowSpace || growth || weekly }
+
     public init() {}
 
     /// 宽松地读：缺哪个开关就用默认值，其他照读；autoClean 读不出来一律当关
@@ -30,6 +33,9 @@ public struct AlertState: Codable, Equatable {
     public var sent: [String: String] = [:]
     /// 自动清理上次执行的时间（第 7 批起：两次之间至少隔 `autoCleanGap`，不再是每天一次）
     public var autoCleanAt: Date?
+    /// 系统最近一次真的收下一条提醒的时间（第四批起记）。`sent` 不能当送达看：首次运行预填周报、
+    /// 周报没卡片时记成已处理，都会写 `sent`，和通知发没发出去无关（审查必须修 1）。`diskslim doctor` 只看这一项
+    public var deliveredAt: Date?
 
     public init() {}
 
@@ -41,6 +47,7 @@ public struct AlertState: Codable, Equatable {
         // 第三批起存 ISO 文本；之前存的是数字（离 2001-01-01 的秒数），两种都认
         autoCleanAt = (try? c.decodeIfPresent(Date.self, forKey: .autoCleanAt)) ?? nil
             ?? ((try? c.decodeIfPresent(Double.self, forKey: .autoCleanAt)) ?? nil).map(Date.init(timeIntervalSinceReferenceDate:))
+        deliveredAt = (try? c.decodeIfPresent(Date.self, forKey: .deliveredAt)) ?? nil
     }
 }
 

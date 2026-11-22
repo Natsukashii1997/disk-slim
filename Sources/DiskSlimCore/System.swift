@@ -114,38 +114,106 @@ public struct ProcessRunner: CommandRunner {
     /// 超时就结束进程并返回退出码 124，免得 gh 卡在网络上时扫描一直转圈
     let timeout: TimeInterval
 
-    public init(timeout: TimeInterval = 120) { self.timeout = timeout }
+    /// 原有的 PATH；nil 时用本进程的。`diskslim doctor` 传应用从访达启动时的短 PATH，查到的才和应用里一样
+    let basePath: String?
+
+    public init(timeout: TimeInterval = 120, basePath: String? = nil) {
+        self.timeout = timeout
+        self.basePath = basePath
+    }
 
     public func run(_ args: [String], cwd: URL?) -> (status: Int32, output: String) {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        p.arguments = args
-        if let cwd { p.currentDirectoryURL = cwd }
         var env = ProcessInfo.processInfo.environment
-        // 从「应用程序」启动时 PATH 很短，补上 Homebrew 的位置
-        env["PATH"] = (env["PATH"] ?? "/usr/bin:/bin") + ":/opt/homebrew/bin:/usr/local/bin"
+        // 从访达、登录项、驿窗挂件启动时 PATH 很短：并上登录 shell 的 PATH（uv 在 ~/.local/bin、pnpm 在 nvm 目录下）和 Homebrew 的位置（L-16）
+        env["PATH"] = mergedPath(basePath ?? env["PATH"], LoginShell.cached())
         // 从访达 / 登录项启动时没有区域设置，ps 会把路径里的中文转义成 M-dM-8…，和路径对不上（L-09）
         env["LC_ALL"] = "en_US.UTF-8"
-        p.environment = env
-        let out = Pipe()
-        p.standardOutput = out
-        p.standardError = FileHandle.nullDevice
-        do { try p.run() } catch { return (127, "") }
-        // 在后台读完输出，避免输出塞满管道卡死；主线等读完或超时
-        var data = Data()
-        let done = DispatchGroup()
-        done.enter()
-        DispatchQueue.global().async {
-            data = out.fileHandleForReading.readDataToEndOfFile()
-            done.leave()
+        return execute(URL(fileURLWithPath: "/usr/bin/env"), args, env: env, cwd: cwd, timeout: timeout)
+    }
+}
+
+/// 跑一个程序，读完标准输出；超时就结束它、返回退出码 124，起不来返回 127
+func execute(_ executable: URL, _ args: [String], env: [String: String], cwd: URL? = nil,
+             timeout: TimeInterval) -> (status: Int32, output: String) {
+    let p = Process()
+    p.executableURL = executable
+    p.arguments = args
+    if let cwd { p.currentDirectoryURL = cwd }
+    p.environment = env
+    let out = Pipe()
+    p.standardOutput = out
+    p.standardError = FileHandle.nullDevice
+    p.standardInput = FileHandle.nullDevice
+    do { try p.run() } catch { return (127, "") }
+    // 在后台读完输出，避免输出塞满管道卡死；主线等读完或超时
+    var data = Data()
+    let done = DispatchGroup()
+    done.enter()
+    DispatchQueue.global().async {
+        data = out.fileHandleForReading.readDataToEndOfFile()
+        done.leave()
+    }
+    if done.wait(timeout: .now() + timeout) == .timedOut {
+        p.terminate()
+        _ = done.wait(timeout: .now() + 2)
+        return (124, "")
+    }
+    p.waitUntilExit()
+    return (p.terminationStatus, String(decoding: data, as: UTF8.self))
+}
+
+/// 合并 PATH：原有的在前，再接登录 shell 里有、原来没有的，最后补 Homebrew 的两个位置；重复的、空的、不是绝对路径的去掉
+public func mergedPath(_ current: String?, _ login: String?) -> String {
+    var seen = Set<String>()
+    var parts: [String] = []
+    for dir in [current ?? "/usr/bin:/bin", login ?? "", "/opt/homebrew/bin:/usr/local/bin"].flatMap({ $0.split(separator: ":") }) {
+        let d = String(dir)
+        guard d.hasPrefix("/"), seen.insert(d).inserted else { continue }
+        parts.append(d)
+    }
+    return parts.joined(separator: ":")
+}
+
+/// 用户的登录 shell 里 PATH 是什么。应用不是从终端启动时拿不到这些（L-16）。
+public enum LoginShell {
+    static let marker = "__DISKSLIM_PATH__"
+    /// 应用从访达启动时的 PATH（没有登录 shell 那些）
+    public static let appBasePath = "/usr/bin:/bin:/usr/sbin:/sbin"
+
+    /// 进程里共用的一份（第四批 ①）。只在后台跑命令时用到（扫描、清理、撤销都在 `Task.detached` 里），第一次最多等 `path` 的超时
+    static let shared = Cache()
+
+    public static func cached() -> String? { shared.get(now: Date()) { path() } }
+
+    /// 取成功就一直用；取失败隔 10 分钟再试：开机自启那一刻机器忙、超时很常见，
+    /// 不能一次失败就整个运行期间都找不到 uv、pnpm（审查建议 3）
+    final class Cache: @unchecked Sendable {
+        static let retryAfter: TimeInterval = 600
+        private let lock = NSLock()
+        private var hit: String?
+        private var missedAt: Date?
+
+        func get(now: Date, resolve: () -> String?) -> String? {
+            lock.lock(); defer { lock.unlock() }
+            if let hit { return hit }
+            if let missedAt, now.timeIntervalSince(missedAt) < Self.retryAfter { return nil }
+            hit = resolve()
+            missedAt = hit == nil ? now : nil
+            return hit
         }
-        if done.wait(timeout: .now() + timeout) == .timedOut {
-            p.terminate()
-            _ = done.wait(timeout: .now() + 2)
-            return (124, "")
-        }
-        p.waitUntilExit()
-        return (p.terminationStatus, String(decoding: data, as: UTF8.self))
+    }
+
+    /// 跑 `<shell> -l -c` 打印 PATH，只取标记后面的部分（配置文件往标准输出打的字不算）。
+    /// 不用 `-i`：交互式配置（nvm 等）在本机要 9 秒，还可能等输入。10 秒没回来、退出码不是 0、结果不像 PATH 时返回 nil。
+    public static func path(shell: String? = ProcessInfo.processInfo.environment["SHELL"], timeout: TimeInterval = 10) -> String? {
+        let sh = (shell?.hasPrefix("/") == true) ? shell! : "/bin/zsh"
+        var env = ["HOME": NSHomeDirectory(), "USER": NSUserName(), "SHELL": sh, "LC_ALL": "en_US.UTF-8"]
+        if let p = ProcessInfo.processInfo.environment["PATH"] { env["PATH"] = p }
+        let r = execute(URL(fileURLWithPath: sh), ["-l", "-c", "printf '\\n\(marker)%s' \"$PATH\""], env: env, timeout: timeout)
+        guard r.status == 0, let range = r.output.range(of: marker, options: .backwards) else { return nil }
+        let value = r.output[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard value.hasPrefix("/"), !value.contains("\n") else { return nil }
+        return value
     }
 }
 
@@ -206,6 +274,8 @@ public enum BeijingTime {
     public static func dayKey(_ date: Date) -> String { dayFormatter.string(from: date) }
     /// 北京时间第几天（从 1970-01-01 算起）。北京没有夏令时，按 +8 小时整除即可；用来算相隔几天
     public static func dayNumber(_ date: Date) -> Int { Int(((date.timeIntervalSince1970 + 8 * 3600) / 86_400).rounded(.down)) }
+    /// 把 `dayKey` 的写法读回日期（当天北京时间 0 点）；格式不对返回 nil
+    public static func date(dayKey: String) -> Date? { dayFormatter.date(from: dayKey) }
     /// 图表横轴用，如「11/5」
     public static func shortDay(_ date: Date) -> String { shortDayFormatter.string(from: date) }
     public static func hourMinute(_ date: Date) -> String { timeFormatter.string(from: date) }
