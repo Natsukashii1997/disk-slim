@@ -2,7 +2,7 @@
 
 当前阶段目标：常态维护。第 6 批已收尾：2026-11-19 常浩定 `disk-space-guard` 停用（原目标「第 6 批试用一周收尾，定下 disk-space-guard 去留，之后转常态维护」，2026-11-08 常浩确认，digital-twin#114）。
 
-更新：2026-11-22 23:25。第四批（issue #26）在分支 `claude/26-batch4` 上做完、开了 PR，未合并、未装机：已定内容登记表 `docs/DECIDED.md`；启动时并上登录 shell 的 PATH；通知被拒时首页提示；`diskslim doctor` 自检；打包写入提交号。同日按常浩「做 1 和 4，清」清掉默认勾选 5 项（报 36.2 GB，`df` 只多了 13.3 GB，原因一部分是量大小没按硬链接去重，另开 issue #27）。唯一下一步：常浩看 PR 后回「合并」；通知仍是「已拒绝」，要常浩在系统设置里打开；AGENTS.md「范围外不顺手修」那条的改动确认待单独发。
+更新：2026-11-22 23:40。第四批（issue #26）已随 PR #28 squash 合并（`953ddbd`，常浩经 Agent HUD 回「Merge」），未装机：已定内容登记表 `docs/DECIDED.md`；启动时并上登录 shell 的 PATH；通知被拒时首页提示；`diskslim doctor` 自检；打包写入提交号。同日按常浩「做 1 和 4，清」清掉默认勾选 5 项（报 36.2 GB，`df` 只多了 13.3 GB，原因一部分是量大小没按硬链接去重，另开 issue #27）。唯一下一步：常浩定要不要装机第四批；通知仍是「已拒绝」，要常浩在系统设置里打开；AGENTS.md「范围外不顺手修」那条的改动确认待单独发。
 
 之前：2026-11-22 14:25。常浩回「权限开好了」后核对：完全磁盘访问已生效（按应用平时的启动方式 `open -n` 起，首页不再提示废纸篓读不了）；通知仍是「已拒绝」（`--test-notify` 三次都是），系统设置里的通知开关还没开成。唯一下一步：请常浩在「系统设置 › 通知」里找到「磁盘瘦身」，把「允许通知」打开，再回一句，我重跑自测。
 
@@ -16,7 +16,7 @@
 
 之前：2026-11-19。`disk-space-guard` 定为停用（任务保持关闭、不删）。菜单栏图标已去掉，入口只留驿窗侧栏挂件，已随 PR #12 squash 合回 main（`8deed49`）、已装机。之前：2026-11-18。第 0–11 批、缩小键、面板尺寸固定和按钮手感都已合回 main（PR #1、#5、#6、#7、#8）。第 11 批「内存」：「磁盘 | 内存」切换、内存页（定稿一二结合）、一键退出、要你说一句（Claude 会话 / 浏览器 / 重启）、强制退出页，已装机。11-18 19:12 交接会话补做了真屏验收：内存页、强制退出页「退出」和「强制退出」点两下都通过；验收中发现面板切到内存页会长出屏幕底边，已修（`FloatingBall.swift`）并重装复验。常浩看过截图说「开 PR」，开了 PR #7，常浩说「合并」后已 squash 合回 main（`e862639`，2026-11-18 20:00）。20:00 后在新分支 `claude/panel-fixed-size` 做了「面板尺寸固定 + 磁盘顶卡谁占着」和「顶栏按钮点击手感」，已随 PR #8 squash 合回 main（`af6f2a2`，2026-11-18 20:58；PR #7 合并后才做，所以单开了 #8）。（当时的唯一下一步「`disk-space-guard` 要不要停」已在 2026-11-19 定为停用，见下面对应一节。）
 
-## 第四批：已定内容登记表 + 登录 shell PATH、首页通知提示、doctor 自检、打包写提交号（2026-11-22，Claude，常浩经 Agent HUD 回「做 1 和 4，清」；已提交到 `claude/26-batch4`、开 PR、未合并、未装机、未发布）
+## 第四批：已定内容登记表 + 登录 shell PATH、首页通知提示、doctor 自检、打包写提交号（2026-11-22，Claude，常浩经 Agent HUD 回「做 1 和 4，清」；已随 PR #28 squash 合并（`953ddbd`）、未装机、未发布）
 
 - 时间：开工 `2026-11-22 21:47`。★ 来由：「牛马之家」会话转来常浩「全部按推荐去做」，本会话把待办和推荐逐项列给他本人后，他经 Agent HUD 回「做 1 和 4，清」（issue #26）。
 - 改了哪些文件：`docs/DECIDED.md`（新建，登记雾光首页、只留浅色、面板尺寸固定、入口只留挂件四项，和「开机自启默认关、④～⑧ 先不做」）；`Sources/DiskSlimCore/System.swift`（`LoginShell`：`<SHELL> -l -c` 取 PATH、取成功一直用、失败隔 10 分钟再试；`mergedPath`；`ProcessRunner` 并上登录 shell 的 PATH，可传 `basePath`；抽出 `execute`；`BeijingTime.date(dayKey:)`）、`KnownPlaces.swift`（注释）、`Alerts.swift`（`AlertState.deliveredAt`：系统真收下提醒才记；`AlertSettings.wantsNotifications`）、新文件 `Doctor.swift`（`diskslim doctor`、`AppBuild`）；`Sources/DiskSlimCLI/main.swift`（`doctor` 子命令）；`Sources/DiskSlimApp/Views.swift`（首页通知提示、提醒设置页底部版本行、两处应用名统一）、`Store.swift`（打开面板重查通知权限、`openNotificationSettings`、送达时记 `deliveredAt`）、`Snapshot.swift`（新增截图 20）；`scripts/bundle.sh`（写 `DiskSlimCommit`、`DiskSlimBuiltAt`）；测试 `LoginShellTests.swift`（7 项）、`DoctorTests.swift`（7 项）；`AGENTS.md`、`GLOSSARY.md`、`docs/PRD.md`、`docs/LESSONS.md`（L-16）同步。
