@@ -159,6 +159,14 @@
 - 补充（2026-11-22，查权限时）：权限也一样。从 agent 会话的终端直接跑 `/Applications/DiskSlim.app/Contents/MacOS/DiskSlimApp --snapshot …`，完全磁盘访问算在启动它的 Claude 头上（系统按「责任进程」判），常浩已经给了权限，首页照样提示「废纸篓读不了」；改用 `open -n -W --stdout <文件> /Applications/DiskSlim.app --args --snapshot <目录>` 起，提示就没了，下载文件夹里久未打开的文件也读得到了（`evidence/permissions-2026-11-22/snapshot/` 与 `snapshot-open/` 对照）。通知权限按应用包标识算，两种起法结果相同。教训：核对已装应用的权限，用 `open -n` 起，不直接跑包里的可执行文件。
 - 升级：〔机检〕部分升级（2026-11-20，issue #18）：③ 已由 `CleanupCommandTests`「找不到清理命令的_不勾选」守住；① ② 未升级，建议加自检命令 `diskslim doctor` 或自动化体检项，等常浩定。③ 的排查思路换个项目也成立，已有全局 G-19 覆盖，不另提。
 
+## L-17 各目录大小加起来远超已用空间，按 du 估的「能腾出」大多是虚的（2026-11-26）
+
+- 现象：系统临时目录里 Chrome 的 `com.google.Chrome.code_sign_clone` 显示 222 GB（155 份整包克隆），删掉其中 142 份，`df` 可用空间没有增加（15.1 → 13.8 GB，期间别的程序在写盘）；`~/Sandbox/2026-11-22-postpane-508-red/target` 显示 21 GB，删掉只多出 6.1 GB。全盘各目录 `du` 加起来 547 GB，数据卷实际只用了 433.6 GB。
+- 根因：APFS 克隆（`clonefile`、`cp -c`）互相共用数据块，`du` 每一份都按全额算；要等所有共用者都删掉，块才会释放。Chrome 每次启动都做一份签名克隆，正在运行的那一份还用着旧版本的块。和 issue #27（硬链接重复计算）是同一类问题：「显示大小」不等于「删掉能腾出」。
+- 正确做法：给常浩报「能腾出多少」之前，先分清显示大小和实际能回收的空间；拿不准的写区间，或写「删了再用 df 实测」。清理时每一项前后都记 `df -k`，按差值报告。Chrome 签名克隆不再当清理对象推荐。
+- 证据：`evidence/cleanup-2026-11-26/`（`df-before.txt`、`df-after-chrome.txt`、`df-before-sandbox.txt`、`df-after-sandbox.txt`、`df-before-caches.txt`、`df-after-caches.txt`、`chrome-clones-deleted.txt`、`caches-deleted.txt`）。
+- 升级：〔文字〕未升级。「显示大小≠能腾出」换个项目也成立（任何磁盘清理），可提议提升为全局，等常浩定。
+
 ---
 
 格式：
