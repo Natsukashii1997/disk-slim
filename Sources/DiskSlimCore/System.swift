@@ -35,24 +35,59 @@ public struct SpotlightMetadata: FileMetadata {
 
 // MARK: - 占用大小
 
-/// 文件或目录实际占用的磁盘空间（目录递归累加，不跟随符号链接）。读不了的部分按 0 算。
+/// 同一设备上的同一个 inode（硬链接共享同一个 FileID）
+struct FileID: Hashable {
+    let dev: dev_t
+    let ino: ino_t
+}
+
+/// 文件或目录实际占用的磁盘空间（目录递归累加，不跟随符号链接，硬链接按 (设备, inode) 去重）。读不了的部分按 0 算。
 public func allocatedSize(_ url: URL) -> Int64 { measure(url, onError: {}) }
 
 /// 同上，出错时调 `onError`
 private func measure(_ url: URL, onError: () -> Void) -> Int64 {
-    let keys: [URLResourceKey] = [.isDirectoryKey, .totalFileAllocatedSizeKey]
-    guard let values = try? url.resourceValues(forKeys: Set(keys)) else { onError(); return 0 }
-    if values.isDirectory != true { return Int64(values.totalFileAllocatedSize ?? 0) }
-    var failed = false
-    guard let e = FileManager.default.enumerator(at: url, includingPropertiesForKeys: keys, options: [],
-                                                  errorHandler: { _, _ in failed = true; return true }) else { onError(); return 0 }
-    var total: Int64 = 0
-    for case let child as URL in e {
-        if let v = try? child.resourceValues(forKeys: [.totalFileAllocatedSizeKey]) {
-            total += Int64(v.totalFileAllocatedSize ?? 0)
-        } else { failed = true }
+    var st = stat()
+    let ok = url.withUnsafeFileSystemRepresentation { rep -> Bool in
+        guard let rep else { return false }
+        return lstat(rep, &st) == 0
     }
-    if failed { onError() }
+    guard ok else { onError(); return 0 }
+    if (st.st_mode & S_IFMT) != S_IFDIR {
+        return Int64(max(0, st.st_blocks)) * 512
+    }
+    var failed = false
+    var total: Int64 = 0
+    var seen = Set<FileID>()
+    let opened = url.withUnsafeFileSystemRepresentation { rep -> Bool in
+        guard let rep else { return false }
+        var paths: [UnsafeMutablePointer<CChar>?] = [UnsafeMutablePointer(mutating: rep), nil]
+        guard let fts = fts_open(&paths, FTS_PHYSICAL | FTS_NOCHDIR, nil) else { return false }
+        defer { fts_close(fts) }
+        while true {
+            errno = 0
+            guard let entry = fts_read(fts) else {
+                if errno != 0 { failed = true }
+                break
+            }
+            let info = Int32(entry.pointee.fts_info)
+            switch info {
+            case FTS_DNR, FTS_ERR, FTS_NS:
+                failed = true
+            case FTS_D, FTS_DC, FTS_DOT:
+                continue
+            default:
+                guard let sp = entry.pointee.fts_statp else { failed = true; continue }
+                let s = sp.pointee
+                // 只有硬链接数 > 1 的非目录项才可能重复，避免把普通文件塞进 Set（与 du 同口径）
+                if info != FTS_DP && s.st_nlink > 1 {
+                    if !seen.insert(FileID(dev: s.st_dev, ino: s.st_ino)).inserted { continue }
+                }
+                total += Int64(max(0, s.st_blocks)) * 512
+            }
+        }
+        return true
+    }
+    if !opened || failed { onError() }
     return total
 }
 

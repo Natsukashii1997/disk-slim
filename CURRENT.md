@@ -22,6 +22,17 @@
 
 之前：2026-11-19。`disk-space-guard` 定为停用（任务保持关闭、不删）。菜单栏图标已去掉，入口只留驿窗侧栏挂件，已随 PR #12 squash 合回 main（`8deed49`）、已装机。之前：2026-11-18。第 0–11 批、缩小键、面板尺寸固定和按钮手感都已合回 main（PR #1、#5、#6、#7、#8）。第 11 批「内存」：「磁盘 | 内存」切换、内存页（定稿一二结合）、一键退出、要你说一句（Claude 会话 / 浏览器 / 重启）、强制退出页，已装机。11-18 19:12 交接会话补做了真屏验收：内存页、强制退出页「退出」和「强制退出」点两下都通过；验收中发现面板切到内存页会长出屏幕底边，已修（`FloatingBall.swift`）并重装复验。常浩看过截图说「开 PR」，开了 PR #7，常浩说「合并」后已 squash 合回 main（`e862639`，2026-11-18 20:00）。20:00 后在新分支 `claude/panel-fixed-size` 做了「面板尺寸固定 + 磁盘顶卡谁占着」和「顶栏按钮点击手感」，已随 PR #8 squash 合回 main（`af6f2a2`，2026-11-18 20:58；PR #7 合并后才做，所以单开了 #8）。（当时的唯一下一步「`disk-space-guard` 要不要停」已在 2026-11-19 定为停用，见下面对应一节。）
 
+## 量大小按 (设备, inode) 去重硬链接（issue #27 第 1 项）（2026-11-28，Antigravity，用户本轮授权只做第 1 项；已推送开 PR #29、未合并、未发布）
+
+- 时间：开工 `2026-11-28 00:22`。★ 来由：issue #27 第 1 项，`measure` 原先逐文件累加 `totalFileAllocatedSize`，未对硬链接去重，导致 cargo `target/` 等含硬链接目录虚高。
+- 改了哪些文件：`Sources/DiskSlimCore/System.swift`（新增 `FileID(dev:ino:)`，`measure` 改用 `lstat` + `fts_open(FTS_PHYSICAL | FTS_NOCHDIR)` 按 `st_blocks * 512` 统计，仅对 `st_nlink > 1` 的非目录项按 `(st_dev, st_ino)` 去重，保持单文件、`onError`、不跟随符号链接等行为不变）；`tests/DiskSlimCoreTests/SystemTests.swift`（新增 `MeasureSizeTests` 7 条测试，覆盖同目录/子目录硬链接、多组硬链接混普通文件、目录外硬链接、单文件/空目录/不存在路径、符号链接与悬空链接、不可读目录 `onError`、`FileID` 跨设备区分）；本文件。
+- 测试：`scripts/test.sh` 原样 `✔ Test run with 350 tests in 51 suites passed after 0.770 seconds.`（原 343 项，新增 7 项）；`node --test tests/*.test.mjs` 原样 `ℹ pass 11` / `ℹ fail 0`；`node scripts/check-rules.mjs`「通用规则检查通过」；`swift build -c release` 原样 `Build complete! (44.42秒)`。★
+- 验证：用 `.build/release/diskslim scan --json` 对照 `du -sk` 与 `du -skl`（未去重）：① 沙盒含硬链接目录（60 MB×3 份硬链接 + 10 MB 普通文件）：diskslim `73,400,320` B、`du -sk` `73,400,320` B（差 `0` B；未去重 `du -skl` `199,229,440` B）。② 本机真实目录只读扫描（12.62 s）：`postpane` 5 个静置 worktree `target/`（`133-shared-hooks` 4,377,528 KB、`542-close-tabs` 8,540,092 KB、`558-agy-hub` 11,646,144 KB、`559-handoff-one-tag` 10,375,096 KB、`peaceful-murdock-ad7fd0` 8,762,464 KB）及 `pnpm` 存储（500,640 KB）与 `du -sk` 全部差 `0 KB`（5 个 `target/` 未去重合计多算约 17.6 GB）；另 1 个 `reply-one-per-session/target` 正在编译中，前后 `du -sk` 从 5,414,008 KB 涨到 5,476,792 KB，diskslim 落在中间 5,469,132 KB。
+- 截图：无界面改动，无。
+- 发布与回读：未发布、未装机。分支已推为 `agent/27-hardlink-dedupe`，开了 PR #29（Claude 会话评审：测试复核通过、自建目录与真实 `postpane/target` 均与 `du -sk` 一致）；disk-slim 不在合并执行器覆盖范围、没有 CI，等常浩说「合并」。
+- 与授权不一致之处、遗留问题、范围外发现：① issue #27 其余两项（记录删前后三个数、PR 里单列会变的数字）按要求未做。② APFS 克隆（`clonefile`）有不同 inode，与 `du` 一样无法按 `(dev, ino)` 去重（见 L-17）。③ 按 `AGENTS.md` 规定，合并前还应由独立 agent 做只读审查和对抗测试（L-06），本轮未发起。
+- 本轮新坑：无。★
+
 ## 删 Colima multica 虚拟机、打开开机自启（2026-11-26，Claude，常浩原话「打开磁盘瘦身开机自启。然后Multica 执行器直接官迷。colima delete multica」；无代码改动、未发布）
 
 - 时间：开工 `2026-11-26 22:10`。★ 来由：上一轮建议重启前先不清 Colima，常浩改定直接关掉 Multica 执行器。

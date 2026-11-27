@@ -31,6 +31,113 @@ import Testing
     }
 }
 
+@Suite struct MeasureSizeTests {
+    let fm = FileManager.default
+
+    @Test func 硬链接只算一份_含子目录里的多份链接() throws {
+        let t = TempDir()
+        let dir = t.dir("target")
+        let orig = t.file("target/deps/libfoo.rlib", bytes: 65_536)
+        let one = allocatedSize(orig)
+        #expect(one >= 65_536)
+
+        try fm.linkItem(at: orig, to: dir.appendingPathComponent("libfoo.rlib"))
+        let nested = t.dir("target/build/nested")
+        try fm.linkItem(at: orig, to: nested.appendingPathComponent("libfoo-copy.rlib"))
+
+        #expect(allocatedSize(dir) == one)
+        #expect(allocatedSizeIfReadable(dir) == one)
+    }
+
+    @Test func 多组硬链接与普通文件混在一起_硬链接去重_不同文件照常相加() throws {
+        let t = TempDir()
+        let dir = t.dir("mix")
+        let a = t.file("mix/a.bin", bytes: 65_536)
+        let b = t.file("mix/b.bin", bytes: 131_072)
+        let c = t.file("mix/plain1.bin", bytes: 32_768)
+        let d = t.file("mix/sub/plain2.bin", bytes: 49_152)
+
+        try fm.linkItem(at: a, to: dir.appendingPathComponent("sub/a-link.bin"))
+        try fm.linkItem(at: b, to: dir.appendingPathComponent("sub/b-link.bin"))
+
+        let expected = allocatedSize(a) + allocatedSize(b) + allocatedSize(c) + allocatedSize(d)
+        #expect(allocatedSize(dir) == expected)
+        #expect(allocatedSizeIfReadable(dir) == expected)
+    }
+
+    @Test func 硬链接另一份在测量目录外_目录内那份照常计入() throws {
+        let t = TempDir()
+        let outside = t.file("outside/a.bin", bytes: 65_536)
+        let inside = t.dir("inside")
+        try fm.linkItem(at: outside, to: inside.appendingPathComponent("a.bin"))
+
+        let one = allocatedSize(outside)
+        #expect(allocatedSize(inside) == one)
+        // 测量共同父目录时才去重成一份
+        #expect(allocatedSize(t.url) == one)
+    }
+
+    @Test func 单个文件_空目录_不存在路径() {
+        let t = TempDir()
+        let f = t.file("single.bin", bytes: 40_960)
+        #expect(allocatedSize(f) >= 40_960)
+        #expect(allocatedSizeIfReadable(f) == allocatedSize(f))
+
+        let empty = t.dir("empty")
+        #expect(allocatedSize(empty) == 0)
+        #expect(allocatedSizeIfReadable(empty) == 0)
+
+        let missing = t.url.appendingPathComponent("no-such-file")
+        #expect(allocatedSize(missing) == 0)
+        #expect(allocatedSizeIfReadable(missing) == nil)
+    }
+
+    @Test func 目录里不跟随符号链接_悬空链接不报错() throws {
+        let t = TempDir()
+        t.file("outside/big.bin", bytes: 1_000_000)
+        let dir = t.dir("box")
+        let real = t.file("box/real.bin", bytes: 65_536)
+        try fm.createSymbolicLink(at: dir.appendingPathComponent("link-dir"),
+                                  withDestinationURL: t.url.appendingPathComponent("outside"))
+        try fm.createSymbolicLink(at: dir.appendingPathComponent("link-file"),
+                                  withDestinationURL: t.url.appendingPathComponent("outside/big.bin"))
+        try fm.createSymbolicLink(at: dir.appendingPathComponent("broken"),
+                                  withDestinationURL: t.url.appendingPathComponent("does-not-exist"))
+
+        let size = allocatedSizeIfReadable(dir)
+        #expect(size != nil)
+        #expect(size! >= allocatedSize(real))
+        #expect(size! < 200_000)
+        // 带目录标记的符号链接 URL 也不跟随
+        let linkAsDir = URL(fileURLWithPath: dir.appendingPathComponent("link-dir").path, isDirectory: true)
+        #expect(allocatedSize(linkAsDir) < 100_000)
+    }
+
+    @Test func 不可读目录触发onError_可读同级文件照常累加() throws {
+        let t = TempDir()
+        let dir = t.dir("parent")
+        let ok = t.file("parent/ok.bin", bytes: 65_536)
+        let secret = t.dir("parent/secret")
+        t.file("parent/secret/hidden.bin", bytes: 65_536)
+
+        try fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: secret.path)
+        defer { try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: secret.path) }
+
+        #expect(allocatedSize(dir) == allocatedSize(ok))
+        #expect(allocatedSizeIfReadable(dir) == nil)
+        #expect(allocatedSize(secret) == 0)
+        #expect(allocatedSizeIfReadable(secret) == nil)
+    }
+
+    @Test func FileID按设备和inode共同区分() {
+        #expect(FileID(dev: 1, ino: 42) == FileID(dev: 1, ino: 42))
+        #expect(FileID(dev: 1, ino: 42) != FileID(dev: 2, ino: 42))
+        #expect(FileID(dev: 1, ino: 42) != FileID(dev: 1, ino: 43))
+        let set: Set<FileID> = [FileID(dev: 1, ino: 42), FileID(dev: 1, ino: 42), FileID(dev: 2, ino: 42)]
+        #expect(set.count == 2)
+    }
+}
+
 // 以下来自第 0–6 批整体审查（2026-11-05）的对抗测试：每个用例只测一件事，注释写期望。
 // 这些用例在提交 e02ed76 上都失败，说明对应的问题当时还在。
 /// 改进程环境变量，必须串行
